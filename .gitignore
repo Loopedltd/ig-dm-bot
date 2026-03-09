@@ -2,3 +2,9 @@
 node_modules
 .DS_Store
 payload.json
+
+.venv/
+**/.venv/
+*.bak
+*.backup
+*.save
