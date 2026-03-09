@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Coach Dashboard</title>
+    <style>
+      :root{
+        --bg:#0b0f18;
+        --panel: rgba(255,255,255,0.04);
+        --panel2: rgba(255,255,255,0.03);
+        --border: rgba(255,255,255,0.08);
+        --border2: rgba(255,255,255,0.12);
+        --text:#e6edf7;
+        --muted:#a9b7d0;
+        --inputbg: rgba(0,0,0,0.25);
+        --primary:#2d6bff;
+        --warn:#ffb020;
+        --good:#0bffb0;
+      }
+
+      body{
+        margin:0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .topbar{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        padding:16px 18px;
+        border-bottom:1px solid var(--border);
+        background: var(--panel2);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+
+      .brand{
+        font-weight:800;
+        letter-spacing: .2px;
+      }
+
+      /* ✅ ONE button style for ALL top buttons (fixes View Stats font mismatch) */
+      .btn{
+        border:1px solid var(--border2);
+        background: rgba(255,255,255,0.05);
+        color: var(--text);
+        padding:10px 14px;
+        border-radius:12px;
+        cursor:pointer;
+        font-weight:700;
+        font-size:13px;           /* <-- key: same font size for Refresh / View Stats / Logout */
+        line-height:1;
+        text-decoration:none;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        user-select:none;
+      }
+      .btn:hover{ filter: brightness(1.08); }
+
+      .btn.primary{
+        background: var(--primary);
+        border:0;
+      }
+
+      .btn.danger{
+        border:1px solid rgba(255,107,107,0.35);
+        background: rgba(255,107,107,0.08);
+      }
+
+      .btn.small{
+        padding:8px 12px;
+        border-radius:10px;
+        font-size:12px;
+      }
+
+      .wrap{
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 26px 22px;
+      }
+
+      h1{
+        margin: 18px 0 6px;
+        font-size: 34px;
+        letter-spacing: -0.2px;
+      }
+
+      .sub{
+        color: var(--muted);
+        font-size: 15px;
+        margin-bottom: 18px;
+      }
+
+      .card{
+        margin-top: 16px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 18px;
+        box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset;
+      }
+
+      label{
+        display:block;
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      input, textarea{
+        width:100%;
+        margin-top:6px;
+        padding:12px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.10);
+        background: var(--inputbg);
+        color: var(--text);
+        outline:none;
+        box-sizing:border-box;
+      }
+
+      textarea{
+        min-height: 240px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .row{
+        display:grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      .divider{
+        height:1px;
+        background: rgba(255,255,255,0.08);
+        margin: 16px 0;
+      }
+
+      .helper{
+        color: var(--muted);
+        font-size: 13px;
+        margin-top: 8px;
+      }
+
+      .actions{
+        display:flex;
+        gap: 10px;
+        margin-top: 14px;
+        justify-content: flex-end;
+      }
+
+      .tip{
+        color: var(--muted);
+        margin-top: 10px;
+        font-size: 13px;
+      }
+
+      .err{ color:#ff6b6b; margin-top:10px; display:none; white-space:pre-wrap; }
+      .ok{  color: var(--good); margin-top:10px; display:none; }
+
+      /* ---- Manual takeover panel ---- */
+      .panelTitle{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+      }
+
+      .badge{
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        padding:7px 10px;
+        border-radius:999px;
+        font-size:12px;
+        font-weight:800;
+        letter-spacing:.1px;
+        border:1px solid rgba(255,176,32,0.35);
+        background: rgba(255,176,32,0.10);
+        color: #ffd28a;
+      }
+
+      .leadList{
+        margin-top: 14px;
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+      }
+
+      .leadRow{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        padding:12px;
+        border-radius:14px;
+        border:1px solid rgba(255,255,255,0.08);
+        background: rgba(0,0,0,0.18);
+      }
+
+      .leadMeta{
+        display:flex;
+        flex-direction:column;
+        gap:4px;
+        min-width: 0;
+      }
+
+      .leadTop{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        min-width:0;
+      }
+
+      .leadId{
+        font-weight:800;
+        font-size:13px;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+        max-width: 520px;
+      }
+
+      .leadSub{
+        color: var(--muted);
+        font-size:12px;
+      }
+
+      .leadActions{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        flex-shrink:0;
+      }
+
+      .mutedNote{
+        color: var(--muted);
+        font-size: 13px;
+        margin-top: 10px;
+      }
+
+      @media (max-width: 900px){
+        .row{ grid-template-columns: 1fr; }
+        h1{ font-size: 28px; }
+        .leadId{ max-width: 220px; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="topbar">
+      <div class="brand">Looped — Coach</div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn" id="refreshBtn">Refresh</button>
+        <a class="btn" id="viewStatsBtn" href="/coach/stats.html">View Stats</a>
+        <button class="btn" id="logoutBtn">Logout</button>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <h1 id="title">Coach Dashboard</h1>
+      <div class="sub">Edit your bot settings below.</div>
+
+      <div class="card">
+        <div class="row">
+          <div>
+            <label>Booking URL</label>
+            <input id="booking_url" placeholder="https://calendly.com/yourname/15min" />
+          </div>
+          <div>
+            <label>Alt Booking URL (optional)</label>
+            <input id="booking_url_alt" placeholder="https://…" />
+          </div>
+        </div>
+
+        <label>Instagram handle (optional)</label>
+        <input id="instagram_handle" placeholder="looped.ltd" />
+
+        <div class="helper">Used to generate a suggested prompt (you can still edit it).</div>
+        <div style="margin-top:10px;">
+          <button class="btn" id="generatePromptBtn">Generate Prompt</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <label>How your bot should reply</label>
+<textarea id="system_prompt" placeholder="Example:\n- Tone: friendly, confident, UK vibe. Short replies.\n- Rules: 1–2 sentences, ask ONE question at the end.\n- If asked price: ask goal + current situation, don’t invent numbers.\n- High intent: share booking link once, don’t spam.\n- Post-call: no booking push, focus next steps.\n\nWrite yours here…"></textarea>
+
+        <div class="tip">
+          Tip: keep it specific (tone + rules + what to do when asked price + when to send booking link).
+        </div>
+
+        <div class="actions">
+          <button class="btn primary" id="saveBtn">Save</button>
+        </div>
+
+        <div class="err" id="err"></div>
+        <div class="ok" id="ok">Saved ✅</div>
+      </div>
+
+      <!-- ✅ NEW: Manual takeovers panel -->
+      <div class="card" id="takeoverCard">
+        <div class="panelTitle">
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <div style="font-weight:900; letter-spacing:.2px;">Manual Takeovers</div>
+            <div class="mutedNote">If you reply manually on Instagram, the bot pauses for that lead.</div>
+          </div>
+          <div class="badge" id="takeoverBadge" style="display:none;">Bot paused – manual takeover</div>
+        </div>
+
+        <div class="leadList" id="takeoverList"></div>
+        <div class="mutedNote" id="takeoverEmpty" style="display:none;">
+          No manual takeovers right now.
+        </div>
+        <div class="mutedNote" id="takeoverHint" style="display:none;">
+          (Backend endpoint not added yet — we’ll wire this next.)
+        </div>
+      </div>
+
+    </div>
+
+    <script src="./coach.js"></script>
+  </body>
+</html>

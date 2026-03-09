@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Complete your payment</title>
+
+    <style>
+      :root{
+        --bg:#f7f8fb;
+        --panel:#ffffff;
+        --border:rgba(15,23,42,0.10);
+        --border2:rgba(15,23,42,0.14);
+        --text:#0f172a;
+        --muted:rgba(15,23,42,0.62);
+        --primary:#2d6bff;
+
+        --shadow:0 10px 30px rgba(15,23,42,0.06);
+        --ring:rgba(45,107,255,0.22);
+
+        --err:#c0262d;
+        --ok:#027a48;
+        --okBg:rgba(2,122,72,0.08);
+        --okBorder:rgba(2,122,72,0.18);
+      }
+
+      *{box-sizing:border-box}
+
+      body{
+        margin:0;
+        font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+        background:var(--bg);
+        color:var(--text);
+        min-height:100vh;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:18px;
+      }
+
+      .card{
+        width:100%;
+        max-width:560px;
+        background:var(--panel);
+        border:1px solid var(--border);
+        border-radius:22px;
+        padding:28px;
+        box-shadow:var(--shadow);
+      }
+
+      h1{
+        margin:0 0 8px;
+        font-size:28px;
+        letter-spacing:-0.3px;
+      }
+
+      .sub{
+        color:var(--muted);
+        font-size:14px;
+        line-height:1.5;
+        margin-bottom:18px;
+      }
+
+      .priceBox{
+        border:1px solid var(--border);
+        border-radius:16px;
+        padding:16px;
+        background:rgba(15,23,42,0.02);
+        margin-bottom:18px;
+      }
+
+      .row{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        padding:8px 0;
+      }
+
+      .row + .row{
+        border-top:1px solid rgba(15,23,42,0.08);
+      }
+
+      .label{
+        font-size:14px;
+        color:var(--text);
+        font-weight:650;
+      }
+
+      .value{
+        font-size:14px;
+        color:var(--text);
+        font-weight:800;
+        white-space:nowrap;
+      }
+
+      .small{
+        margin-top:10px;
+        color:var(--muted);
+        font-size:12px;
+        line-height:1.5;
+      }
+
+      label{
+        display:block;
+        margin-top:14px;
+        font-size:13px;
+        font-weight:650;
+        color:var(--muted);
+      }
+
+      input{
+        width:100%;
+        margin-top:6px;
+        padding:12px;
+        border-radius:12px;
+        border:1px solid rgba(15,23,42,0.12);
+        background:#fff;
+        color:var(--text);
+        outline:none;
+        transition:border-color .12s ease, box-shadow .12s ease;
+      }
+
+      input:focus{
+        border-color:rgba(45,107,255,0.55);
+        box-shadow:0 0 0 4px var(--ring);
+      }
+
+      button{
+        margin-top:20px;
+        width:100%;
+        padding:14px;
+        border-radius:14px;
+        border:1px solid rgba(45,107,255,0.35);
+        background:var(--primary);
+        color:#fff;
+        font-weight:800;
+        cursor:pointer;
+        box-shadow:0 8px 18px rgba(45,107,255,0.22);
+      }
+
+      button:hover{ filter:brightness(1.02); }
+      button:active{ transform:translateY(1px); }
+      button:disabled{ opacity:.7; cursor:not-allowed; }
+
+      .ok{
+        color:var(--ok);
+        background:var(--okBg);
+        border:1px solid var(--okBorder);
+        border-radius:14px;
+        padding:12px 14px;
+        margin-top:14px;
+        font-size:13px;
+        display:none;
+      }
+
+      .err{
+        color:var(--err);
+        margin-top:14px;
+        font-size:13px;
+        white-space:pre-wrap;
+        display:none;
+      }
+
+      .footer{
+        margin-top:16px;
+        color:var(--muted);
+        font-size:12px;
+        line-height:1.5;
+      }
+
+      .footer a{
+        color:inherit;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="card">
+      <h1>Complete your payment</h1>
+      <div class="sub">
+        Finish setup for your Looped account. Once payment is complete, you’ll be taken to set your password and access your dashboard.
+      </div>
+
+      <div class="priceBox">
+        <div class="row">
+          <div class="label">Setup fee</div>
+          <div class="value">£750 one-off</div>
+        </div>
+        <div class="row">
+          <div class="label">Subscription</div>
+          <div class="value">£200 / month</div>
+        </div>
+        <div class="small">
+          VAT / billing address are collected at checkout by Stripe.
+        </div>
+      </div>
+
+      <form id="payForm">
+        <input id="clientId" type="hidden" />
+
+        <label>Email</label>
+        <input
+          id="email"
+          type="email"
+          placeholder="you@example.com"
+          autocomplete="email"
+          required
+        />
+
+        <button id="payBtn" type="submit">Continue to payment</button>
+      </form>
+
+      <div class="ok" id="ok"></div>
+      <div class="err" id="err"></div>
+
+      <div class="footer">
+        Payments are processed securely by Stripe.
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const form = document.getElementById("payForm");
+        const clientIdEl = document.getElementById("clientId");
+        const emailEl = document.getElementById("email");
+        const payBtn = document.getElementById("payBtn");
+        const errEl = document.getElementById("err");
+        const okEl = document.getElementById("ok");
+
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get("token") || "";
+
+        function showErr(msg) {
+          if (!errEl) return;
+          errEl.textContent = msg || "";
+          errEl.style.display = msg ? "block" : "none";
+        }
+
+        function showOk(msg) {
+          if (!okEl) return;
+          okEl.textContent = msg || "";
+          okEl.style.display = msg ? "block" : "none";
+        }
+
+        async function resolveToken() {
+          if (!token) {
+            showErr("Missing payment token.");
+            if (payBtn) payBtn.disabled = true;
+            return null;
+          }
+
+          try {
+            const res = await fetch("/api/payment-link/resolve", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ token }),
+            });
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+              throw new Error(data?.error || "Invalid payment link.");
+            }
+
+            const clientId = data?.client_id || "";
+            const email = data?.email || "";
+
+            if (!clientId) {
+              throw new Error("Missing client ID.");
+            }
+
+            if (clientIdEl) clientIdEl.value = clientId;
+            if (emailEl && email) emailEl.value = email;
+
+            return { clientId, email };
+          } catch (e) {
+            showErr(String(e.message || e));
+            if (payBtn) payBtn.disabled = true;
+            return null;
+          }
+        }
+
+        form?.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          showErr("");
+          showOk("");
+
+          const client_id = String(clientIdEl?.value || "").trim();
+          const email = String(emailEl?.value || "").trim();
+
+          if (!client_id) {
+            showErr("Missing client ID.");
+            return;
+          }
+
+          if (!email) {
+            showErr("Please enter your email.");
+            return;
+          }
+
+          try {
+            if (payBtn) {
+              payBtn.disabled = true;
+              payBtn.textContent = "Redirecting…";
+            }
+
+            const res = await fetch("/api/stripe/create-checkout-session", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ client_id, email }),
+            });
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+              throw new Error(
+                data?.error ||
+                data?.message ||
+                "Failed to create checkout session."
+              );
+            }
+
+            const url = data?.url || "";
+            if (!url) {
+              throw new Error("No checkout URL returned.");
+            }
+
+            showOk("Redirecting to secure checkout…");
+            window.location.href = url;
+          } catch (e2) {
+            showErr(String(e2.message || e2));
+            if (payBtn) {
+              payBtn.disabled = false;
+              payBtn.textContent = "Continue to payment";
+            }
+          }
+        });
+
+        resolveToken();
+      })();
+    </script>
+  </body>
+</html>

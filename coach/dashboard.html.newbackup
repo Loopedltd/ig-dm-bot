@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Looped — Coach</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 20% 0%, #0f172a, #020617);
+      color: #e5e7eb;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 28px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      opacity: 0.9;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    /* 🔑 ONE shared button style */
+    .btn {
+      font-size: 14px;
+      line-height: 1;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.92);
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    h2 {
+      margin: 0 0 6px;
+      font-size: 22px;
+      font-weight: 600;
+    }
+
+    .sub {
+      opacity: 0.7;
+      margin-bottom: 28px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 26px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      opacity: 0.7;
+      margin-bottom: 6px;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: #e5e7eb;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    textarea {
+      min-height: 160px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      line-height: 1.45;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 16px;
+    }
+
+    .save {
+      background: #3b82f6;
+      border: none;
+      padding: 12px 18px;
+      border-radius: 14px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .save:hover {
+      background: #2563eb;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>Looped — Coach</h1>
+
+    <div class="header-actions">
+      <button class="btn" id="refreshBtn">Refresh</button>
+
+      <!-- ✅ FIXED: View Stats now matches button size exactly -->
+      <a href="/coach/stats.html" class="btn">View Stats</a>
+
+      <button class="btn" id="logoutBtn">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <h2>Coach Dashboard</h2>
+    <div class="sub">Edit your bot settings below.</div>
+
+    <div class="card">
+      <label>Booking URL</label>
+      <input id="bookingUrl" placeholder="https://calendly.com/yourname/15min" />
+
+      <label>Alt Booking URL (optional)</label>
+      <input id="bookingUrlAlt" placeholder="https://…" />
+
+      <label>Instagram handle (optional)</label>
+      <input id="instagramHandle" placeholder="looped.ltd" />
+
+      <button class="btn" id="generatePromptBtn">Generate Prompt</button>
+
+      <label style="margin-top: 18px;">How your bot should reply</label>
+      <textarea id="systemPrompt"></textarea>
+
+      <div class="actions">
+        <button class="save" id="saveBtn">Save</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Existing JS untouched — assumes you already had this working
+    const token = localStorage.getItem("coach_token");
+    if (!token) location.href = "/coach/login.html";
+
+    document.getElementById("logoutBtn").onclick = () => {
+      localStorage.removeItem("coach_token");
+      location.href = "/coach/login.html";
+    };
+
+    document.getElementById("refreshBtn").onclick = () => {
+      location.reload();
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Saved</title>
+    <style>
+      :root{
+        --bg: #f7f8fb;
+        --panel: #ffffff;
+        --border: rgba(15, 23, 42, 0.10);
+        --border2: rgba(15, 23, 42, 0.14);
+        --text: #0f172a;
+        --muted: rgba(15, 23, 42, 0.62);
+        --primary: #2d6bff;
+
+        --shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+        --shadow2: 0 1px 0 rgba(15, 23, 42, 0.04);
+      }
+
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+      }
+
+      .wrap {
+        width: 100%;
+        max-width: 980px;
+        padding: 24px;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        padding: 34px 20px;
+        text-align: center;
+        box-shadow: var(--shadow);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 54px;
+        letter-spacing: -1px;
+      }
+
+      .muted {
+        color: var(--muted);
+        font-size: 18px;
+        margin-top: 14px;
+        line-height: 1.45;
+      }
+
+      .btn {
+        margin-top: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(45, 107, 255, 0.35);
+        background: var(--primary);
+        color: #fff;
+        padding: 14px 18px;
+        border-radius: 16px;
+        cursor: pointer;
+        font-weight: 850;
+        font-size: 18px;
+        text-decoration: none;
+        box-shadow: 0 10px 22px rgba(45, 107, 255, 0.22);
+      }
+
+      .btn:hover {
+        filter: brightness(1.02);
+      }
+
+      .btn:active {
+        transform: translateY(1px);
+      }
+
+      @media (max-width: 520px){
+        h1{ font-size: 40px; }
+        .muted{ font-size: 16px; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>Saved</h1>
+
+        <div class="muted">
+          We’ve saved your presets and your bot will be ready within a couple of minutes.<br />
+          You can close this page — or go back and edit anytime.
+        </div>
+
+        <a class="btn" href="/coach/dashboard.html">Back to Dashboard</a>
+      </div>
+    </div>
+  </body>
+</html>

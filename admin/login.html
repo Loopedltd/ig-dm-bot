@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Admin Login</title>
+    <style>
+      :root{
+        --bg:#ffffff;
+        --panel:#ffffff;
+        --text:#0b1220;
+        --muted:#5b667a;
+        --line:rgba(15,23,42,.12);
+        --line2:rgba(15,23,42,.16);
+        --shadow: 0 12px 40px rgba(15,23,42,.10);
+        --radius:18px;
+
+        --btn:#111827;
+        --btnText:#ffffff;
+
+        --danger:#b42318;
+        --ok:#027a48;
+      }
+
+      body{
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        background:var(--bg);
+        color:var(--text);
+        margin:0;
+      }
+
+      .wrap{
+        max-width: 420px;
+        margin: 70px auto;
+        padding: 24px;
+        background:var(--panel);
+        border:1px solid var(--line);
+        border-radius:var(--radius);
+        box-shadow: var(--shadow);
+      }
+
+      h1{ margin: 0 0 10px; font-size: 20px; font-weight: 900; letter-spacing: .1px; }
+      p{ margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+
+      label{
+        display:block;
+        margin: 10px 0 6px;
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 800;
+      }
+
+      input{
+        width:100%;
+        padding:12px;
+        border-radius:12px;
+        border:1px solid var(--line2);
+        background:#fff;
+        color:var(--text);
+        outline:none;
+        box-sizing: border-box;
+      }
+      input:focus{
+        border-color:rgba(17,24,39,.35);
+        box-shadow: 0 0 0 3px rgba(17,24,39,.08);
+      }
+
+      button{
+        width:100%;
+        margin-top:14px;
+        padding:12px;
+        border-radius:12px;
+        border:1px solid rgba(17,24,39,.12);
+        background:var(--btn);
+        color:var(--btnText);
+        font-weight: 900;
+        cursor:pointer;
+      }
+      button:hover{ filter: brightness(1.02); }
+      button:disabled{ opacity:.6; cursor:not-allowed; }
+
+      .err{ margin-top:12px; color:var(--danger); font-size: 13px; display:none; white-space: pre-wrap; }
+      .ok{ margin-top:12px; color:var(--ok); font-size: 13px; display:none; }
+
+      a{ color:#111827; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Admin Login</h1>
+      <p>Log in to manage coaches, configs, and leads.</p>
+
+      <form id="f">
+        <label>Email</label>
+        <input id="email" type="email" autocomplete="username" required />
+
+        <label>Password</label>
+        <input id="password" type="password" autocomplete="current-password" required />
+
+        <button id="btn" type="submit">Sign in</button>
+        <div class="err" id="err"></div>
+        <div class="ok" id="ok"></div>
+      </form>
+    </div>
+
+    <script src="/admin/admin.js"></script>
+    <script>
+      AdminLogin.init();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Coach Stats</title>
+  <style>
+    /* Light "Lovable-style" (match coach/dashboard.html) */
+    :root{
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --panel2: rgba(255,255,255,0.85);
+      --border: rgba(15, 23, 42, 0.10);
+      --border2: rgba(15, 23, 42, 0.14);
+      --text: #0f172a;
+      --muted: rgba(15, 23, 42, 0.62);
+      --danger: #c0262d;
+
+      --ringBg: rgba(15, 23, 42, 0.12);
+      --ringFg: #2d6bff;
+
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+      --shadow2: 0 1px 0 rgba(15, 23, 42, 0.04);
+      --ring: rgba(45, 107, 255, 0.22);
+    }
+
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color:var(--text);
+      background:
+        radial-gradient(1200px 700px at 70% 20%, rgba(45,107,255,0.14), transparent 58%),
+        radial-gradient(900px 600px at 25% 65%, rgba(45,107,255,0.08), transparent 62%),
+        var(--bg);
+    }
+
+    .wrap{max-width:1100px;margin:0 auto;padding:42px 22px;}
+
+    h1{margin:0 0 10px 0;font-size:44px;letter-spacing:-0.02em;}
+
+    a{
+      color: var(--text);
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--border2);
+      background:#fff;
+      box-shadow: var(--shadow2);
+    }
+    a:hover{ box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08); }
+    a:active{ transform: translateY(0.5px); }
+
+    .panel{
+      margin-top:18px;
+      padding:22px;
+      border-radius:22px;
+      background: var(--panel);
+      border:1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .gridTop{
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap:16px;
+      margin-bottom:18px;
+    }
+
+    .card{
+      background: rgba(15, 23, 42, 0.02);
+      border:1px solid var(--border);
+      border-radius:18px;
+      padding:18px;
+      min-height:86px;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+    }
+
+    .label{color:var(--muted);font-size:14px;font-weight:650}
+    .value{font-size:28px;font-weight:800;letter-spacing:-0.2px}
+
+    .gridRings{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:16px;
+    }
+
+    .ringCard{
+      background: rgba(15, 23, 42, 0.02);
+      border:1px solid var(--border);
+      border-radius:18px;
+      padding:18px;
+      display:flex;
+      gap:14px;
+      align-items:center;
+      min-height:92px;
+    }
+
+    .ringText .title{font-weight:850;letter-spacing:-0.1px}
+    .ringText .sub{color:var(--muted);font-size:14px;margin-top:2px}
+
+    .err{
+      margin-top:14px;
+      color: var(--danger);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size:13px;
+      white-space:pre-wrap;
+      background: rgba(192, 38, 45, 0.06);
+      border: 1px solid rgba(192, 38, 45, 0.16);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    /* circular progress */
+    .ring{
+      width:64px;height:64px;flex:0 0 64px;
+      position:relative;
+      display:grid;place-items:center;
+    }
+    .ring svg{transform:rotate(-90deg)}
+    .ring .pct{
+      position:absolute;
+      font-weight:850;
+      font-size:14px;
+      color: rgba(15, 23, 42, 0.82);
+    }
+
+    @media (max-width: 900px){
+      .gridTop{grid-template-columns:1fr 1fr}
+      .gridRings{grid-template-columns:1fr}
+      h1{font-size:36px}
+      .wrap{padding:32px 18px;}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Stats</h1>
+    <a href="/coach/dashboard.html">Back to dashboard</a>
+
+    <div class="panel">
+      <div class="gridTop">
+        <div class="card">
+          <div class="label">Leads</div>
+          <div class="value" id="leadsVal">—</div>
+        </div>
+        <div class="card">
+          <div class="label">Conversations</div>
+          <div class="value" id="convosVal">—</div>
+        </div>
+        <div class="card">
+          <div class="label">Replies sent</div>
+          <div class="value" id="repliesVal">—</div>
+        </div>
+        <div class="card">
+          <div class="label">Reply rate</div>
+          <div class="value" id="replyRateVal">—</div>
+        </div>
+      </div>
+
+      <div class="gridRings">
+        <div class="ringCard">
+          <div class="ring" data-ring="leads">
+            <svg width="64" height="64" viewBox="0 0 64 64">
+              <circle cx="32" cy="32" r="26" stroke="var(--ringBg)" stroke-width="8" fill="none"></circle>
+              <circle id="ringLeads" cx="32" cy="32" r="26" stroke="var(--ringFg)" stroke-width="8" fill="none"
+                      stroke-linecap="round" stroke-dasharray="163.36" stroke-dashoffset="163.36"></circle>
+            </svg>
+            <div class="pct" id="pctLeads">0%</div>
+          </div>
+          <div class="ringText">
+            <div class="title">Leads progress</div>
+            <div class="sub">Based on your monthly target</div>
+          </div>
+        </div>
+
+        <div class="ringCard">
+          <div class="ring" data-ring="replies">
+            <svg width="64" height="64" viewBox="0 0 64 64">
+              <circle cx="32" cy="32" r="26" stroke="var(--ringBg)" stroke-width="8" fill="none"></circle>
+              <circle id="ringReplies" cx="32" cy="32" r="26" stroke="var(--ringFg)" stroke-width="8" fill="none"
+                      stroke-linecap="round" stroke-dasharray="163.36" stroke-dashoffset="163.36"></circle>
+            </svg>
+            <div class="pct" id="pctReplies">0%</div>
+          </div>
+          <div class="ringText">
+            <div class="title">Replies progress</div>
+            <div class="sub">Based on your monthly target</div>
+          </div>
+        </div>
+
+        <div class="ringCard">
+          <div class="ring" data-ring="bookings">
+            <svg width="64" height="64" viewBox="0 0 64 64">
+              <circle cx="32" cy="32" r="26" stroke="var(--ringBg)" stroke-width="8" fill="none"></circle>
+              <circle id="ringBookings" cx="32" cy="32" r="26" stroke="var(--ringFg)" stroke-width="8" fill="none"
+                      stroke-linecap="round" stroke-dasharray="163.36" stroke-dashoffset="163.36"></circle>
+            </svg>
+            <div class="pct" id="pctBookings">0%</div>
+          </div>
+          <div class="ringText">
+            <div class="title">Booking clicks</div>
+            <div class="sub">Based on your monthly target</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="err" id="errBox" style="display:none;"></div>
+    </div>
+  </div>
+
+  <script>
+    const CIRC = 2 * Math.PI * 26; // 163.36
+
+    function setRing(circleEl, pctEl, pct){
+      const p = Math.max(0, Math.min(100, Math.round(pct)));
+      pctEl.textContent = p + "%";
+      const offset = CIRC * (1 - p/100);
+      circleEl.style.strokeDasharray = CIRC.toFixed(2);
+      circleEl.style.strokeDashoffset = offset.toFixed(2);
+    }
+
+    function showErr(obj){
+      const box = document.getElementById("errBox");
+      box.style.display = "block";
+      box.textContent = "Error loading stats:\n" + (typeof obj === "string" ? obj : JSON.stringify(obj, null, 2));
+    }
+
+    function redirectToLogin(){
+      window.location.href = "/coach/login.html";
+    }
+
+    async function loadStats(){
+      const token = localStorage.getItem("coach_token");
+      if(!token){
+        redirectToLogin();
+        return;
+      }
+
+      const res = await fetch("/coach/api/stats", {
+        headers: { "Authorization": "Bearer " + token }
+      });
+
+      if(res.status === 401 || res.status === 403){
+        localStorage.removeItem("coach_token");
+        redirectToLogin();
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if(!res.ok){
+        showErr(data || { error: "request_failed" });
+        return;
+      }
+
+      const t = data.totals || {};
+      document.getElementById("leadsVal").textContent = t.leads ?? 0;
+      document.getElementById("convosVal").textContent = t.conversations ?? 0;
+      document.getElementById("repliesVal").textContent = t.repliesSent ?? 0;
+      document.getElementById("replyRateVal").textContent = (t.replyRate ?? 0) + "%";
+
+      // Targets (change later if you want)
+      const leadsTarget = 100;
+      const repliesTarget = 300;
+      const bookingsTarget = 50;
+
+      const leadsPct = leadsTarget ? ( (t.leads ?? 0) / leadsTarget * 100 ) : 0;
+      const repliesPct = repliesTarget ? ( (t.repliesSent ?? 0) / repliesTarget * 100 ) : 0;
+      const bookingsPct = bookingsTarget ? ( (t.bookingClicks ?? 0) / bookingsTarget * 100 ) : 0;
+
+      setRing(document.getElementById("ringLeads"), document.getElementById("pctLeads"), leadsPct);
+      setRing(document.getElementById("ringReplies"), document.getElementById("pctReplies"), repliesPct);
+      setRing(document.getElementById("ringBookings"), document.getElementById("pctBookings"), bookingsPct);
+    }
+
+    loadStats();
+  </script>
+</body>
+</html>

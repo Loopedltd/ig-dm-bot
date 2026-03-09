@@ -1,0 +1,835 @@
+import bcrypt from "bcryptjs";
+import dotenv from "dotenv";
+import express from "express";
+import OpenAI from "openai";
+import jwt from "jsonwebtoken";
+import path from "path";
+import { fileURLToPath } from "url";
+import { supabase } from "./supabaseClient.js";
+
+// Load env only for local/dev (Render injects env vars itself)
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config();
+}
+
+// ---- PATH HELPERS ----
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+
+// ✅ Serve admin + coach UI
+app.use("/admin", express.static(path.join(__dirname, "admin")));
+app.use("/coach", express.static(path.join(__dirname, "coach")));
+
+// Redirects
+app.get("/admin", (req, res) => res.redirect("/admin/login.html"));
+app.get("/coach", (req, res) => res.redirect("/coach/login.html"));
+
+// ---- ENV SAFETY ----
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+if (!VERIFY_TOKEN) {
+  throw new Error("❌ VERIFY_TOKEN is NOT set. Meta webhook verification will fail.");
+}
+
+const DASHBOARD_JWT_SECRET = process.env.DASHBOARD_JWT_SECRET;
+const DASHBOARD_ADMIN_EMAIL = process.env.DASHBOARD_ADMIN_EMAIL;
+const DASHBOARD_ADMIN_PASSWORD = process.env.DASHBOARD_ADMIN_PASSWORD;
+
+const COACH_JWT_SECRET = process.env.COACH_JWT_SECRET;
+
+if (process.env.NODE_ENV === "production") {
+  if (!COACH_JWT_SECRET) throw new Error("❌ COACH_JWT_SECRET is not set");
+  if (!DASHBOARD_JWT_SECRET) throw new Error("❌ DASHBOARD_JWT_SECRET is not set");
+  if (!DASHBOARD_ADMIN_EMAIL) throw new Error("❌ DASHBOARD_ADMIN_EMAIL is not set");
+  if (!DASHBOARD_ADMIN_PASSWORD) throw new Error("❌ DASHBOARD_ADMIN_PASSWORD is not set");
+}
+
+// ---- OPENAI (OPTIONAL) ----
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
+
+/**
+ * ===========================
+ * MANUAL TAKEOVER (core rules)
+ * ===========================
+ * DB column you added: leads.manual_override (boolean)
+ *
+ * When manual_override=true for a lead:
+ * - Bot MUST NOT send replies
+ * - But we should still store inbound messages (normal logging)
+ *
+ * We also expose simple API endpoints for coach/admin to toggle it.
+ *
+ * ✅ EXTRA BEHAVIOUR ADDED:
+ * - If coach replies manually on Instagram (echo), auto-enable manual_override for THAT lead only.
+ * - Refresh manual_override_at on every coach manual reply (echo) so the 24h timer resets.
+ * - Auto-resume after 24h of no coach replies (only then bot can reply again).
+ */
+
+const nowIso = () => new Date().toISOString();
+
+async function setLeadManualOverride({ leadId, clientId, enabled, reason, actor }) {
+  // actor: "coach" | "admin" | "system"
+  const patch = {
+    manual_override: !!enabled,
+    manual_override_reason: reason ? String(reason).slice(0, 200) : null,
+    manual_override_by: actor,
+    manual_override_at: nowIso(),
+  };
+
+  let q = supabase.from("leads").update(patch).eq("id", leadId);
+  if (clientId) q = q.eq("client_id", clientId);
+
+  const { data, error } = await q.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+// ===========================
+// SAFE HELPERS (fallback safety)
+// ===========================
+
+function safeJson(res, status, payload) {
+  try {
+    return res.status(status).json(payload);
+  } catch {
+    // last resort
+    try {
+      return res.status(status).send(JSON.stringify(payload));
+    } catch {
+      return res.end();
+    }
+  }
+}
+
+// ---------------------------
+// IG HELPERS (webhook parsing)
+// ---------------------------
+function extractIgText(messaging) {
+  return (
+    messaging?.message?.text ||
+    messaging?.message?.attachments?.[0]?.payload?.url ||
+    ""
+  );
+}
+
+function isIgEcho(messaging) {
+  // Instagram/Facebook echo flag for messages you sent from your Page/IG account
+  return !!messaging?.message?.is_echo;
+}
+
+function parseIgEvent(reqBody) {
+  const entry = reqBody?.entry?.[0];
+  const messaging = entry?.messaging?.[0];
+  return { entry, messaging };
+}
+
+function msSince(iso) {
+  const t = iso ? new Date(iso).getTime() : NaN;
+  if (!Number.isFinite(t)) return Infinity;
+  return Date.now() - t;
+}
+
+async function generateAiReply({
+  cfg,
+  lead,
+  lastUserTextRaw,
+  postCallMode,
+  asksPrice,
+  highIntent,
+  bookingUrl,
+}) {
+  if (!openai) return null;
+
+  const systemBase =
+    cfg?.system_prompt ||
+    "You are the coach's Instagram DM assistant. Be friendly, concise, and human. Ask one question at a time.";
+
+  const guardrails = [
+    "Keep replies short (1–3 sentences).",
+    "Ask ONE clear question at the end (unless you are giving the booking link, which is handled elsewhere).",
+    "Do not mention OpenAI/AI. Sound like a real person.",
+    "Do not invent prices. If asked about price, ask for goal + current situation and say you'll confirm.",
+    "Never spam. No follow-up threats.",
+  ];
+
+  const postCallRules = postCallMode
+    ? [
+        "This user has already completed a call. Use a matey supportive tone (UK vibe).",
+        "Do NOT push booking links or ask them to book a call.",
+        "Focus on next steps: training, nutrition, accountability, onboarding info.",
+      ]
+    : ["This user has not completed a call yet. Qualify them: goal, timeline, current situation."];
+
+  const context = {
+    lead_stage: lead?.stage ?? null,
+    call_completed: lead?.call_completed ?? false,
+    booking_sent: lead?.booking_sent ?? false,
+    booking_url_present: !!bookingUrl,
+    user_asked_price: asksPrice,
+    user_high_intent: highIntent,
+    manual_override: !!lead?.manual_override,
+  };
+
+  const messages = [
+    {
+      role: "system",
+      content: [
+        systemBase,
+        "",
+        "RULES:",
+        ...guardrails.map((x) => `- ${x}`),
+        ...postCallRules.map((x) => `- ${x}`),
+        "",
+        "CONTEXT (JSON):",
+        JSON.stringify(context),
+      ].join("\n"),
+    },
+    { role: "user", content: lastUserTextRaw || "" },
+  ];
+
+  try {
+    const resp = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      messages,
+      temperature: 0.6,
+      max_tokens: 140,
+    });
+
+    const text = resp?.choices?.[0]?.message?.content?.trim();
+    if (!text) return null;
+    return text;
+  } catch (e) {
+    console.warn("⚠️ OpenAI error, falling back:", e?.message || e);
+    return null;
+  }
+}
+
+// ===========================
+// ADMIN DASHBOARD (BACKEND)
+// ===========================
+
+function signAdminToken() {
+  if (!DASHBOARD_JWT_SECRET) return null;
+  return jwt.sign({ role: "admin" }, DASHBOARD_JWT_SECRET, { expiresIn: "7d" });
+}
+
+function requireAdmin(req, res, next) {
+  try {
+    if (!DASHBOARD_JWT_SECRET) {
+      return safeJson(res, 500, { error: "dashboard env not configured" });
+    }
+
+    const hdr = req.headers.authorization || "";
+    const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
+    if (!token) return safeJson(res, 401, { error: "missing token" });
+
+    const decoded = jwt.verify(token, DASHBOARD_JWT_SECRET);
+    if (!decoded || decoded.role !== "admin") {
+      return safeJson(res, 403, { error: "forbidden" });
+    }
+
+    req.admin = decoded;
+    return next();
+  } catch {
+    return safeJson(res, 401, { error: "invalid token" });
+  }
+}
+
+// Admin login -> returns JWT
+app.post("/admin/api/login", async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return safeJson(res, 400, { error: "email and password required" });
+    }
+
+    if (!DASHBOARD_ADMIN_EMAIL || !DASHBOARD_ADMIN_PASSWORD || !DASHBOARD_JWT_SECRET) {
+      return safeJson(res, 500, { error: "dashboard env not configured" });
+    }
+
+    const ok =
+      String(email).trim().toLowerCase() === String(DASHBOARD_ADMIN_EMAIL).trim().toLowerCase() &&
+      String(password) === String(DASHBOARD_ADMIN_PASSWORD);
+
+    if (!ok) return safeJson(res, 401, { error: "invalid credentials" });
+
+    const token = signAdminToken();
+    return safeJson(res, 200, { ok: true, token });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+// Basic stats for dashboard
+app.get("/admin/api/stats", requireAdmin, async (req, res) => {
+  try {
+    const { count: clientsCount, error: cErr } = await supabase
+      .from("clients")
+      .select("*", { count: "exact", head: true });
+    if (cErr) return safeJson(res, 500, cErr);
+
+    const { count: leadsCount, error: lErr } = await supabase
+      .from("leads")
+      .select("*", { count: "exact", head: true });
+    if (lErr) return safeJson(res, 500, lErr);
+
+    const { count: msgsCount, error: mErr } = await supabase
+      .from("messages")
+      .select("*", { count: "exact", head: true });
+    if (mErr) return safeJson(res, 500, mErr);
+
+    return safeJson(res, 200, {
+      ok: true,
+      clients: clientsCount ?? 0,
+      leads: leadsCount ?? 0,
+      messages: msgsCount ?? 0,
+    });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+// List clients + their config
+app.get("/admin/api/clients", requireAdmin, async (req, res) => {
+  try {
+    const { data: clients, error: err } = await supabase
+      .from("clients")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (err) return safeJson(res, 500, err);
+
+    const clientIds = (clients || []).map((c) => c.id);
+
+    const { data: configs, error: cfgErr } = await supabase
+      .from("client_configs")
+      .select("*")
+      .in("client_id", clientIds);
+    if (cfgErr) return safeJson(res, 500, cfgErr);
+
+    const map = new Map();
+    for (const cfg of configs || []) map.set(cfg.client_id, cfg);
+
+    const merged = (clients || []).map((c) => ({
+      ...c,
+      config: map.get(c.id) || null,
+    }));
+
+    return safeJson(res, 200, { ok: true, clients: merged });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+// Update a client's config
+app.post("/admin/api/clients/:clientId/config", requireAdmin, async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    const patch = req.body || {};
+
+    const allowed = {};
+    if (typeof patch.system_prompt === "string") allowed.system_prompt = patch.system_prompt;
+    if (typeof patch.offer_type === "string") allowed.offer_type = patch.offer_type;
+    if (typeof patch.offer_url === "string" || patch.offer_url === null) allowed.offer_url = patch.offer_url;
+    if (typeof patch.booking_url === "string" || patch.booking_url === null) allowed.booking_url = patch.booking_url;
+    if (typeof patch.booking_url_alt === "string" || patch.booking_url_alt === null)
+      allowed.booking_url_alt = patch.booking_url_alt;
+    if (typeof patch.followup_rules === "object") allowed.followup_rules = patch.followup_rules;
+    if (typeof patch.instagram_handle === "string" || patch.instagram_handle === null)
+      allowed.instagram_handle = patch.instagram_handle;
+
+    const { data: updated, error } = await supabase
+      .from("client_configs")
+      .update(allowed)
+      .eq("client_id", clientId)
+      .select()
+      .single();
+
+    if (error) return safeJson(res, 500, error);
+    return safeJson(res, 200, { ok: true, config: updated });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+// List leads
+app.get("/admin/api/leads", requireAdmin, async (req, res) => {
+  try {
+    const clientId = req.query.client_id ? String(req.query.client_id) : null;
+
+    let q = supabase
+      .from("leads")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    if (clientId) q = q.eq("client_id", clientId);
+
+    const { data: leads, error } = await q;
+    if (error) return safeJson(res, 500, error);
+
+    return safeJson(res, 200, { ok: true, leads: leads || [] });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+// Mark call complete from dashboard
+app.post("/admin/api/leads/mark-call-complete", requireAdmin, async (req, res) => {
+  try {
+    const { client_id, ig_psid } = req.body || {};
+    if (!client_id || !ig_psid) {
+      return safeJson(res, 400, { error: "client_id and ig_psid are required" });
+    }
+
+    const { data: lead, error: leadErr } = await supabase
+      .from("leads")
+      .update({ call_completed: true })
+      .eq("client_id", client_id)
+      .eq("ig_psid", ig_psid)
+      .select()
+      .single();
+
+    if (leadErr) return safeJson(res, 500, leadErr);
+    return safeJson(res, 200, { ok: true, lead });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+// ✅ Admin toggle manual override
+app.post("/admin/api/leads/:leadId/manual-override", requireAdmin, async (req, res) => {
+  try {
+    const leadId = req.params.leadId;
+    const { enabled, reason } = req.body || {};
+    const updated = await setLeadManualOverride({
+      leadId,
+      enabled: !!enabled,
+      reason,
+      actor: "admin",
+    });
+    return safeJson(res, 200, { ok: true, lead: updated });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+// ===========================
+// COACH PORTAL (BACKEND)
+// ===========================
+
+function signCoachToken(client_id) {
+  if (!COACH_JWT_SECRET) return null;
+  return jwt.sign({ role: "coach", client_id }, COACH_JWT_SECRET, { expiresIn: "14d" });
+}
+
+function requireCoach(req, res, next) {
+  try {
+    const hdr = req.headers.authorization || "";
+    const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
+    if (!token) return safeJson(res, 401, { error: "missing token" });
+
+    const decoded = jwt.verify(token, COACH_JWT_SECRET);
+    if (!decoded || decoded.role !== "coach" || !decoded.client_id) {
+      return safeJson(res, 403, { error: "forbidden" });
+    }
+
+    req.coach = decoded;
+    return next();
+  } catch {
+    return safeJson(res, 401, { error: "invalid token" });
+  }
+}
+
+// Coach login -> returns JWT
+app.post("/coach/api/login", async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return safeJson(res, 400, { error: "email and password required" });
+    }
+
+    const emailNorm = String(email).trim().toLowerCase();
+
+    const { data: user, error } = await supabase
+      .from("coach_users")
+      .select("*")
+      .eq("email", emailNorm)
+      .single();
+
+    if (error || !user) return safeJson(res, 401, { error: "invalid credentials" });
+
+    const ok = await bcrypt.compare(String(password), user.password_hash);
+    if (!ok) return safeJson(res, 401, { error: "invalid credentials" });
+
+    const token = signCoachToken(user.client_id);
+    return safeJson(res, 200, { ok: true, token });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+// Coach info
+app.get("/coach/api/me", requireCoach, async (req, res) => {
+  const { data, error } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("id", req.coach.client_id)
+    .single();
+
+  if (error) return safeJson(res, 500, error);
+  return safeJson(res, 200, { ok: true, client: data });
+});
+
+// Coach config (READ)
+app.get("/coach/api/config", requireCoach, async (req, res) => {
+  const { data, error } = await supabase
+    .from("client_configs")
+    .select("*")
+    .eq("client_id", req.coach.client_id)
+    .single();
+
+  if (error) return safeJson(res, 500, error);
+  return safeJson(res, 200, { ok: true, config: data });
+});
+
+// Coach config (WRITE - LIMITED)
+app.post("/coach/api/config", requireCoach, async (req, res) => {
+  const patch = req.body || {};
+  const allowed = {};
+
+  if (typeof patch.system_prompt === "string") allowed.system_prompt = patch.system_prompt;
+  if (typeof patch.booking_url === "string" || patch.booking_url === null) allowed.booking_url = patch.booking_url;
+  if (typeof patch.booking_url_alt === "string" || patch.booking_url_alt === null)
+    allowed.booking_url_alt = patch.booking_url_alt;
+  if (typeof patch.instagram_handle === "string" || patch.instagram_handle === null)
+    allowed.instagram_handle = patch.instagram_handle;
+
+  const { data, error } = await supabase
+    .from("client_configs")
+    .update(allowed)
+    .eq("client_id", req.coach.client_id)
+    .select()
+    .single();
+
+  if (error) return safeJson(res, 500, error);
+  return safeJson(res, 200, { ok: true, config: data });
+});
+
+// ✅ Coach toggle manual override (only for their own client_id)
+app.post("/coach/api/leads/:leadId/manual-override", requireCoach, async (req, res) => {
+  try {
+    const leadId = req.params.leadId;
+    const { enabled, reason } = req.body || {};
+    const updated = await setLeadManualOverride({
+      leadId,
+      clientId: req.coach.client_id,
+      enabled: !!enabled,
+      reason,
+      actor: "coach",
+    });
+    return safeJson(res, 200, { ok: true, lead: updated });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+/**
+ * ✅ NEW: List leads for coach UI (for “Bot paused – manual takeover” badge)
+ * Returns manual override fields so the UI can show status per lead.
+ */
+app.get("/coach/api/leads", requireCoach, async (req, res) => {
+  try {
+    const { data: leads, error } = await supabase
+      .from("leads")
+      .select(
+        "id,created_at,ig_psid,stage,booking_sent,call_completed,manual_override,manual_override_reason,manual_override_by,manual_override_at"
+      )
+      .eq("client_id", req.coach.client_id)
+      .order("created_at", { ascending: false })
+      .limit(300);
+
+    if (error) return safeJson(res, 500, error);
+    return safeJson(res, 200, { ok: true, leads: leads || [] });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+// ---- COACH PROMPT GENERATOR (single route, no duplicates) ----
+app.post("/coach/api/generate-prompt", requireCoach, async (req, res) => {
+  try {
+    const { instagram_handle } = req.body || {};
+    const handleRaw = String(instagram_handle || "").trim();
+    if (!handleRaw) return safeJson(res, 400, { error: "instagram_handle is required" });
+
+    const handle = handleRaw.startsWith("@") ? handleRaw.slice(1) : handleRaw;
+    if (!/^[a-zA-Z0-9._]{1,30}$/.test(handle)) {
+      return safeJson(res, 400, { error: "invalid instagram handle format" });
+    }
+
+    const { data: cfg } = await supabase
+      .from("client_configs")
+      .select("*")
+      .eq("client_id", req.coach.client_id)
+      .single();
+
+    const base = cfg?.system_prompt || "";
+
+    if (!openai) {
+      const stub = [
+        "You are the coach's Instagram DM assistant.",
+        "Tone: friendly, confident, concise, UK vibe.",
+        "Write 1–2 short sentences max and end with ONE clear question.",
+        "Never mention AI.",
+        "If asked about price: ask goal + current situation, say you'll confirm exact options.",
+        `Coach context: Instagram handle is @${handle}. Mirror their style (short, punchy, motivating).`,
+      ].join("\n");
+      return safeJson(res, 200, { ok: true, system_prompt: stub, used_ai: false });
+    }
+
+    const messages = [
+      {
+        role: "system",
+        content: [
+          "You write system prompts for an Instagram DM assistant for a coach.",
+          "Output ONLY the system prompt text. No quotes, no markdown.",
+          "Make it practical and specific.",
+        ].join("\n"),
+      },
+      {
+        role: "user",
+        content: [
+          `Coach Instagram handle: @${handle}`,
+          "",
+          "Goal: Create a strong system prompt for the coach's DM assistant.",
+          "Constraints:",
+          "- Keep it short but clear (8–14 lines).",
+          "- UK tone, confident, not cringe.",
+          "- 1–2 sentences per reply, end with ONE question.",
+          "- If asked about price: ask goal + current situation; don't invent prices.",
+          "- If high intent: guide to booking link (but don't spam).",
+          "",
+          "If there is an existing prompt, improve it while keeping the intent:",
+          base ? `EXISTING_PROMPT:\n${base}` : "EXISTING_PROMPT: (none)",
+        ].join("\n"),
+      },
+    ];
+
+    const resp = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      messages,
+      temperature: 0.5,
+      max_tokens: 350,
+    });
+
+    const text = resp?.choices?.[0]?.message?.content?.trim();
+    if (!text) return safeJson(res, 500, { error: "failed to generate prompt" });
+
+    return safeJson(res, 200, { ok: true, system_prompt: text, used_ai: true });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+// ===========================
+// COACH STATS API (your existing one stays as-is in your project)
+// NOTE: You already fixed replyRate to be <=100%.
+// If you want manual override count surfaced to UI later, you can add it here.
+// ===========================
+
+// Root test
+app.get("/", (req, res) => res.send("IG DM Bot is running"));
+
+// Meta webhook verify
+app.get("/webhook", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    console.log("✅ Webhook verified by Meta");
+    return res.status(200).send(challenge);
+  }
+  console.warn("❌ Webhook verification failed");
+  return res.sendStatus(403);
+});
+
+// ===========================
+// INSTAGRAM WEBHOOK (POST)
+// ===========================
+app.post("/webhook", async (req, res) => {
+  try {
+    const { messaging } = parseIgEvent(req.body);
+
+    // Ignore non-message updates
+    if (!messaging) return res.sendStatus(200);
+
+    const senderId = messaging.sender?.id;
+    const text = extractIgText(messaging);
+    const isEcho = isIgEcho(messaging);
+
+    // Nothing useful to do
+    if (!senderId || !text) return res.sendStatus(200);
+
+    // 1️⃣ Find or create lead (per senderId)
+    let { data: lead, error: leadErr } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("ig_psid", senderId)
+      .single();
+
+    // "PGRST116" is the "No rows found" code in PostgREST
+    if (leadErr && leadErr.code !== "PGRST116") {
+      console.error("Lead lookup error:", leadErr);
+      return res.sendStatus(200);
+    }
+
+    if (!lead) {
+      const { data: newLead, error: createErr } = await supabase
+        .from("leads")
+        .insert({
+          ig_psid: senderId,
+          stage: "new",
+        })
+        .select()
+        .single();
+
+      if (createErr) {
+        console.error("Lead create error:", createErr);
+        return res.sendStatus(200);
+      }
+
+      lead = newLead;
+    }
+
+    // 2️⃣ Store message
+    // - Echo messages are "coach/manual outbound"
+    // - Non-echo messages are inbound from user
+    await supabase.from("messages").insert({
+      lead_id: lead.id,
+      direction: isEcho ? "out" : "in",
+      text,
+      created_at: new Date().toISOString(),
+    });
+
+    // 3️⃣ If coach replies manually (echo) => pause bot for THIS lead only
+    // Also refresh manual_override_at on EVERY coach reply so the 24h timer is accurate.
+    if (isEcho) {
+      await setLeadManualOverride({
+        leadId: lead.id,
+        clientId: lead.client_id,
+        enabled: true,
+        reason: "Coach replied manually on Instagram",
+        actor: "system",
+      });
+
+      console.log("🛑 Manual override enabled/refreshed (echo) for lead", lead.id);
+      return res.sendStatus(200);
+    }
+
+    // 4️⃣ Manual override handling for inbound user messages
+    if (lead.manual_override) {
+      // ✅ Auto-resume after 24h of NO coach replies (echo)
+      // We use manual_override_at as "last coach activity" timestamp (refreshed on each echo above).
+      const H24 = 24 * 60 * 60 * 1000;
+      const idleMs = msSince(lead.manual_override_at);
+
+      if (idleMs > H24) {
+        await setLeadManualOverride({
+          leadId: lead.id,
+          clientId: lead.client_id,
+          enabled: false,
+          reason: "Auto-resumed after 24h of no coach replies",
+          actor: "system",
+        });
+
+        // reflect locally so this request continues
+        lead.manual_override = false;
+        console.log("✅ Auto-resumed bot after 24h idle for lead", lead.id);
+      } else {
+        console.log("🛑 Manual override ON — bot will not reply:", lead.id);
+        return res.sendStatus(200);
+      }
+    }
+
+    // 5️⃣ Load client config
+    if (!lead.client_id) {
+      console.warn("⚠️ lead.client_id is missing; skipping reply for lead", lead.id);
+      return res.sendStatus(200);
+    }
+
+    const { data: cfg, error: cfgErr } = await supabase
+      .from("client_configs")
+      .select("*")
+      .eq("client_id", lead.client_id)
+      .single();
+
+    if (cfgErr) {
+      console.error("Config lookup error:", cfgErr);
+      return res.sendStatus(200);
+    }
+
+    // 6️⃣ Generate AI reply
+    const reply = await generateAiReply({
+      cfg,
+      lead,
+      lastUserTextRaw: text,
+      postCallMode: lead.call_completed,
+      asksPrice: /price|cost|how much/i.test(text),
+      highIntent: /ready|start|sign up|book/i.test(text),
+      bookingUrl: cfg?.booking_url || null,
+    });
+
+    if (!reply) return res.sendStatus(200);
+
+    // 7️⃣ Send reply via Meta
+    // NOTE: Node 18+ has global fetch. If you're on older Node, you'll need to install/import node-fetch.
+    await fetch(
+      `https://graph.facebook.com/v19.0/me/messages?access_token=${process.env.PAGE_ACCESS_TOKEN}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipient: { id: senderId },
+          message: { text: reply },
+        }),
+      }
+    );
+
+    // 8️⃣ Store outbound bot message
+    await supabase.from("messages").insert({
+      lead_id: lead.id,
+      direction: "out",
+      text: reply,
+      created_at: new Date().toISOString(),
+    });
+
+    return res.sendStatus(200);
+  } catch (err) {
+    console.error("Webhook error:", err);
+    return res.sendStatus(200);
+  }
+});
+
+/**
+ * ===========================
+ * UI signal: “Bot paused – manual takeover”
+ * ===========================
+ * UI shows this per lead when:
+ * - lead.manual_override === true
+ *
+ * Your UI can fetch /coach/api/leads
+ * and show a badge using:
+ * - manual_override
+ * - manual_override_reason
+ * - manual_override_by
+ * - manual_override_at
+ */
+
+// ---- START SERVER ----
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

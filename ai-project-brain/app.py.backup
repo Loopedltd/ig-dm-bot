@@ -1,0 +1,921 @@
+"""
+AI Project Brain for Architecture — V1 (single-file starter)
+
+What it does:
+- Create projects
+- Ingest meeting transcripts / emails / notes (text)
+- Ingest site info (address + notes + docs as text)
+- Extract structured project intelligence into a persistent "Project Brain"
+- Generate: Architectural brief, Design review feedback (no design generation), Client portfolio (markdown)
+
+Run:
+  python -m venv .venv && source .venv/bin/activate
+  pip install fastapi uvicorn pydantic httpx python-multipart
+
+Set env:
+  export OPENAI_API_KEY="..."
+  # Optional:
+  export OPENAI_BASE_URL="https://api.openai.com/v1"   # or compatible
+  export OPENAI_MODEL="gpt-4.1-mini"                   # choose what you have access to
+  export APP_DB_PATH="./brain.db"
+
+Start:
+  uvicorn app:app --reload
+"""
+
+from __future__ import annotations
+
+import os
+import json
+import time
+import sqlite3
+from typing import Any, Dict, List, Optional, Tuple, Literal
+
+import httpx
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from pydantic import BaseModel, Field
+
+# -----------------------------
+# Config
+# -----------------------------
+
+DB_PATH = os.getenv("APP_DB_PATH", "./brain.db")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+
+# Safety: architecture work is real-world impact. Keep model on a shorter leash.
+SYSTEM_POLICY = """You are an architecture project intelligence assistant.
+You must never generate a full design solution, drawings, or detailed architectural design.
+You may:
+- extract and structure requirements, constraints, risks, decisions, and priorities
+- analyze site information and propose considerations/opportunities/risks
+- critique and suggest beneficial adjustments to architect-provided designs (based on the project brain)
+- draft briefs, rationales, narratives, and client-facing portfolios
+You must:
+- cite which project evidence (meeting/email/note/site input) supports claims, by referencing the record IDs when available
+- avoid inventing facts not present in the project brain or supplied inputs
+If information is missing, state what is missing and propose the minimal questions to resolve it.
+Tone: clear, direct, professional.
+"""
+
+# -----------------------------
+# Database
+# -----------------------------
+
+def db() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db() -> None:
+    conn = db()
+    cur = conn.cursor()
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        client_name TEXT,
+        site_address TEXT,
+        project_type TEXT,
+        created_at INTEGER NOT NULL
+    )
+    """)
+
+    # Raw inputs (meetings/emails/notes/site docs)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        record_type TEXT NOT NULL,   -- meeting/email/note/site
+        source_label TEXT,           -- e.g. "Kickoff call", "Email thread 1"
+        content TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY(project_id) REFERENCES projects(id)
+    )
+    """)
+
+    # Structured facts extracted into the Project Brain
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS facts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        category TEXT NOT NULL,      -- goals/requirements/constraints/risks/decisions/questions/stakeholders/site/opportunities
+        statement TEXT NOT NULL,
+        importance INTEGER NOT NULL DEFAULT 3, -- 1..5
+        status TEXT NOT NULL DEFAULT 'active', -- active/resolved/superseded
+        evidence_record_ids TEXT,     -- JSON list of record IDs supporting this
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY(project_id) REFERENCES projects(id)
+    )
+    """)
+
+    # Optional: version tracking for design iterations (text-based in V1)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS design_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        label TEXT,
+        design_notes TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY(project_id) REFERENCES projects(id)
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# -----------------------------
+# LLM Client (OpenAI Responses API style)
+# -----------------------------
+
+class LLMError(Exception):
+    pass
+
+async def llm_json(prompt: str, schema_hint: str) -> Dict[str, Any]:
+    """
+    Returns JSON from the model. We instruct it strongly to output valid JSON only.
+    """
+    if not OPENAI_API_KEY:
+        raise LLMError("OPENAI_API_KEY is not set.")
+
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    # This uses the OpenAI "Responses" endpoint. Many compatible endpoints support it.
+    payload = {
+        "model": OPENAI_MODEL,
+        "input": [
+            {"role": "system", "content": SYSTEM_POLICY},
+            {"role": "user", "content": prompt + "\n\nRETURN JSON ONLY.\nSchema:\n" + schema_hint},
+        ],
+        "temperature": 0.2,
+    }
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        r = await client.post(f"{OPENAI_BASE_URL}/responses", headers=headers, json=payload)
+
+    if r.status_code >= 400:
+        raise LLMError(f"LLM API error {r.status_code}: {r.text}")
+
+    data = r.json()
+
+    # Extract text output; OpenAI returns it in output[].content[].text
+    try:
+        out = data["output"]
+        text_chunks = []
+        for item in out:
+            for c in item.get("content", []):
+                if c.get("type") == "output_text":
+                    text_chunks.append(c.get("text", ""))
+        raw = "\n".join(text_chunks).strip()
+    except Exception as e:
+        raise LLMError(f"Unexpected LLM response format: {e}")
+
+    # Parse JSON
+    try:
+        return json.loads(raw)
+    except Exception:
+        # Some models wrap in ```json blocks; strip those
+        cleaned = raw.replace("```json", "").replace("```", "").strip()
+        return json.loads(cleaned)
+
+async def llm_text(prompt: str) -> str:
+    if not OPENAI_API_KEY:
+        raise LLMError("OPENAI_API_KEY is not set.")
+
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": OPENAI_MODEL,
+        "input": [
+            {"role": "system", "content": SYSTEM_POLICY},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.3,
+    }
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        r = await client.post(f"{OPENAI_BASE_URL}/responses", headers=headers, json=payload)
+
+    if r.status_code >= 400:
+        raise LLMError(f"LLM API error {r.status_code}: {r.text}")
+
+    data = r.json()
+    try:
+        out = data["output"]
+        text_chunks = []
+        for item in out:
+            for c in item.get("content", []):
+                if c.get("type") == "output_text":
+                    text_chunks.append(c.get("text", ""))
+        return "\n".join(text_chunks).strip()
+    except Exception as e:
+        raise LLMError(f"Unexpected LLM response format: {e}")
+
+# -----------------------------
+# Models
+# -----------------------------
+
+RecordType = Literal["meeting", "email", "note", "site"]
+
+class ProjectCreate(BaseModel):
+    name: str
+    client_name: Optional[str] = None
+    site_address: Optional[str] = None
+    project_type: Optional[str] = None
+
+class ProjectOut(BaseModel):
+    id: int
+    name: str
+    client_name: Optional[str]
+    site_address: Optional[str]
+    project_type: Optional[str]
+    created_at: int
+
+class IngestText(BaseModel):
+    record_type: RecordType
+    source_label: Optional[str] = None
+    content: str = Field(min_length=1)
+
+class IngestSite(BaseModel):
+    site_address: Optional[str] = None
+    notes: str = Field(default="")
+    # You can also upload PDFs etc. and paste extracted text for now
+
+class FactOut(BaseModel):
+    id: int
+    category: str
+    statement: str
+    importance: int
+    status: str
+    evidence_record_ids: List[int] = []
+    created_at: int
+    updated_at: int
+
+class BrainOut(BaseModel):
+    project: ProjectOut
+    facts: Dict[str, List[FactOut]]
+
+class GenerateBriefIn(BaseModel):
+    include_categories: Optional[List[str]] = None  # if None, include all
+
+class DesignReviewIn(BaseModel):
+    design_label: Optional[str] = None
+    design_notes: str = Field(min_length=1)
+    # Optional structured inputs for stronger feedback (if user has them)
+    areas_summary: Optional[str] = None
+    key_drawings_list: Optional[List[str]] = None  # e.g. ["Ground plan", "Section A-A"]
+    questions_to_answer: Optional[List[str]] = None
+
+class PortfolioIn(BaseModel):
+    title: Optional[str] = None
+    include_images_placeholders: bool = True
+    audience: Literal["client", "planning", "award", "internal"] = "client"
+
+# -----------------------------
+# Core "Project Brain" logic
+# -----------------------------
+
+FACT_CATEGORIES = [
+    "goals",
+    "requirements",
+    "constraints",
+    "budget_signals",
+    "risks",
+    "decisions",
+    "open_questions",
+    "stakeholders",
+    "site_factors",
+    "opportunities",
+]
+
+EXTRACTION_SCHEMA_HINT = """
+{
+  "facts": [
+    {
+      "category": "goals|requirements|constraints|budget_signals|risks|decisions|open_questions|stakeholders|site_factors|opportunities",
+      "statement": "string (one clear atomic fact)",
+      "importance": 1-5,
+      "status": "active",
+      "evidence_record_ids": [123, 124]
+    }
+  ]
+}
+"""
+
+def get_project_or_404(project_id: int) -> sqlite3.Row:
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM projects WHERE id = ?", (project_id,))
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return row
+
+def insert_record(project_id: int, record_type: str, source_label: Optional[str], content: str) -> int:
+    conn = db()
+    cur = conn.cursor()
+    now = int(time.time())
+    cur.execute(
+        "INSERT INTO records(project_id, record_type, source_label, content, created_at) VALUES (?,?,?,?,?)",
+        (project_id, record_type, source_label, content, now),
+    )
+    rid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return int(rid)
+
+def upsert_fact(
+    project_id: int,
+    category: str,
+    statement: str,
+    importance: int,
+    status: str,
+    evidence_record_ids: List[int],
+) -> int:
+    """
+    Simple strategy for V1:
+    - If an identical statement exists in same category, update importance/evidence.
+    - Otherwise insert.
+    """
+    conn = db()
+    cur = conn.cursor()
+    now = int(time.time())
+
+    cur.execute(
+        "SELECT id, evidence_record_ids, importance FROM facts WHERE project_id=? AND category=? AND statement=? AND status='active'",
+        (project_id, category, statement),
+    )
+    row = cur.fetchone()
+
+    if row:
+        existing_ids = []
+        try:
+            existing_ids = json.loads(row["evidence_record_ids"] or "[]")
+        except Exception:
+            existing_ids = []
+        merged = sorted(set(existing_ids + evidence_record_ids))
+        new_importance = max(int(row["importance"]), int(importance))
+        cur.execute(
+            "UPDATE facts SET evidence_record_ids=?, importance=?, updated_at=? WHERE id=?",
+            (json.dumps(merged), new_importance, now, row["id"]),
+        )
+        fid = row["id"]
+    else:
+        cur.execute(
+            """INSERT INTO facts(project_id, category, statement, importance, status, evidence_record_ids, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (project_id, category, statement, int(importance), status, json.dumps(evidence_record_ids), now, now),
+        )
+        fid = cur.lastrowid
+
+    conn.commit()
+    conn.close()
+    return int(fid)
+
+def fetch_project_facts(project_id: int) -> Dict[str, List[sqlite3.Row]]:
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM facts WHERE project_id=? AND status='active' ORDER BY category, importance DESC, updated_at DESC",
+        (project_id,),
+    )
+    rows = cur.fetchall()
+    conn.close()
+    grouped: Dict[str, List[sqlite3.Row]] = {c: [] for c in FACT_CATEGORIES}
+    for r in rows:
+        grouped.setdefault(r["category"], []).append(r)
+    return grouped
+
+def fetch_project_records(project_id: int, limit: int = 50) -> List[sqlite3.Row]:
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM records WHERE project_id=? ORDER BY created_at DESC LIMIT ?",
+        (project_id, limit),
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+def rows_to_project_out(row: sqlite3.Row) -> ProjectOut:
+    return ProjectOut(
+        id=row["id"],
+        name=row["name"],
+        client_name=row["client_name"],
+        site_address=row["site_address"],
+        project_type=row["project_type"],
+        created_at=row["created_at"],
+    )
+
+def row_to_fact_out(r: sqlite3.Row) -> FactOut:
+    try:
+        eids = json.loads(r["evidence_record_ids"] or "[]")
+    except Exception:
+        eids = []
+    return FactOut(
+        id=r["id"],
+        category=r["category"],
+        statement=r["statement"],
+        importance=int(r["importance"]),
+        status=r["status"],
+        evidence_record_ids=[int(x) for x in eids],
+        created_at=int(r["created_at"]),
+        updated_at=int(r["updated_at"]),
+    )
+
+# -----------------------------
+# Extraction / Generation Prompts
+# -----------------------------
+
+def build_extraction_prompt(project: sqlite3.Row, record_id: int, record_type: str, source_label: Optional[str], content: str) -> str:
+    return f"""
+Project:
+- name: {project["name"]}
+- client_name: {project["client_name"] or ""}
+- site_address: {project["site_address"] or ""}
+- project_type: {project["project_type"] or ""}
+
+New record to ingest:
+- record_id: {record_id}
+- record_type: {record_type}
+- source_label: {source_label or ""}
+- content:
+\"\"\"{content}\"\"\"
+
+Task:
+Extract atomic, non-duplicative facts relevant to architectural project delivery and store them into the Project Brain.
+Only extract facts supported by the content above. If unsure, do not include.
+Assign each fact a category from the allowed list and importance 1..5.
+Include evidence_record_ids as [record_id] for all extracted facts.
+
+Allowed categories:
+{", ".join(FACT_CATEGORIES)}
+
+Return JSON only per schema.
+""".strip()
+
+def build_brief_prompt(project: sqlite3.Row, facts: Dict[str, List[sqlite3.Row]]) -> str:
+    # Format evidence compactly
+    def fmt(cat: str) -> str:
+        out = []
+        for r in facts.get(cat, []):
+            try:
+                eids = json.loads(r["evidence_record_ids"] or "[]")
+            except Exception:
+                eids = []
+            out.append(f"- ({r['importance']}/5) {r['statement']} [evidence: {eids}]")
+        return "\n".join(out) if out else "- (none)"
+    return f"""
+Project:
+- name: {project["name"]}
+- client_name: {project["client_name"] or ""}
+- site_address: {project["site_address"] or ""}
+- project_type: {project["project_type"] or ""}
+
+Project Brain (active facts):
+CLIENT GOALS:
+{fmt("goals")}
+
+FUNCTIONAL REQUIREMENTS:
+{fmt("requirements")}
+
+CONSTRAINTS:
+{fmt("constraints")}
+
+BUDGET SIGNALS:
+{fmt("budget_signals")}
+
+SITE FACTORS:
+{fmt("site_factors")}
+
+OPPORTUNITIES:
+{fmt("opportunities")}
+
+RISKS:
+{fmt("risks")}
+
+DECISIONS TO DATE:
+{fmt("decisions")}
+
+OPEN QUESTIONS:
+{fmt("open_questions")}
+
+STAKEHOLDERS:
+{fmt("stakeholders")}
+
+Task:
+Write a professional Architectural Brief suitable for an architect to use internally and share selectively with a client.
+Requirements:
+- Do NOT invent facts.
+- Where helpful, cite evidence record IDs inline like [evidence: 12, 19].
+- Call out contradictions and missing info as "Clarifications Needed".
+- End with a "Next 7 Days" action list.
+
+Format:
+- Headings and bullets. Keep it crisp.
+""".strip()
+
+def build_design_review_prompt(project: sqlite3.Row, facts: Dict[str, List[sqlite3.Row]], design: DesignReviewIn, design_version_id: int) -> str:
+    # Use only top facts (importance >=3) to keep signal high
+    def top(cat: str) -> str:
+        lines = []
+        for r in facts.get(cat, []):
+            if int(r["importance"]) >= 3:
+                try:
+                    eids = json.loads(r["evidence_record_ids"] or "[]")
+                except Exception:
+                    eids = []
+                lines.append(f"- {r['statement']} [evidence: {eids}]")
+        return "\n".join(lines) if lines else "- (none)"
+    q = "\n".join([f"- {x}" for x in (design.questions_to_answer or [])]) or "- (none)"
+    drawings = "\n".join([f"- {x}" for x in (design.key_drawings_list or [])]) or "- (none)"
+    return f"""
+Project:
+- name: {project["name"]}
+- client_name: {project["client_name"] or ""}
+- site_address: {project["site_address"] or ""}
+- project_type: {project["project_type"] or ""}
+
+Project Brain (high-signal facts only):
+GOALS:
+{top("goals")}
+
+REQUIREMENTS:
+{top("requirements")}
+
+CONSTRAINTS:
+{top("constraints")}
+
+BUDGET SIGNALS:
+{top("budget_signals")}
+
+SITE FACTORS + OPPORTUNITIES:
+{top("site_factors")}
+{top("opportunities")}
+
+RISKS:
+{top("risks")}
+
+DECISIONS:
+{top("decisions")}
+
+DESIGN VERSION:
+- design_version_id: {design_version_id}
+- label: {design.design_label or ""}
+- key drawings list:
+{drawings}
+- areas_summary (if provided):
+{design.areas_summary or "(none)"}
+- design_notes:
+\"\"\"{design.design_notes}\"\"\"
+
+Questions the architect wants answered:
+{q}
+
+Task:
+Provide specific and beneficial design adjustments WITHOUT generating a full design.
+Rules:
+- Tie each suggestion back to project evidence where possible.
+- If the design_notes are insufficient, ask the smallest number of clarifying questions.
+- Output sections:
+  1) Alignment Check (where it matches goals/brief)
+  2) Gaps & Conflicts (requirements not met, contradictions, planning/site risks)
+  3) High-Impact Adjustments (ranked 1..5 by impact; each with 'Why' + 'Evidence' + 'Trade-offs')
+  4) Immediate Next Steps (what to change/check next)
+""".strip()
+
+def build_portfolio_prompt(project: sqlite3.Row, facts: Dict[str, List[sqlite3.Row]], portfolio: PortfolioIn) -> str:
+    # Provide compact facts
+    def compact(cat: str, max_items: int = 8) -> str:
+        items = []
+        for r in facts.get(cat, [])[:max_items]:
+            try:
+                eids = json.loads(r["evidence_record_ids"] or "[]")
+            except Exception:
+                eids = []
+            items.append(f"- {r['statement']} [evidence: {eids}]")
+        return "\n".join(items) if items else "- (none)"
+
+    title = portfolio.title or f"{project['name']} — Client Portfolio"
+
+    img_hint = """
+Include image placeholders like:
+[IMAGE: Site photo]
+[IMAGE: Concept diagram]
+[IMAGE: Ground floor plan]
+[IMAGE: Section]
+[IMAGE: Final render]
+""" if portfolio.include_images_placeholders else "Do not include image placeholders."
+
+    audience_rules = {
+        "client": "Client-friendly, minimal jargon, focus on benefits and clarity.",
+        "planning": "Planning-oriented, emphasize context, constraints, rationale, policy-like language without quoting policies.",
+        "award": "Narrative-led, strong concept framing, concise and persuasive.",
+        "internal": "Operational, decisions, risks, rationale, what changed and why.",
+    }[portfolio.audience]
+
+    return f"""
+Project:
+- title: {title}
+- client_name: {project["client_name"] or ""}
+- site_address: {project["site_address"] or ""}
+- project_type: {project["project_type"] or ""}
+
+Project Brain (selected):
+GOALS:
+{compact("goals")}
+
+REQUIREMENTS:
+{compact("requirements")}
+
+SITE FACTORS:
+{compact("site_factors")}
+
+OPPORTUNITIES:
+{compact("opportunities")}
+
+CONSTRAINTS:
+{compact("constraints")}
+
+KEY DECISIONS:
+{compact("decisions")}
+
+RISKS (if any):
+{compact("risks")}
+
+Task:
+Generate a client-facing portfolio in Markdown.
+Constraints:
+- Do NOT invent facts.
+- Use evidence IDs lightly; include them in a small "Sources" section per chapter or at the end.
+- Structure:
+  1) Executive Summary
+  2) Project Brief (what the client wanted)
+  3) Site & Context (insights + opportunities/constraints)
+  4) Design Approach (high-level narrative only; no “new design”)
+  5) Key Decisions & Rationale (with evidence)
+  6) What We Delivered (describe outcomes at a high level)
+  7) Next Steps / Handover Notes
+- {img_hint}
+Audience style:
+- {audience_rules}
+""".strip()
+
+def build_site_analysis_prompt(project: sqlite3.Row, record_id: int, site_address: str, notes: str, extra_text: str) -> str:
+    return f"""
+Project:
+- name: {project["name"]}
+- project_type: {project["project_type"] or ""}
+
+Site analysis input (record_id={record_id}):
+- site_address: {site_address}
+- notes:
+\"\"\"{notes}\"\"\"
+- extra_text (from uploaded docs, if any):
+\"\"\"{extra_text}\"\"\"
+
+Task:
+Extract site intelligence as structured facts for the Project Brain.
+Allowed categories: site_factors, opportunities, constraints, risks.
+Rules:
+- No invented measurements.
+- Prefer architecture-relevant observations: access, orientation (only if explicitly stated), adjacencies, noise, movement, typologies, heritage/planning cues (only if stated), experiential notes.
+- Include evidence_record_ids: [record_id]
+Return JSON only per schema.
+""".strip()
+
+# -----------------------------
+# FastAPI
+# -----------------------------
+
+app = FastAPI(title="AI Project Brain (Architecture) — V1")
+
+@app.get("/health")
+def health():
+    return {"ok": True}
+
+@app.post("/projects", response_model=ProjectOut)
+def create_project(p: ProjectCreate):
+    conn = db()
+    cur = conn.cursor()
+    now = int(time.time())
+    cur.execute(
+        "INSERT INTO projects(name, client_name, site_address, project_type, created_at) VALUES (?,?,?,?,?)",
+        (p.name, p.client_name, p.site_address, p.project_type, now),
+    )
+    pid = cur.lastrowid
+    conn.commit()
+    cur.execute("SELECT * FROM projects WHERE id=?", (pid,))
+    row = cur.fetchone()
+    conn.close()
+    return rows_to_project_out(row)
+
+@app.get("/projects/{project_id}", response_model=ProjectOut)
+def get_project(project_id: int):
+    row = get_project_or_404(project_id)
+    return rows_to_project_out(row)
+
+@app.get("/projects/{project_id}/brain", response_model=BrainOut)
+def get_brain(project_id: int):
+    project = get_project_or_404(project_id)
+    facts = fetch_project_facts(project_id)
+    out: Dict[str, List[FactOut]] = {}
+    for cat, rows in facts.items():
+        out[cat] = [row_to_fact_out(r) for r in rows]
+    return BrainOut(project=rows_to_project_out(project), facts=out)
+
+@app.post("/projects/{project_id}/ingest/text")
+async def ingest_text(project_id: int, payload: IngestText):
+    project = get_project_or_404(project_id)
+    rid = insert_record(project_id, payload.record_type, payload.source_label, payload.content)
+
+    prompt = build_extraction_prompt(project, rid, payload.record_type, payload.source_label, payload.content)
+    try:
+        extracted = await llm_json(prompt, EXTRACTION_SCHEMA_HINT)
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    facts = extracted.get("facts", [])
+    created_fact_ids = []
+    for f in facts:
+        cat = f.get("category")
+        if cat not in FACT_CATEGORIES:
+            continue
+        statement = (f.get("statement") or "").strip()
+        if not statement:
+            continue
+        importance = int(f.get("importance") or 3)
+        importance = max(1, min(5, importance))
+        status = f.get("status") or "active"
+        eids = f.get("evidence_record_ids") or [rid]
+        eids = [int(x) for x in eids] if isinstance(eids, list) else [rid]
+        created_fact_ids.append(upsert_fact(project_id, cat, statement, importance, status, eids))
+
+    return {
+        "record_id": rid,
+        "facts_added_or_updated": len(created_fact_ids),
+        "fact_ids": created_fact_ids,
+    }
+
+@app.post("/projects/{project_id}/ingest/site")
+async def ingest_site(project_id: int, payload: IngestSite):
+    project = get_project_or_404(project_id)
+
+    # Update site address if provided
+    if payload.site_address:
+        conn = db()
+        cur = conn.cursor()
+        cur.execute("UPDATE projects SET site_address=? WHERE id=?", (payload.site_address, project_id))
+        conn.commit()
+        conn.close()
+        project = get_project_or_404(project_id)
+
+    site_address = payload.site_address or (project["site_address"] or "")
+    if not site_address and not payload.notes:
+        raise HTTPException(status_code=400, detail="Provide at least site_address or notes")
+
+    content = f"SITE ADDRESS: {site_address}\n\nSITE NOTES:\n{payload.notes}"
+    rid = insert_record(project_id, "site", "Site intake", content)
+
+    prompt = build_site_analysis_prompt(project, rid, site_address, payload.notes, extra_text="")
+    try:
+        extracted = await llm_json(prompt, EXTRACTION_SCHEMA_HINT)
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    facts = extracted.get("facts", [])
+    created_fact_ids = []
+    for f in facts:
+        cat = f.get("category")
+        if cat not in ["site_factors", "opportunities", "constraints", "risks"]:
+            continue
+        statement = (f.get("statement") or "").strip()
+        if not statement:
+            continue
+        importance = int(f.get("importance") or 3)
+        importance = max(1, min(5, importance))
+        status = f.get("status") or "active"
+        eids = f.get("evidence_record_ids") or [rid]
+        eids = [int(x) for x in eids] if isinstance(eids, list) else [rid]
+        created_fact_ids.append(upsert_fact(project_id, cat, statement, importance, status, eids))
+
+    return {
+        "record_id": rid,
+        "site_address": site_address,
+        "facts_added_or_updated": len(created_fact_ids),
+        "fact_ids": created_fact_ids,
+    }
+
+@app.post("/projects/{project_id}/ingest/file_as_text")
+async def ingest_file_as_text(project_id: int, record_type: RecordType, file: UploadFile = File(...)):
+    """
+    V1: We do NOT do OCR or PDF parsing here. You can upload a .txt file or paste-extracted text.
+    If you upload a PDF, you should first extract its text elsewhere and upload .txt.
+
+    This endpoint stores the file content as a record and extracts facts from it.
+    """
+    if record_type not in ["meeting", "email", "note", "site"]:
+        raise HTTPException(status_code=400, detail="Invalid record_type")
+
+    raw = await file.read()
+    try:
+        content = raw.decode("utf-8", errors="replace")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not decode file; upload UTF-8 text.")
+
+    payload = IngestText(record_type=record_type, source_label=file.filename, content=content)
+    return await ingest_text(project_id, payload)
+
+@app.post("/projects/{project_id}/generate/brief")
+async def generate_brief(project_id: int, payload: GenerateBriefIn = GenerateBriefIn()):
+    project = get_project_or_404(project_id)
+    facts = fetch_project_facts(project_id)
+
+    # Optionally filter categories
+    if payload.include_categories:
+        allowed = set(payload.include_categories)
+        facts = {k: v for k, v in facts.items() if k in allowed}
+
+    prompt = build_brief_prompt(project, facts)
+    try:
+        brief = await llm_text(prompt)
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"brief_markdown": brief}
+
+@app.post("/projects/{project_id}/design_versions")
+def add_design_version(project_id: int, payload: DesignReviewIn):
+    get_project_or_404(project_id)
+    conn = db()
+    cur = conn.cursor()
+    now = int(time.time())
+    cur.execute(
+        "INSERT INTO design_versions(project_id, label, design_notes, created_at) VALUES (?,?,?,?)",
+        (project_id, payload.design_label, payload.design_notes, now),
+    )
+    vid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return {"design_version_id": int(vid)}
+
+@app.post("/projects/{project_id}/review/design")
+async def review_design(project_id: int, payload: DesignReviewIn):
+    project = get_project_or_404(project_id)
+    facts = fetch_project_facts(project_id)
+
+    # Save design version (text-based V1)
+    conn = db()
+    cur = conn.cursor()
+    now = int(time.time())
+    cur.execute(
+        "INSERT INTO design_versions(project_id, label, design_notes, created_at) VALUES (?,?,?,?)",
+        (project_id, payload.design_label, payload.design_notes, now),
+    )
+    design_version_id = int(cur.lastrowid)
+    conn.commit()
+    conn.close()
+
+    prompt = build_design_review_prompt(project, facts, payload, design_version_id)
+    try:
+        feedback = await llm_text(prompt)
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"design_version_id": design_version_id, "review_markdown": feedback}
+
+@app.post("/projects/{project_id}/generate/portfolio")
+async def generate_portfolio(project_id: int, payload: PortfolioIn):
+    project = get_project_or_404(project_id)
+    facts = fetch_project_facts(project_id)
+
+    prompt = build_portfolio_prompt(project, facts, payload)
+    try:
+        md = await llm_text(prompt)
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"portfolio_markdown": md}
+
+@app.get("/projects/{project_id}/records")
+def list_records(project_id: int, limit: int = 50):
+    get_project_or_404(project_id)
+    rows = fetch_project_records(project_id, limit=limit)
+    return [{
+        "id": r["id"],
+        "record_type": r["record_type"],
+        "source_label": r["source_label"],
+        "created_at": r["created_at"],
+        "content_preview": (r["content"][:300] + ("..." if len(r["content"]) > 300 else "")),
+    } for r in rows]
