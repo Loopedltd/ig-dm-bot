@@ -45,6 +45,9 @@ app.get("/coach", (req, res) => res.redirect("/coach/login.html"));
 
 // Clean SaaS routes
 app.get("/checkout", (req, res) => {
+  if (!isPayHost(req) && process.env.NODE_ENV === "production") {
+    return res.status(404).send("Not Found");
+  }
 
   const token = req.query.token;
 
@@ -64,19 +67,31 @@ app.get("/cancel", (req, res) => {
 });
 
 app.get("/login", (req, res) => {
-  res.sendFile(path.join(__dirname, "coach", "login.html"));
+  if (!isAppHost(req) && process.env.NODE_ENV === "production") {
+    return res.status(404).send("Not Found");
+  }
+  return res.sendFile(path.join(__dirname, "coach", "login.html"));
 });
 
 app.get("/dashboard", (req, res) => {
-  res.sendFile(path.join(__dirname, "coach", "dashboard.html"));
+  if (!isAppHost(req) && process.env.NODE_ENV === "production") {
+    return res.status(404).send("Not Found");
+  }
+  return res.sendFile(path.join(__dirname, "coach", "dashboard.html"));
 });
 
 app.get("/stats", (req, res) => {
-  res.sendFile(path.join(__dirname, "coach", "stats.html"));
+  if (!isAppHost(req) && process.env.NODE_ENV === "production") {
+    return res.status(404).send("Not Found");
+  }
+  return res.sendFile(path.join(__dirname, "coach", "stats.html"));
 });
 
 app.get("/set-password", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "set-password.html"));
+  if (!isAppHost(req) && process.env.NODE_ENV === "production") {
+    return res.status(404).send("Not Found");
+  }
+  return res.sendFile(path.join(__dirname, "public", "set-password.html"));
 });
 
 // ---- ENV SAFETY ----
@@ -158,6 +173,18 @@ function randomInt(min, max) {
 function isAllowedStripeStatus(status) {
   const s = String(status || "").toLowerCase();
   return s === "active" || s === "trialing";
+}
+
+function getHost(req) {
+  return String(req.headers.host || "").toLowerCase().split(":")[0];
+}
+
+function isPayHost(req) {
+  return getHost(req) === "pay.looped.ltd";
+}
+
+function isAppHost(req) {
+  return getHost(req) === "app.looped.ltd";
 }
 
 // ---------------------------
@@ -1522,7 +1549,15 @@ if (existingUsersErr) {
  */
 
 app.get("/", (req, res) => {
-  return res.redirect("/checkout");
+  if (isPayHost(req)) {
+    return res.redirect("/checkout");
+  }
+
+  if (isAppHost(req)) {
+    return res.redirect("/login");
+  }
+
+  return res.send("IG DM Bot is running");
 });
 
 /**
