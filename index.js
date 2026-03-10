@@ -43,6 +43,35 @@ app.use("/coach", express.static(path.join(__dirname, "coach")));
 app.get("/admin", (req, res) => res.redirect("/admin/login.html"));
 app.get("/coach", (req, res) => res.redirect("/coach/login.html"));
 
+// Clean SaaS routes
+app.get("/checkout", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "pay.html"));
+});
+
+app.get("/success", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "success.html"));
+});
+
+app.get("/cancel", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "cancel.html"));
+});
+
+app.get("/login", (req, res) => {
+  res.sendFile(path.join(__dirname, "coach", "login.html"));
+});
+
+app.get("/dashboard", (req, res) => {
+  res.sendFile(path.join(__dirname, "coach", "dashboard.html"));
+});
+
+app.get("/stats", (req, res) => {
+  res.sendFile(path.join(__dirname, "coach", "stats.html"));
+});
+
+app.get("/set-password", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "set-password.html"));
+});
+
 // ---- ENV SAFETY ----
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 if (!VERIFY_TOKEN) {
@@ -704,7 +733,7 @@ app.post("/admin/api/create-payment-link/:clientId", requireAdmin, async (req, r
       return safeJson(res, 500, error);
     }
 
-    const url = `${APP_BASE_URL}/pay.html?token=${token}`;
+const url = `${APP_BASE_URL}/checkout?token=${token}`;
 
     return safeJson(res, 200, {
       ok: true,
@@ -1273,7 +1302,7 @@ app.post("/coach/api/billing-portal", requireCoach, async (req, res) => {
 
     const portal = await stripe.billingPortal.sessions.create({
       customer: String(customerId),
-      return_url: `${APP_BASE_URL}/coach/dashboard.html`,
+return_url: `${APP_BASE_URL}/dashboard`,
     });
 
     return safeJson(res, 200, {
@@ -1356,8 +1385,8 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
         client_id: String(client_id),
       },
 
-      success_url: `${APP_BASE_URL}/coach/login.html?paid=1`,
-      cancel_url: `${APP_BASE_URL}/pay.html?cancelled=1`,
+success_url: `${APP_BASE_URL}/success?paid=1`,
+cancel_url: `${APP_BASE_URL}/cancel?cancelled=1`,
     });
 
     return safeJson(res, 200, {
@@ -1486,7 +1515,7 @@ if (existingUsersErr) {
  */
 
 app.get("/", (req, res) => {
-  res.send("IG DM Bot is running");
+  return res.redirect("/checkout");
 });
 
 /**
