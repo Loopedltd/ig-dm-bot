@@ -1339,23 +1339,17 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
 
       line_items: [
         {
+          price: STRIPE_PRICE_SETUP,
+          quantity: 1,
+        },
+        {
           price: STRIPE_PRICE_MONTHLY,
           quantity: 1,
         },
       ],
 
-      subscription_data: {
-        add_invoice_items: [
-          {
-            price: STRIPE_PRICE_SETUP,
-            quantity: 1,
-          },
-        ],
-      },
-
       automatic_tax: { enabled: true },
       billing_address_collection: "required",
-
       customer_email: email || undefined,
 
       metadata: {
