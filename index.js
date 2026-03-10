@@ -45,7 +45,14 @@ app.get("/coach", (req, res) => res.redirect("/coach/login.html"));
 
 // Clean SaaS routes
 app.get("/checkout", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "pay.html"));
+
+  const token = req.query.token;
+
+  if (!token) {
+    return res.sendFile(path.join(__dirname, "public", "invalid-link.html"));
+  }
+
+  return res.sendFile(path.join(__dirname, "public", "pay.html"));
 });
 
 app.get("/success", (req, res) => {
