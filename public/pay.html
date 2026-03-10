@@ -245,7 +245,7 @@
 
         async function resolveToken() {
           if (!token) {
-            showErr("Missing payment token.");
+showErr("Invalid or expired payment link. Please contact the administrator to receive your personalised access link.");
             if (payBtn) payBtn.disabled = true;
             return null;
           }
