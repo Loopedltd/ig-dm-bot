@@ -1381,6 +1381,33 @@ app.post("/api/payment-link/resolve", async (req, res) => {
   }
 });
 
+app.post("/api/stripe/session-token", async (req, res) => {
+  try {
+    assertStripeConfigured();
+
+    const { session_id } = req.body || {};
+
+    if (!session_id) {
+      return safeJson(res, 400, { error: "session_id required" });
+    }
+
+    const session = await stripe.checkout.sessions.retrieve(String(session_id));
+
+    const paymentToken = session?.metadata?.payment_token || "";
+
+    if (!paymentToken) {
+      return safeJson(res, 404, { error: "payment token not found" });
+    }
+
+    return safeJson(res, 200, {
+      ok: true,
+      token: paymentToken,
+    });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
 /**
  * ===========================
  * STRIPE CHECKOUT
@@ -1420,7 +1447,7 @@ const session = await stripe.checkout.sessions.create({
     payment_token: token ? String(token) : "",
   },
 
-  success_url: `${APP_BASE_URL}/success?paid=1`,
+success_url: `${APP_BASE_URL}/success?paid=1&session_id={CHECKOUT_SESSION_ID}`,
   cancel_url: `${APP_BASE_URL}/cancel?cancelled=1`,
 });
 

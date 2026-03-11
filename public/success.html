@@ -103,22 +103,47 @@
         Redirecting you to set your password…
       </div>
 
-      <a class="link" href="/set-password.html">Go to set password</a>
+<a class="link" href="https://app.looped.ltd/login">Go to login</a>
     </div>
 
-    <script>
-      (function () {
-        const params = new URLSearchParams(window.location.search);
-        const token = params.get("token") || "";
+<script>
+(async function () {
+  const statusText = document.getElementById("statusText");
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get("session_id") || "";
 
-        setTimeout(() => {
-          if (token) {
-            window.location.href = `/set-password.html?token=${encodeURIComponent(token)}`;
-          } else {
-            window.location.href = "/set-password.html";
-          }
-        }, 1400);
-      })();
-    </script>
+  try {
+    if (!sessionId) {
+      throw new Error("Missing session id");
+    }
+
+    const res = await fetch("/api/stripe/session-token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data?.token) {
+      throw new Error("Could not prepare account.");
+    }
+
+    statusText.textContent = "Redirecting you to set your password...";
+
+    setTimeout(() => {
+      window.location.href =
+        `https://app.looped.ltd/set-password?token=${encodeURIComponent(data.token)}`;
+    }, 1200);
+
+  } catch (err) {
+    console.error(err);
+    statusText.textContent =
+      "We couldn't complete automatic setup. Please contact support.";
+  }
+})();
+</script>
   </body>
 </html>
