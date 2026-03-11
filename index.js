@@ -1429,10 +1429,6 @@ const session = await stripe.checkout.sessions.create({
 
   line_items: [
     {
-      price: STRIPE_PRICE_SETUP,
-      quantity: 1,
-    },
-    {
       price: STRIPE_PRICE_MONTHLY,
       quantity: 1,
     },
@@ -1447,7 +1443,7 @@ const session = await stripe.checkout.sessions.create({
     payment_token: token ? String(token) : "",
   },
 
-success_url: `${APP_BASE_URL}/success?paid=1&session_id={CHECKOUT_SESSION_ID}`,
+  success_url: `${APP_BASE_URL}/success?paid=1&session_id={CHECKOUT_SESSION_ID}`,
   cancel_url: `${APP_BASE_URL}/cancel?cancelled=1`,
 });
 
