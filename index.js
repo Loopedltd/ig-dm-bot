@@ -622,14 +622,16 @@ app.post("/admin/api/clients/create", requireAdmin, async (req, res) => {
       return safeJson(res, 500, { error: String(clientErr.message || clientErr) });
     }
 
-    const { data: config, error: configErr } = await supabase
-      .from("client_configs")
-      .insert({
-        client_id: client.id,
-        stripe_subscription_status: null,
-      })
-      .select()
-      .single();
+const { data: config, error: configErr } = await supabase
+  .from("client_configs")
+  .insert({
+    client_id: client.id,
+    stripe_subscription_status: null,
+    system_prompt:
+      "You are the coach's Instagram DM assistant. Be friendly, concise and human. Ask one clear question at a time. Keep replies short. Do not mention AI.",
+  })
+  .select()
+  .single();
 
     if (configErr) {
       return safeJson(res, 500, { error: String(configErr.message || configErr) });
