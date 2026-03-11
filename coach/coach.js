@@ -332,9 +332,9 @@ document.addEventListener("DOMContentLoaded", () => {
           okEl.style.display = "block";
         }
 
-          window.location.href setTimeout(() => {
- window.location.href = "https://app.looped.ltd/login?password_set=1";
-}, 900);
+        setTimeout(() => {
+          window.location.href = "https://app.looped.ltd/login?password_set=1";
+        }, 900);
       } catch (e2) {
         if (errEl) {
           errEl.textContent = String(e2.message || e2);
