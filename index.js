@@ -1391,37 +1391,38 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
   try {
     assertStripeConfigured();
 
-    const { client_id, email } = req.body || {};
+const { client_id, email, token } = req.body || {};
 
     if (!client_id) {
       return safeJson(res, 400, { error: "client_id required" });
     }
 
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
+const session = await stripe.checkout.sessions.create({
+  mode: "subscription",
 
-      line_items: [
-        {
-          price: STRIPE_PRICE_SETUP,
-          quantity: 1,
-        },
-        {
-          price: STRIPE_PRICE_MONTHLY,
-          quantity: 1,
-        },
-      ],
+  line_items: [
+    {
+      price: STRIPE_PRICE_SETUP,
+      quantity: 1,
+    },
+    {
+      price: STRIPE_PRICE_MONTHLY,
+      quantity: 1,
+    },
+  ],
 
-      automatic_tax: { enabled: true },
-      billing_address_collection: "required",
-      customer_email: email || undefined,
+  automatic_tax: { enabled: true },
+  billing_address_collection: "required",
+  customer_email: email || undefined,
 
-      metadata: {
-        client_id: String(client_id),
-      },
+  metadata: {
+    client_id: String(client_id),
+    payment_token: token ? String(token) : "",
+  },
 
-success_url: `${APP_BASE_URL}/success?paid=1`,
-cancel_url: `${APP_BASE_URL}/cancel?cancelled=1`,
-    });
+  success_url: `${APP_BASE_URL}/success?paid=1`,
+  cancel_url: `${APP_BASE_URL}/cancel?cancelled=1`,
+});
 
     return safeJson(res, 200, {
       ok: true,

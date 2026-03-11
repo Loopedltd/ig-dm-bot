@@ -308,7 +308,7 @@ showErr("Invalid or expired payment link. Please contact the administrator to re
             const res = await fetch("/api/stripe/create-checkout-session", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ client_id, email }),
+body: JSON.stringify({ client_id, email, token }),
             });
 
             const data = await res.json().catch(() => ({}));
