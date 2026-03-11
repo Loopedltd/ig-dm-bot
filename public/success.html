@@ -103,12 +103,13 @@
         Redirecting you to set your password…
       </div>
 
-<a class="link" href="https://app.looped.ltd/login">Go to login</a>
+<a class="link" id="fallbackLink" href="https://app.looped.ltd/login">Continue</a>
     </div>
 
 <script>
 (async function () {
   const statusText = document.getElementById("statusText");
+const fallbackLink = document.getElementById("fallbackLink");
   const params = new URLSearchParams(window.location.search);
   const sessionId = params.get("session_id") || "";
 
@@ -130,6 +131,10 @@
     if (!res.ok || !data?.token) {
       throw new Error("Could not prepare account.");
     }
+
+if (fallbackLink) {
+  fallbackLink.href = `https://app.looped.ltd/set-password?token=${encodeURIComponent(data.token)}`;
+}
 
     statusText.textContent = "Redirecting you to set your password...";
 
