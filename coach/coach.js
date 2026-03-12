@@ -210,9 +210,29 @@ function wireInstagramConnectButton() {
   if (!btn || btn.__wired) return;
   btn.__wired = true;
 
-  btn.addEventListener("click", () => {
-    clearErr();
-    window.location.href = "/auth/instagram/start";
+  btn.addEventListener("click", async () => {
+    try {
+      clearErr();
+
+      btn.disabled = true;
+      btn.style.opacity = "0.75";
+      btn.textContent = "Opening Instagram…";
+
+      const data = await apiFetch(`${API}/instagram/connect-url`, {
+        method: "GET",
+      });
+
+      if (!data?.url) {
+        throw new Error("Missing Instagram connect URL");
+      }
+
+      window.location.href = data.url;
+    } catch (e) {
+      setErr(String(e.message || e));
+      btn.disabled = false;
+      btn.style.opacity = "1";
+      btn.textContent = "Connect Instagram";
+    }
   });
 }
   async function loadDashboard() {
