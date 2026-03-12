@@ -205,18 +205,16 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.style.opacity = "1";
   }
 
-  function wireInstagramConnectButton() {
-    const btn = qs("#connectInstagramBtn");
-    if (!btn || btn.__wired) return;
-    btn.__wired = true;
+function wireInstagramConnectButton() {
+  const btn = qs("#connectInstagramBtn");
+  if (!btn || btn.__wired) return;
+  btn.__wired = true;
 
-    btn.addEventListener("click", () => {
-      clearErr();
-      setErr(
-        "Instagram connection is not wired yet. The next step is building the Meta OAuth flow."
-      );
-    });
-  }
+  btn.addEventListener("click", () => {
+    clearErr();
+    window.location.href = "/auth/instagram/start";
+  });
+}
   async function loadDashboard() {
     const bookingEl = qs("#booking_url");
     const bookingAltEl = qs("#booking_url_alt");
