@@ -124,6 +124,7 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 const META_APP_ID = process.env.META_APP_ID;
 const META_APP_SECRET = process.env.META_APP_SECRET;
 const META_REDIRECT_URI = process.env.META_REDIRECT_URI;
+const META_CONFIG_ID = process.env.META_CONFIG_ID;
 
 const STRIPE_PRICE_SETUP =
   process.env.STRIPE_PRICE_SETUP || "price_1T7bDyCS3UXrJEm9cHGA2lrG";
@@ -444,6 +445,63 @@ async function getClientConfig(clientId) {
   if (error) throw error;
   return data;
 }
+
+function signInstagramState(clientId) {
+  return jwt.sign(
+    {
+      type: "instagram_connect",
+      client_id: clientId,
+    },
+    COACH_JWT_SECRET,
+    { expiresIn: "15m" }
+  );
+}
+
+function verifyInstagramState(state) {
+  const decoded = jwt.verify(state, COACH_JWT_SECRET);
+  if (!decoded || decoded.type !== "instagram_connect" || !decoded.client_id) {
+    throw new Error("invalid state");
+  }
+  return decoded;
+}
+
+app.get("/coach/api/instagram/connect-url", requireCoach, async (req, res) => {
+  try {
+    if (!META_APP_ID || !META_REDIRECT_URI || !META_CONFIG_ID) {
+      return safeJson(res, 500, { error: "Meta env vars not configured" });
+    }
+
+    const state = signInstagramState(req.coach.client_id);
+
+    const authUrl = new URL("https://www.facebook.com/v23.0/dialog/oauth");
+    authUrl.searchParams.set("client_id", META_APP_ID);
+    authUrl.searchParams.set("redirect_uri", META_REDIRECT_URI);
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("config_id", META_CONFIG_ID);
+    authUrl.searchParams.set("state", state);
+authUrl.searchParams.set("auth_type", "rerequest");
+
+    return safeJson(res, 200, {
+      ok: true,
+      url: authUrl.toString(),
+    });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+async function getIgAccountByClientId(clientId) {
+  const { data, error } = await supabase
+    .from("ig_accounts")
+    .select("*")
+    .eq("client_id", clientId)
+    .eq("is_active", true)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 /**
  * ===========================
  * ADMIN AUTH
@@ -1622,7 +1680,11 @@ app.post("/webhook", async (req, res) => {
     if (!messaging) return res.sendStatus(200);
 
     const senderId = messaging.sender?.id;
-    const text = extractIgText(messaging);
+const recipientId = messaging.recipient?.id;
+console.log("IG WEBHOOK messaging:", JSON.stringify(messaging, null, 2));
+console.log("senderId:", senderId);
+console.log("recipientId:", recipientId);    
+const text = extractIgText(messaging);
     const isEcho = isIgEcho(messaging);
 
     if (!senderId || !text) return res.sendStatus(200);
@@ -1712,18 +1774,26 @@ app.post("/webhook", async (req, res) => {
         const delayMs = randomInt(8000, 25000);
         await sleep(delayMs);
 
-        await fetch(
-          `https://graph.facebook.com/v19.0/me/messages?access_token=${process.env.PAGE_ACCESS_TOKEN}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              recipient: { id: senderId },
-              message: { text: reply },
-            }),
-          }
-        );
+const igAccount = await getIgAccountByClientId(lead.client_id);
 
+if (!igAccount?.page_access_token) {
+  console.error("Missing page access token for client:", lead.client_id);
+  return;
+}
+
+await fetch(
+  `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(
+    igAccount.page_access_token
+  )}`,
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      recipient: { id: senderId },
+      message: { text: reply },
+    }),
+  }
+);
         await supabase.from("messages").insert({
           lead_id: lead.id,
           direction: "out",
@@ -1747,31 +1817,7 @@ app.post("/webhook", async (req, res) => {
  */
 
 app.get("/auth/instagram/start", (req, res) => {
-  try {
-    if (!META_APP_ID || !META_REDIRECT_URI) {
-      return safeJson(res, 500, { error: "Meta env vars not configured" });
-    }
-
-    const authUrl = new URL("https://www.facebook.com/v23.0/dialog/oauth");
-
-    authUrl.searchParams.set("client_id", META_APP_ID);
-    authUrl.searchParams.set("redirect_uri", META_REDIRECT_URI);
-    authUrl.searchParams.set("response_type", "code");
-    authUrl.searchParams.set(
-      "scope",
-      [
-        "instagram_basic",
-        "instagram_manage_messages",
-        "pages_show_list",
-        "pages_manage_metadata",
-        "business_management",
-      ].join(",")
-    );
-
-    return res.redirect(authUrl.toString());
-  } catch (e) {
-    return safeJson(res, 500, { error: String(e?.message || e) });
-  }
+  return res.status(400).send("Use the dashboard Connect Instagram button.");
 });
 
 app.get("/auth/instagram/callback", async (req, res) => {
@@ -1780,11 +1826,37 @@ app.get("/auth/instagram/callback", async (req, res) => {
       return res.status(500).send("Meta env vars not configured");
     }
 
+    const error = String(req.query.error || "");
+    const errorReason = String(req.query.error_reason || "");
+    const errorDescription = String(req.query.error_description || "");
+
+    if (error) {
+      return res.redirect(
+        `/coach/dashboard.html?instagram_connected=0&error=${encodeURIComponent(
+          errorDescription || errorReason || error
+        )}`
+      );
+    }
+
     const code = String(req.query.code || "");
+    const state = String(req.query.state || "");
 
     if (!code) {
       return res.status(400).send("Missing code");
     }
+
+    if (!state) {
+      return res.status(400).send("Missing state");
+    }
+
+    let decoded;
+    try {
+      decoded = verifyInstagramState(state);
+    } catch {
+      return res.status(400).send("Invalid or expired state");
+    }
+
+    const clientId = decoded.client_id;
 
     const tokenResp = await fetch(
       `https://graph.facebook.com/v23.0/oauth/access_token?client_id=${encodeURIComponent(
@@ -1834,23 +1906,38 @@ app.get("/auth/instagram/callback", async (req, res) => {
 
     const ig = page.instagram_business_account;
 
-    return res.send(`
-      <html>
-        <body style="font-family:system-ui;padding:24px;">
-          <h2>Instagram connected</h2>
-          <p>Page: ${page.name}</p>
-          <p>Instagram: ${ig.username} (${ig.id})</p>
-          <p>Next step: save this account to ig_accounts and redirect back to the dashboard.</p>
-        </body>
-      </html>
-    `);
+    const expiresAt =
+      tokenData.expires_in && Number.isFinite(Number(tokenData.expires_in))
+        ? new Date(Date.now() + Number(tokenData.expires_in) * 1000).toISOString()
+        : null;
+
+    const { error: upsertErr } = await supabase.from("ig_accounts").upsert(
+      {
+        client_id: clientId,
+        ig_user_id: ig.id,
+        ig_username: ig.username,
+        page_id: page.id,
+        page_access_token: page.access_token,
+        token_expires_at: expiresAt,
+        is_active: true,
+      },
+      { onConflict: "client_id" }
+    );
+
+    if (upsertErr) {
+      return res
+        .status(500)
+        .send(`Failed to save Instagram account: ${upsertErr.message}`);
+    }
+
+    return res.redirect("/coach/dashboard.html?instagram_connected=1");
   } catch (e) {
     return res.status(500).send(String(e?.message || e));
   }
 });
 
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+
