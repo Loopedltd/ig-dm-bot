@@ -121,6 +121,10 @@ const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 
+const META_APP_ID = process.env.META_APP_ID;
+const META_APP_SECRET = process.env.META_APP_SECRET;
+const META_REDIRECT_URI = process.env.META_REDIRECT_URI;
+
 const STRIPE_PRICE_SETUP =
   process.env.STRIPE_PRICE_SETUP || "price_1T7bDyCS3UXrJEm9cHGA2lrG";
 
@@ -1741,6 +1745,109 @@ app.post("/webhook", async (req, res) => {
  * START SERVER
  * ===========================
  */
+
+app.get("/auth/instagram/start", (req, res) => {
+  try {
+    if (!META_APP_ID || !META_REDIRECT_URI) {
+      return safeJson(res, 500, { error: "Meta env vars not configured" });
+    }
+
+    const authUrl = new URL("https://www.facebook.com/v23.0/dialog/oauth");
+
+    authUrl.searchParams.set("client_id", META_APP_ID);
+    authUrl.searchParams.set("redirect_uri", META_REDIRECT_URI);
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set(
+      "scope",
+      [
+        "instagram_basic",
+        "instagram_manage_messages",
+        "pages_show_list",
+        "pages_manage_metadata",
+        "business_management",
+      ].join(",")
+    );
+
+    return res.redirect(authUrl.toString());
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+app.get("/auth/instagram/callback", async (req, res) => {
+  try {
+    if (!META_APP_ID || !META_APP_SECRET || !META_REDIRECT_URI) {
+      return res.status(500).send("Meta env vars not configured");
+    }
+
+    const code = String(req.query.code || "");
+
+    if (!code) {
+      return res.status(400).send("Missing code");
+    }
+
+    const tokenResp = await fetch(
+      `https://graph.facebook.com/v23.0/oauth/access_token?client_id=${encodeURIComponent(
+        META_APP_ID
+      )}&redirect_uri=${encodeURIComponent(
+        META_REDIRECT_URI
+      )}&client_secret=${encodeURIComponent(
+        META_APP_SECRET
+      )}&code=${encodeURIComponent(code)}`
+    );
+
+    const tokenData = await tokenResp.json();
+
+    if (!tokenResp.ok || !tokenData?.access_token) {
+      return res
+        .status(500)
+        .send(`Failed to exchange code: ${JSON.stringify(tokenData)}`);
+    }
+
+    const userAccessToken = tokenData.access_token;
+
+    const pagesResp = await fetch(
+      `https://graph.facebook.com/v23.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}&access_token=${encodeURIComponent(
+        userAccessToken
+      )}`
+    );
+
+    const pagesData = await pagesResp.json();
+
+    if (!pagesResp.ok) {
+      return res
+        .status(500)
+        .send(`Failed to fetch pages: ${JSON.stringify(pagesData)}`);
+    }
+
+    const page = (pagesData?.data || []).find(
+      (p) => p?.instagram_business_account?.id
+    );
+
+    if (!page) {
+      return res
+        .status(400)
+        .send(
+          "No Instagram professional account found. Make sure the Instagram account is linked to a Facebook Page."
+        );
+    }
+
+    const ig = page.instagram_business_account;
+
+    return res.send(`
+      <html>
+        <body style="font-family:system-ui;padding:24px;">
+          <h2>Instagram connected</h2>
+          <p>Page: ${page.name}</p>
+          <p>Instagram: ${ig.username} (${ig.id})</p>
+          <p>Next step: save this account to ig_accounts and redirect back to the dashboard.</p>
+        </body>
+      </html>
+    `);
+  } catch (e) {
+    return res.status(500).send(String(e?.message || e));
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 
