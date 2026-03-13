@@ -1858,13 +1858,15 @@ app.get("/auth/instagram/callback", async (req, res) => {
       return res.status(400).send("Missing state");
     }
 
-    let decoded;
+    try {
+  decoded = verifyInstagramState(state);let decoded;
     try {
       decoded = verifyInstagramState(state);
     } catch {
       return res.status(400).send("Invalid or expired state");
     }
 
+const clientId = decoded.client_id;
 const tokenResp = await fetch(
   `https://graph.facebook.com/v23.0/oauth/access_token?client_id=${encodeURIComponent(
     META_APP_ID
