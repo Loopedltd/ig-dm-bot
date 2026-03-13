@@ -1858,82 +1858,82 @@ app.get("/auth/instagram/callback", async (req, res) => {
       return res.status(400).send("Missing state");
     }
 
-    try {
-  decoded = verifyInstagramState(state);let decoded;
+    let decoded;
     try {
       decoded = verifyInstagramState(state);
     } catch {
       return res.status(400).send("Invalid or expired state");
     }
 
-const clientId = decoded.client_id;
-const tokenResp = await fetch(
-  `https://graph.facebook.com/v23.0/oauth/access_token?client_id=${encodeURIComponent(
-    META_APP_ID
-  )}&redirect_uri=${encodeURIComponent(
-    META_REDIRECT_URI
-  )}&client_secret=${encodeURIComponent(
-    META_APP_SECRET
-  )}&code=${encodeURIComponent(code)}`
-);
+    const clientId = decoded.client_id;
 
-const tokenData = await tokenResp.json();
-
-console.log("TOKEN RESP OK:", tokenResp.ok);
-console.log("TOKEN DATA:", JSON.stringify(tokenData, null, 2));
-
-if (!tokenResp.ok || !tokenData?.access_token) {
-  return res
-    .status(500)
-    .send(`Failed to exchange code: ${JSON.stringify(tokenData)}`);
-}
-
-const userAccessToken = tokenData.access_token;
-
-const pagesUrl =
-  `https://graph.facebook.com/v23.0/me/accounts` +
-  `?fields=id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}` +
-  `&access_token=${encodeURIComponent(userAccessToken)}`;
-
-console.log("PAGES URL:", pagesUrl);
-
-const pagesResp = await fetch(pagesUrl);
-const pagesData = await pagesResp.json();
-
-console.log("PAGES RESP OK:", pagesResp.ok);
-console.log("PAGES DATA:", JSON.stringify(pagesData, null, 2));
-
-if (!pagesResp.ok) {
-  return res
-    .status(500)
-    .send(`Failed to fetch pages: ${JSON.stringify(pagesData)}`);
-}
-
-const page = (pagesData?.data || []).find(
-  (p) =>
-    p?.instagram_business_account?.id ||
-    p?.connected_instagram_account?.id
-);
-
-console.log("MATCHED PAGE:", JSON.stringify(page, null, 2));
-
-if (!page) {
-  return res
-    .status(400)
-    .send(
-      `No Instagram professional account found. Full pages response: ${JSON.stringify(
-        pagesData
-      )}`
+    const tokenResp = await fetch(
+      `https://graph.facebook.com/v23.0/oauth/access_token?client_id=${encodeURIComponent(
+        META_APP_ID
+      )}&redirect_uri=${encodeURIComponent(
+        META_REDIRECT_URI
+      )}&client_secret=${encodeURIComponent(
+        META_APP_SECRET
+      )}&code=${encodeURIComponent(code)}`
     );
-}
+    const tokenData = await tokenResp.json();
 
-const ig =
-  page.instagram_business_account ||
-  page.connected_instagram_account;
+    console.log("TOKEN RESP OK:", tokenResp.ok);
+    console.log("TOKEN DATA:", JSON.stringify(tokenData, null, 2));
+
+    if (!tokenResp.ok || !tokenData?.access_token) {
+      return res
+        .status(500)
+        .send(`Failed to exchange code: ${JSON.stringify(tokenData)}`);
+    }
+
+    const userAccessToken = tokenData.access_token;
+
+    const pagesUrl =
+      `https://graph.facebook.com/v23.0/me/accounts` +
+      `?fields=id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}` +
+      `&access_token=${encodeURIComponent(userAccessToken)}`;
+
+    console.log("PAGES URL:", pagesUrl);
+
+    const pagesResp = await fetch(pagesUrl);
+    const pagesData = await pagesResp.json();
+
+    console.log("PAGES RESP OK:", pagesResp.ok);
+    console.log("PAGES DATA:", JSON.stringify(pagesData, null, 2));
+
+    if (!pagesResp.ok) {
+      return res
+        .status(500)
+        .send(`Failed to fetch pages: ${JSON.stringify(pagesData)}`);
+    }
+
+    const page = (pagesData?.data || []).find(
+      (p) =>
+        p?.instagram_business_account?.id ||
+        p?.connected_instagram_account?.id
+    );
+
+    console.log("MATCHED PAGE:", JSON.stringify(page, null, 2));
+    if (!page) {
+      return res
+        .status(400)
+        .send(
+          `No Instagram professional account found. Full pages response: ${JSON.stringify(
+            pagesData
+          )}`
+        );
+    }
+
+    const ig =
+      page.instagram_business_account ||
+      page.connected_instagram_account;
 
     const expiresAt =
       tokenData.expires_in && Number.isFinite(Number(tokenData.expires_in))
-        ? new Date(Date.now() + Number(tokenData.expires_in) * 1000).toISOString()
+        ? new Date(
+            Date.now() + Number(tokenData.expires_in) * 1000
+          ).toISOString()
         : null;
 
     const { error: upsertErr } = await supabase.from("ig_accounts").upsert(
@@ -1965,4 +1965,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
-
