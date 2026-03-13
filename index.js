@@ -1781,7 +1781,7 @@ if (!igAccount?.page_access_token) {
   return;
 }
 
-await fetch(
+const sendResp = await fetch(
   `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(
     igAccount.page_access_token
   )}`,
@@ -1794,6 +1794,15 @@ await fetch(
     }),
   }
 );
+
+const sendData = await sendResp.json().catch(() => null);
+
+console.log("SEND RESP OK:", sendResp.ok);
+console.log("SEND DATA:", JSON.stringify(sendData, null, 2));
+
+if (!sendResp.ok) {
+  throw new Error(`Failed to send IG message: ${JSON.stringify(sendData)}`);
+}
         await supabase.from("messages").insert({
           lead_id: lead.id,
           direction: "out",
@@ -1856,55 +1865,69 @@ app.get("/auth/instagram/callback", async (req, res) => {
       return res.status(400).send("Invalid or expired state");
     }
 
-    const clientId = decoded.client_id;
+const tokenResp = await fetch(
+  `https://graph.facebook.com/v23.0/oauth/access_token?client_id=${encodeURIComponent(
+    META_APP_ID
+  )}&redirect_uri=${encodeURIComponent(
+    META_REDIRECT_URI
+  )}&client_secret=${encodeURIComponent(
+    META_APP_SECRET
+  )}&code=${encodeURIComponent(code)}`
+);
 
-    const tokenResp = await fetch(
-      `https://graph.facebook.com/v23.0/oauth/access_token?client_id=${encodeURIComponent(
-        META_APP_ID
-      )}&redirect_uri=${encodeURIComponent(
-        META_REDIRECT_URI
-      )}&client_secret=${encodeURIComponent(
-        META_APP_SECRET
-      )}&code=${encodeURIComponent(code)}`
-    );
+const tokenData = await tokenResp.json();
 
-    const tokenData = await tokenResp.json();
+console.log("TOKEN RESP OK:", tokenResp.ok);
+console.log("TOKEN DATA:", JSON.stringify(tokenData, null, 2));
 
-    if (!tokenResp.ok || !tokenData?.access_token) {
-      return res
-        .status(500)
-        .send(`Failed to exchange code: ${JSON.stringify(tokenData)}`);
-    }
+if (!tokenResp.ok || !tokenData?.access_token) {
+  return res
+    .status(500)
+    .send(`Failed to exchange code: ${JSON.stringify(tokenData)}`);
+}
 
-    const userAccessToken = tokenData.access_token;
+const userAccessToken = tokenData.access_token;
 
-    const pagesResp = await fetch(
-      `https://graph.facebook.com/v23.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}&access_token=${encodeURIComponent(
-        userAccessToken
+const pagesUrl =
+  `https://graph.facebook.com/v23.0/me/accounts` +
+  `?fields=id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}` +
+  `&access_token=${encodeURIComponent(userAccessToken)}`;
+
+console.log("PAGES URL:", pagesUrl);
+
+const pagesResp = await fetch(pagesUrl);
+const pagesData = await pagesResp.json();
+
+console.log("PAGES RESP OK:", pagesResp.ok);
+console.log("PAGES DATA:", JSON.stringify(pagesData, null, 2));
+
+if (!pagesResp.ok) {
+  return res
+    .status(500)
+    .send(`Failed to fetch pages: ${JSON.stringify(pagesData)}`);
+}
+
+const page = (pagesData?.data || []).find(
+  (p) =>
+    p?.instagram_business_account?.id ||
+    p?.connected_instagram_account?.id
+);
+
+console.log("MATCHED PAGE:", JSON.stringify(page, null, 2));
+
+if (!page) {
+  return res
+    .status(400)
+    .send(
+      `No Instagram professional account found. Full pages response: ${JSON.stringify(
+        pagesData
       )}`
     );
+}
 
-    const pagesData = await pagesResp.json();
-
-    if (!pagesResp.ok) {
-      return res
-        .status(500)
-        .send(`Failed to fetch pages: ${JSON.stringify(pagesData)}`);
-    }
-
-    const page = (pagesData?.data || []).find(
-      (p) => p?.instagram_business_account?.id
-    );
-
-    if (!page) {
-      return res
-        .status(400)
-        .send(
-          "No Instagram professional account found. Make sure the Instagram account is linked to a Facebook Page."
-        );
-    }
-
-    const ig = page.instagram_business_account;
+const ig =
+  page.instagram_business_account ||
+  page.connected_instagram_account;
 
     const expiresAt =
       tokenData.expires_in && Number.isFinite(Number(tokenData.expires_in))
