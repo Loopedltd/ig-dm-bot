@@ -467,19 +467,22 @@ function verifyInstagramState(state) {
 
 app.get("/coach/api/instagram/connect-url", requireCoach, async (req, res) => {
   try {
-    if (!META_APP_ID || !META_REDIRECT_URI || !META_CONFIG_ID) {
+    if (!META_APP_ID || !META_REDIRECT_URI) {
       return safeJson(res, 500, { error: "Meta env vars not configured" });
     }
 
     const state = signInstagramState(req.coach.client_id);
 
-    const authUrl = new URL("https://www.facebook.com/v23.0/dialog/oauth");
+    const authUrl = new URL("https://www.instagram.com/oauth/authorize");
     authUrl.searchParams.set("client_id", META_APP_ID);
     authUrl.searchParams.set("redirect_uri", META_REDIRECT_URI);
     authUrl.searchParams.set("response_type", "code");
-    authUrl.searchParams.set("config_id", META_CONFIG_ID);
+    authUrl.searchParams.set("scope", [
+      "instagram_business_basic",
+      "instagram_business_manage_messages",
+      "instagram_manage_comments"
+    ].join(","));
     authUrl.searchParams.set("state", state);
-authUrl.searchParams.set("auth_type", "rerequest");
 
     return safeJson(res, 200, {
       ok: true,
@@ -1777,32 +1780,19 @@ const text = extractIgText(messaging);
 const igAccount = await getIgAccountByClientId(lead.client_id);
 
 if (!igAccount?.page_access_token) {
-  console.error("Missing page access token for client:", lead.client_id);
+  console.error("Missing Instagram access token for client:", lead.client_id);
   return;
 }
 
-const sendResp = await fetch(
-  `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(
-    igAccount.page_access_token
-  )}`,
-  {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      recipient: { id: senderId },
-      message: { text: reply },
-    }),
-  }
-);
+console.log("Instagram account connected for client:", lead.client_id);
+console.log("Prepared reply (not sending yet):", reply);
 
-const sendData = await sendResp.json().catch(() => null);
+// TEMPORARY:
+// Instagram Login connection is now being switched to the new direct flow.
+// Outbound DM sending still needs to be reworked to match the token + API path
+// you will use in production, so we stop here for now.
+return;
 
-console.log("SEND RESP OK:", sendResp.ok);
-console.log("SEND DATA:", JSON.stringify(sendData, null, 2));
-
-if (!sendResp.ok) {
-  throw new Error(`Failed to send IG message: ${JSON.stringify(sendData)}`);
-}
         await supabase.from("messages").insert({
           lead_id: lead.id,
           direction: "out",
@@ -1867,16 +1857,22 @@ app.get("/auth/instagram/callback", async (req, res) => {
 
     const clientId = decoded.client_id;
 
-    const tokenResp = await fetch(
-      `https://graph.facebook.com/v23.0/oauth/access_token?client_id=${encodeURIComponent(
-        META_APP_ID
-      )}&redirect_uri=${encodeURIComponent(
-        META_REDIRECT_URI
-      )}&client_secret=${encodeURIComponent(
-        META_APP_SECRET
-      )}&code=${encodeURIComponent(code)}`
-    );
-    const tokenData = await tokenResp.json();
+const form = new URLSearchParams();
+form.set("client_id", META_APP_ID);
+form.set("client_secret", META_APP_SECRET);
+form.set("grant_type", "authorization_code");
+form.set("redirect_uri", META_REDIRECT_URI);
+form.set("code", code);
+
+const tokenResp = await fetch("https://api.instagram.com/oauth/access_token", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/x-www-form-urlencoded",
+  },
+  body: form.toString(),
+});
+
+const tokenData = await tokenResp.json();
 
     console.log("TOKEN RESP OK:", tokenResp.ok);
     console.log("TOKEN DATA:", JSON.stringify(tokenData, null, 2));
@@ -1887,67 +1883,52 @@ app.get("/auth/instagram/callback", async (req, res) => {
         .send(`Failed to exchange code: ${JSON.stringify(tokenData)}`);
     }
 
-    const userAccessToken = tokenData.access_token;
+const igAccessToken = tokenData.access_token;
+const igUserId = tokenData.user_id;
 
-    const pagesUrl =
-      `https://graph.facebook.com/v23.0/me/accounts` +
-      `?fields=id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}` +
-      `&access_token=${encodeURIComponent(userAccessToken)}`;
+console.log("IG ACCESS TOKEN OK:", !!igAccessToken);
+console.log("IG USER ID:", igUserId);
 
-    console.log("PAGES URL:", pagesUrl);
+if (!igAccessToken || !igUserId) {
+  return res
+    .status(500)
+    .send(`Instagram token response missing fields: ${JSON.stringify(tokenData)}`);
+}
 
-    const pagesResp = await fetch(pagesUrl);
-    const pagesData = await pagesResp.json();
+const profileResp = await fetch(
+  `https://graph.instagram.com/me?fields=id,username&access_token=${encodeURIComponent(
+    igAccessToken
+  )}`
+);
 
-    console.log("PAGES RESP OK:", pagesResp.ok);
-    console.log("PAGES DATA:", JSON.stringify(pagesData, null, 2));
+const profileData = await profileResp.json();
 
-    if (!pagesResp.ok) {
-      return res
-        .status(500)
-        .send(`Failed to fetch pages: ${JSON.stringify(pagesData)}`);
-    }
+console.log("PROFILE RESP OK:", profileResp.ok);
+console.log("PROFILE DATA:", JSON.stringify(profileData, null, 2));
 
-    const page = (pagesData?.data || []).find(
-      (p) =>
-        p?.instagram_business_account?.id ||
-        p?.connected_instagram_account?.id
-    );
+if (!profileResp.ok || !profileData?.id) {
+  return res
+    .status(500)
+    .send(`Failed to fetch Instagram profile: ${JSON.stringify(profileData)}`);
+}
 
-    console.log("MATCHED PAGE:", JSON.stringify(page, null, 2));
-    if (!page) {
-      return res
-        .status(400)
-        .send(
-          `No Instagram professional account found. Full pages response: ${JSON.stringify(
-            pagesData
-          )}`
-        );
-    }
+const expiresAt =
+  tokenData.expires_in && Number.isFinite(Number(tokenData.expires_in))
+    ? new Date(Date.now() + Number(tokenData.expires_in) * 1000).toISOString()
+    : null;
 
-    const ig =
-      page.instagram_business_account ||
-      page.connected_instagram_account;
-
-    const expiresAt =
-      tokenData.expires_in && Number.isFinite(Number(tokenData.expires_in))
-        ? new Date(
-            Date.now() + Number(tokenData.expires_in) * 1000
-          ).toISOString()
-        : null;
-
-    const { error: upsertErr } = await supabase.from("ig_accounts").upsert(
-      {
-        client_id: clientId,
-        ig_user_id: ig.id,
-        ig_username: ig.username,
-        page_id: page.id,
-        page_access_token: page.access_token,
-        token_expires_at: expiresAt,
-        is_active: true,
-      },
-      { onConflict: "client_id" }
-    );
+const { error: upsertErr } = await supabase.from("ig_accounts").upsert(
+  {
+    client_id: clientId,
+    ig_user_id: profileData.id,
+    ig_username: profileData.username || null,
+    page_id: null,
+    page_access_token: igAccessToken,
+    token_expires_at: expiresAt,
+    is_active: true,
+  },
+  { onConflict: "client_id" }
+);
 
     if (upsertErr) {
       return res
