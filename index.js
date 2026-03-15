@@ -467,22 +467,19 @@ function verifyInstagramState(state) {
 
 app.get("/coach/api/instagram/connect-url", requireCoach, async (req, res) => {
   try {
-    if (!META_APP_ID || !META_REDIRECT_URI) {
+    if (!META_APP_ID || !META_REDIRECT_URI || !META_CONFIG_ID) {
       return safeJson(res, 500, { error: "Meta env vars not configured" });
     }
 
     const state = signInstagramState(req.coach.client_id);
 
-    const authUrl = new URL("https://www.instagram.com/oauth/authorize");
+    const authUrl = new URL("https://www.facebook.com/v23.0/dialog/oauth");
     authUrl.searchParams.set("client_id", META_APP_ID);
     authUrl.searchParams.set("redirect_uri", META_REDIRECT_URI);
     authUrl.searchParams.set("response_type", "code");
-    authUrl.searchParams.set("scope", [
-      "instagram_business_basic",
-      "instagram_business_manage_messages",
-      "instagram_manage_comments"
-    ].join(","));
+    authUrl.searchParams.set("config_id", META_CONFIG_ID);
     authUrl.searchParams.set("state", state);
+    authUrl.searchParams.set("auth_type", "rerequest");
 
     return safeJson(res, 200, {
       ok: true,
@@ -1772,11 +1769,6 @@ const text = extractIgText(messaging);
           thinkAboutIt,
         });
 
-        if (!reply) return;
-
-        const delayMs = randomInt(8000, 25000);
-        await sleep(delayMs);
-
 const igAccount = await getIgAccountByClientId(lead.client_id);
 
 if (!igAccount?.page_access_token) {
@@ -1784,14 +1776,28 @@ if (!igAccount?.page_access_token) {
   return;
 }
 
-console.log("Instagram account connected for client:", lead.client_id);
-console.log("Prepared reply (not sending yet):", reply);
+const sendResp = await fetch(
+  `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(
+    igAccount.page_access_token
+  )}`,
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      recipient: { id: senderId },
+      message: { text: reply },
+    }),
+  }
+);
 
-// TEMPORARY:
-// Instagram Login connection is now being switched to the new direct flow.
-// Outbound DM sending still needs to be reworked to match the token + API path
-// you will use in production, so we stop here for now.
-return;
+const sendData = await sendResp.json().catch(() => null);
+
+console.log("SEND RESP OK:", sendResp.ok);
+console.log("SEND DATA:", JSON.stringify(sendData, null, 2));
+
+if (!sendResp.ok) {
+  throw new Error(`Failed to send IG message: ${JSON.stringify(sendData)}`);
+}        
 
         await supabase.from("messages").insert({
           lead_id: lead.id,
@@ -1857,74 +1863,67 @@ app.get("/auth/instagram/callback", async (req, res) => {
 
     const clientId = decoded.client_id;
 
-const form = new URLSearchParams();
-form.set("client_id", META_APP_ID);
-form.set("client_secret", META_APP_SECRET);
-form.set("grant_type", "authorization_code");
-form.set("redirect_uri", META_REDIRECT_URI);
-form.set("code", code);
-
-const tokenResp = await fetch("https://api.instagram.com/oauth/access_token", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/x-www-form-urlencoded",
-  },
-  body: form.toString(),
-});
+const tokenResp = await fetch(
+  `https://graph.facebook.com/v23.0/oauth/access_token?client_id=${encodeURIComponent(
+    META_APP_ID
+  )}&redirect_uri=${encodeURIComponent(
+    META_REDIRECT_URI
+  )}&client_secret=${encodeURIComponent(
+    META_APP_SECRET
+  )}&code=${encodeURIComponent(code)}`
+);
 
 const tokenData = await tokenResp.json();
 
-    console.log("TOKEN RESP OK:", tokenResp.ok);
-    console.log("TOKEN DATA:", JSON.stringify(tokenData, null, 2));
-
-    if (!tokenResp.ok || !tokenData?.access_token) {
-      return res
-        .status(500)
-        .send(`Failed to exchange code: ${JSON.stringify(tokenData)}`);
-    }
-
-const igAccessToken = tokenData.access_token;
-const igUserId = tokenData.user_id;
-
-console.log("IG ACCESS TOKEN OK:", !!igAccessToken);
-console.log("IG USER ID:", igUserId);
-
-if (!igAccessToken || !igUserId) {
+if (!tokenResp.ok || !tokenData?.access_token) {
   return res
     .status(500)
-    .send(`Instagram token response missing fields: ${JSON.stringify(tokenData)}`);
+    .send(`Failed to exchange code: ${JSON.stringify(tokenData)}`);
 }
 
-const profileResp = await fetch(
-  `https://graph.instagram.com/me?fields=id,username&access_token=${encodeURIComponent(
-    igAccessToken
+const userAccessToken = tokenData.access_token;
+
+const pagesResp = await fetch(
+  `https://graph.facebook.com/v23.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}&access_token=${encodeURIComponent(
+    userAccessToken
   )}`
 );
 
-const profileData = await profileResp.json();
+const pagesData = await pagesResp.json();
 
-console.log("PROFILE RESP OK:", profileResp.ok);
-console.log("PROFILE DATA:", JSON.stringify(profileData, null, 2));
-
-if (!profileResp.ok || !profileData?.id) {
+if (!pagesResp.ok) {
   return res
     .status(500)
-    .send(`Failed to fetch Instagram profile: ${JSON.stringify(profileData)}`);
+    .send(`Failed to fetch pages: ${JSON.stringify(pagesData)}`);
 }
 
-const expiresAt =
-  tokenData.expires_in && Number.isFinite(Number(tokenData.expires_in))
-    ? new Date(Date.now() + Number(tokenData.expires_in) * 1000).toISOString()
-    : null;
+const page = (pagesData?.data || []).find(
+  (p) =>
+    p?.instagram_business_account?.id ||
+    p?.connected_instagram_account?.id
+);
+
+if (!page) {
+  return res
+    .status(400)
+    .send(
+      `No Instagram professional account found. Full pages response: ${JSON.stringify(
+        pagesData
+      )}`
+    );
+}
+
+const ig =
+  page.instagram_business_account ||
+  page.connected_instagram_account;
 
 const { error: upsertErr } = await supabase.from("ig_accounts").upsert(
   {
     client_id: clientId,
-    ig_user_id: profileData.id,
-    ig_username: profileData.username || null,
-    page_id: null,
-    page_access_token: igAccessToken,
-    token_expires_at: expiresAt,
+    ig_user_id: ig.id,
+    ig_username: ig.username || null,
+    page_id: page.id,
+    page_access_token: page.access_token,
     is_active: true,
   },
   { onConflict: "client_id" }
