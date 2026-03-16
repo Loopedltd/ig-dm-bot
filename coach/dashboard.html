@@ -28,7 +28,15 @@
         --warnBg: rgba(181, 71, 8, 0.08);
         --warnBorder: rgba(181, 71, 8, 0.18);
         --warnText: #b54708;
-      }
+}
+
+.instagram-connect-note{
+  font-size:14px;
+  line-height:1.5;
+  color: var(--muted);
+  margin-bottom:12px;
+  max-width:420px;    
+  }
 
       body{
         margin:0;
@@ -393,22 +401,25 @@
         </div>
 
         <div class="connectCardRow">
-          <div class="connectLeft">
-            <div class="takeoverTopLine">
-              <span class="badge warn" id="instagramConnectionBadge">Not connected</span>
-              <span class="mono" id="instagramConnectionMeta">No Instagram account connected yet.</span>
-            </div>
+<div class="connectLeft">
+  <div class="takeoverTopLine">
+    <span class="badge warn" id="instagramConnectionBadge">Not connected</span>
+    <span class="mono" id="instagramConnectionMeta">No Instagram account connected yet.</span>
+  </div>
 
-            <div class="connectMeta">
-              After connecting, your assistant will be able to receive and reply to Instagram DMs using your saved settings.
-            </div>
-          </div>
+  <div class="connectMeta">
+    After connecting, your assistant will be able to receive and reply to Instagram DMs using your saved settings.
 
-          <div class="connectRight">
-            <button class="btn primary" id="connectInstagramBtn">Connect Instagram</button>
-          </div>
-        </div>
-      </div>
+    <br><br>
+
+    <strong>Note:</strong> Meta may ask you to create a free <strong>Business Portfolio</strong>.  
+    This takes about 60 seconds and is required for Instagram automation tools.
+  </div>
+</div>
+
+<div class="connectRight">
+  <button class="btn primary" id="connectInstagramBtn">Connect Instagram</button>
+</div>
 
       <div class="card">
         <div class="row">
