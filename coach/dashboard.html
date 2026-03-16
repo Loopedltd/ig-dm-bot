@@ -1,527 +1,321 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Coach Dashboard</title>
-    <style>
-      :root{
-        /* Light "Lovable-style" */
-        --bg: #f7f8fb;
-        --panel: #ffffff;
-        --panel2: rgba(255,255,255,0.85);
-        --border: rgba(15, 23, 42, 0.10);
-        --border2: rgba(15, 23, 42, 0.14);
-        --text: #0f172a;
-        --muted: rgba(15, 23, 42, 0.62);
-        --inputbg: #ffffff;
-        --primary: #2d6bff;
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Coach Dashboard</title>
 
-        --shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-        --shadow2: 0 1px 0 rgba(15, 23, 42, 0.04);
-        --ring: rgba(45, 107, 255, 0.22);
+<style>
+:root{
+  --bg:#f7f8fb;
+  --panel:#ffffff;
+  --border:rgba(15,23,42,0.10);
+  --border2:rgba(15,23,42,0.14);
+  --text:#0f172a;
+  --muted:rgba(15,23,42,0.62);
+  --inputbg:#ffffff;
+  --primary:#2d6bff;
 
-        --okBg: rgba(2, 122, 72, 0.08);
-        --okBorder: rgba(2, 122, 72, 0.18);
-        --okText: #027a48;
-
-        --warnBg: rgba(181, 71, 8, 0.08);
-        --warnBorder: rgba(181, 71, 8, 0.18);
-        --warnText: #b54708;
+  --shadow:0 10px 30px rgba(15,23,42,0.06);
+  --shadow2:0 1px 0 rgba(15,23,42,0.04);
+  --ring:rgba(45,107,255,0.22);
 }
 
-.instagram-connect-note{
-  font-size:14px;
-  line-height:1.5;
-  color: var(--muted);
-  margin-bottom:12px;
-  max-width:420px;    
-  }
+body{
+margin:0;
+font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+background:var(--bg);
+color:var(--text);
+}
 
-      body{
-        margin:0;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: var(--bg);
-        color: var(--text);
-      }
+.topbar{
+display:flex;
+align-items:center;
+justify-content:space-between;
+padding:14px 18px;
+border-bottom:1px solid var(--border);
+background:rgba(255,255,255,0.78);
+backdrop-filter:blur(10px);
+position:sticky;
+top:0;
+z-index:10;
+}
 
-      .topbar{
-        display:flex;
-        align-items:center;
-        justify-content:space-between;
-        padding:14px 18px;
-        border-bottom:1px solid var(--border);
-        background: rgba(255,255,255,0.78);
-        backdrop-filter: blur(10px);
-        position: sticky;
-        top: 0;
-        z-index: 10;
-      }
+.brand{
+font-weight:800;
+letter-spacing:.2px;
+}
 
-      .brand{
-        font-weight:800;
-        letter-spacing: .2px;
-      }
+.btn{
+border:1px solid var(--border2);
+background:#fff;
+color:var(--text);
+padding:10px 14px;
+border-radius:12px;
+cursor:pointer;
+font-weight:700;
+font-size:13px;
+display:inline-flex;
+align-items:center;
+justify-content:center;
+box-shadow:var(--shadow2);
+}
 
-      .btn{
-        border:1px solid var(--border2);
-        background: #fff;
-        color: var(--text);
-        padding:10px 14px;
-        border-radius:12px;
-        cursor:pointer;
-        font-weight:700;
-        font-size:13px;
-        line-height:1;
-        text-decoration:none;
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        user-select:none;
-        box-shadow: var(--shadow2);
-      }
+.btn.primary{
+background:var(--primary);
+border:1px solid rgba(45,107,255,0.35);
+color:#fff;
+box-shadow:0 8px 18px rgba(45,107,255,0.22);
+}
 
-      .btn:hover{
-        filter: brightness(0.99);
-        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
-      }
+.wrap{
+max-width:1080px;
+margin:0 auto;
+padding:28px 22px 42px;
+}
 
-      .btn:active{ transform: translateY(0.5px); }
+h1{
+margin:16px 0 6px;
+font-size:34px;
+}
 
-      .btn.primary{
-        background: var(--primary);
-        border: 1px solid rgba(45, 107, 255, 0.35);
-        color: #fff;
-        box-shadow: 0 8px 18px rgba(45, 107, 255, 0.22);
-      }
+.sub{
+color:var(--muted);
+font-size:15px;
+margin-bottom:18px;
+}
 
-      .btn.primary:hover{ filter: brightness(1.02); }
+.card{
+margin-top:16px;
+background:var(--panel);
+border:1px solid var(--border);
+border-radius:18px;
+padding:18px;
+box-shadow:var(--shadow);
+}
 
-      .btn.small{
-        padding:8px 10px;
-        border-radius:12px;
-        font-size:12px;
-      }
+.row{
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:14px;
+}
 
-      .btn.disabled{
-        opacity: 0.65;
-        cursor: default;
-        pointer-events: none;
-      }
+label{
+display:block;
+margin-top:14px;
+color:var(--muted);
+font-size:13px;
+font-weight:650;
+}
 
-      .wrap{
-        max-width: 1080px;
-        margin: 0 auto;
-        padding: 28px 22px 42px;
-      }
+input,textarea{
+width:100%;
+margin-top:6px;
+padding:12px;
+border-radius:12px;
+border:1px solid rgba(15,23,42,0.12);
+background:var(--inputbg);
+}
 
-      h1{
-        margin: 16px 0 6px;
-        font-size: 34px;
-        letter-spacing: -0.4px;
-      }
+textarea{
+min-height:240px;
+font-family:inherit;
+font-size:13px;
+}
 
-      .sub{
-        color: var(--muted);
-        font-size: 15px;
-        margin-bottom: 18px;
-      }
+.divider{
+height:1px;
+background:rgba(15,23,42,0.10);
+margin:16px 0;
+}
 
-      .card{
-        margin-top: 16px;
-        background: var(--panel);
-        border: 1px solid var(--border);
-        border-radius: 18px;
-        padding: 18px;
-        box-shadow: var(--shadow);
-      }
+.helper{
+color:var(--muted);
+font-size:13px;
+margin-top:8px;
+}
 
-      label{
-        display:block;
-        margin-top: 14px;
-        color: var(--muted);
-        font-size: 13px;
-        font-weight: 650;
-      }
+.actions{
+display:flex;
+justify-content:flex-end;
+margin-top:14px;
+}
 
-      input, textarea{
-        width:100%;
-        margin-top:6px;
-        padding:12px 12px;
-        border-radius: 12px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: var(--inputbg);
-        color: var(--text);
-        outline:none;
-        box-sizing:border-box;
-        transition: box-shadow .12s ease, border-color .12s ease;
-      }
+.tip{
+color:var(--muted);
+margin-top:10px;
+font-size:13px;
+}
 
-      input::placeholder, textarea::placeholder{
-        color: rgba(15, 23, 42, 0.40);
-      }
+.connectRow{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:12px;
+}
 
-      input:focus, textarea:focus{
-        border-color: rgba(45, 107, 255, 0.55);
-        box-shadow: 0 0 0 4px var(--ring);
-      }
+.badge{
+display:inline-flex;
+padding:6px 10px;
+border-radius:999px;
+font-size:12px;
+font-weight:800;
+border:1px solid rgba(15,23,42,0.12);
+background:rgba(15,23,42,0.04);
+}
 
-      textarea{
-        min-height: 240px;
-        font-family: inherit;
-        font-size: 13px;
-        line-height: 1.45;
-      }
+.badge.warn{
+background:rgba(181,71,8,0.10);
+border-color:rgba(181,71,8,0.20);
+color:#b54708;
+}
 
-      .row{
-        display:grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 14px;
-      }
+.muted{
+color:var(--muted);
+font-size:13px;
+}
 
-      .divider{
-        height:1px;
-        background: rgba(15, 23, 42, 0.10);
-        margin: 16px 0;
-      }
+.note{
+margin-top:10px;
+font-size:13px;
+color:var(--muted);
+}
+</style>
+</head>
 
-      .helper{
-        color: var(--muted);
-        font-size: 13px;
-        margin-top: 8px;
-      }
+<body>
 
-      .actions{
-        display:flex;
-        gap: 10px;
-        margin-top: 14px;
-        justify-content: flex-end;
-      }
-
-      .tip{
-        color: var(--muted);
-        margin-top: 10px;
-        font-size: 13px;
-      }
-
-      .err{ color:#c0262d; margin-top:10px; display:none; white-space:pre-wrap; }
-      .ok{  color:#0f766e; margin-top:10px; display:none; }
-
-      .takeoverHeader{
-        display:flex;
-        align-items:center;
-        justify-content:space-between;
-        gap:12px;
-      }
-
-      .takeoverTitle{
-        font-weight:850;
-        font-size:18px;
-        letter-spacing: -0.2px;
-      }
-
-      .takeoverSub{
-        margin-top:6px;
-        color: var(--muted);
-        font-size: 13px;
-      }
-
-      .takeoverList{
-        margin-top:14px;
-        display:flex;
-        flex-direction:column;
-        gap:10px;
-      }
-
-      .takeoverRow{
-        display:flex;
-        align-items:flex-start;
-        justify-content:space-between;
-        gap:12px;
-        padding:12px;
-        border:1px solid rgba(15, 23, 42, 0.10);
-        background: rgba(15, 23, 42, 0.02);
-        border-radius:14px;
-      }
-
-      .takeoverLeft{
-        display:flex;
-        flex-direction:column;
-        gap:6px;
-        min-width: 0;
-      }
-
-      .takeoverTopLine{
-        display:flex;
-        align-items:center;
-        gap:8px;
-        flex-wrap:wrap;
-      }
-
-      .badge{
-        display:inline-flex;
-        align-items:center;
-        padding:6px 10px;
-        border-radius:999px;
-        font-size:12px;
-        font-weight:850;
-        border:1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(15, 23, 42, 0.04);
-        color: rgba(15, 23, 42, 0.78);
-      }
-
-      .badge.paused{
-        border-color: rgba(192, 38, 45, 0.25);
-        background: rgba(192, 38, 45, 0.08);
-        color: #7f1d1d;
-      }
-
-      .badge.connected{
-        border-color: var(--okBorder);
-        background: var(--okBg);
-        color: var(--okText);
-      }
-
-      .badge.warn{
-        border-color: var(--warnBorder);
-        background: var(--warnBg);
-        color: var(--warnText);
-      }
-
-      .mono{
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-        font-size:12px;
-        color: rgba(15, 23, 42, 0.55);
-        word-break: break-all;
-      }
-
-      .takeoverMeta{
-        color: var(--muted);
-        font-size: 13px;
-      }
-
-      .takeoverRight{
-        display:flex;
-        gap:10px;
-        align-items:center;
-        flex-shrink:0;
-      }
-
-      .globalRow{
-        display:flex;
-        align-items:flex-start;
-        justify-content:space-between;
-        gap:12px;
-        margin-top:12px;
-      }
-
-      .globalLeft{
-        min-width:0;
-        display:flex;
-        flex-direction:column;
-        gap:8px;
-      }
-
-      .globalRight{
-        display:flex;
-        gap:10px;
-        align-items:center;
-        flex-shrink:0;
-      }
-
-      .badge.globalPaused{
-        border-color: rgba(161, 98, 7, 0.25);
-        background: rgba(245, 158, 11, 0.12);
-        color: #7c2d12;
-      }
-
-      .connectCardRow{
-        display:flex;
-        align-items:flex-start;
-        justify-content:space-between;
-        gap:16px;
-        margin-top:12px;
-      }
-
-      .connectLeft{
-        display:flex;
-        flex-direction:column;
-        gap:8px;
-        min-width:0;
-      }
-
-      .connectRight{
-        display:flex;
-        align-items:center;
-        gap:10px;
-        flex-shrink:0;
-      }
-
-      .connectMeta{
-        color: var(--muted);
-        font-size: 13px;
-        line-height: 1.5;
-      }
-
-      @media (max-width: 900px){
-        .row{ grid-template-columns: 1fr; }
-        h1{ font-size: 28px; }
-        .takeoverRow{ flex-direction:column; }
-        .takeoverRight{ justify-content:flex-end; width:100%; }
-        .globalRow{ flex-direction:column; }
-        .globalRight{ justify-content:flex-end; width:100%; }
-        .connectCardRow{ flex-direction:column; }
-        .connectRight{ justify-content:flex-end; width:100%; }
-      }
-    </style>
-  </head>
-
-  <body>
-    <div class="topbar">
-      <div class="brand">Looped — Coach</div>
-      <div style="display:flex; gap:10px;">
-        <button class="btn" id="refreshBtn">Refresh</button>
-        <a class="btn" id="viewStatsBtn" href="/stats">View Stats</a>
-        <button class="btn" id="logoutBtn">Logout</button>
-      </div>
-    </div>
-
-    <div class="wrap">
-      <h1 id="title">Coach Dashboard</h1>
-      <div class="sub">Edit your bot settings and connect your Instagram below.</div>
-
-      <div class="card" id="instagramConnectionCard">
-        <div class="takeoverHeader">
-          <div>
-            <div class="takeoverTitle">Instagram Connection</div>
-            <div class="takeoverSub">
-              Connect your Instagram to activate your assistant and start replying to messages.
-            </div>
-          </div>
-        </div>
-
-        <div class="connectCardRow">
-<div class="connectLeft">
-  <div class="takeoverTopLine">
-    <span class="badge warn" id="instagramConnectionBadge">Not connected</span>
-    <span class="mono" id="instagramConnectionMeta">No Instagram account connected yet.</span>
-  </div>
-
-  <div class="connectMeta">
-    After connecting, your assistant will be able to receive and reply to Instagram DMs using your saved settings.
-
-    <br><br>
-
-    <strong>Note:</strong> Meta may ask you to create a free <strong>Business Portfolio</strong>.  
-    This takes about 60 seconds and is required for Instagram automation tools.
-  </div>
-</div>
-
-  <button class="btn primary"<div class="connectRight">
-  <button class="btn primary" id="connectInstagramBtn">Connect Instagram</button>
-</div>
-
+<div class="topbar">
+<div class="brand">Looped — Coach</div>
+<div style="display:flex;gap:10px;">
+<button class="btn" id="refreshBtn">Refresh</button>
+<a class="btn" href="/coach/stats.html">View Stats</a>
+<button class="btn" id="logoutBtn">Logout</button>
 </div>
 </div>
 
-      <div class="card">
-        <div class="row">
-          <div>
-            <label>Booking URL</label>
-            <input id="booking_url" placeholder="https://calendly.com/yourname/15min" />
-          </div>
-          <div>
-            <label>Alt Booking URL (optional)</label>
-            <input id="booking_url_alt" placeholder="https://…" />
-          </div>
-        </div>
+<div class="wrap">
 
-        <label>Instagram handle</label>
-        <input id="instagram_handle" placeholder="looped.ltd" />
+<h1>Coach Dashboard</h1>
+<div class="sub">Edit your bot settings below.</div>
 
-        <div class="helper">Used to generate a suggested prompt (you can still edit it).</div>
-        <div style="margin-top:10px;">
-          <button class="btn" id="generatePromptBtn">Generate Prompt</button>
-        </div>
+<!-- Instagram Connection -->
+<div class="card">
 
-        <div class="divider"></div>
+<div class="connectRow">
 
-        <label>How your assistant should reply</label>
-        <textarea id="system_prompt" placeholder="Example:
-- Tone: friendly, confident, UK vibe. Short replies.
-- Rules: 1–2 sentences, ask ONE question at the end.
-- If asked price: ask goal + current situation, don’t invent numbers.
-- High intent: share booking link once, don’t spam.
-- Post-call: no booking push, focus next steps.
+<div>
+<div style="font-weight:800;margin-bottom:6px;">Instagram Connection</div>
 
-Write yours here…"></textarea>
+<span class="badge warn" id="instagramConnectionBadge">
+Not connected
+</span>
 
-        <div class="tip">
-          Tip: keep it specific (tone + rules + what to do when asked price + when to send booking link).
-        </div>
+<span class="muted" id="instagramConnectionMeta">
+No Instagram account connected yet.
+</span>
 
-        <div class="actions">
-          <button class="btn primary" id="saveBtn">Save</button>
-        </div>
+</div>
 
-        <div class="err" id="err"></div>
-        <div class="ok" id="ok">Saved ✅</div>
-      </div>
+<button class="btn primary" id="connectInstagramBtn">
+Connect Instagram
+</button>
 
-      <div class="card" id="globalPauseCard">
-        <div class="takeoverHeader">
-          <div>
-            <div class="takeoverTitle">Global Manual Mode</div>
-            <div class="takeoverSub">
-              Pause the assistant completely. When ON, your Instagram becomes fully manual (no assistant replies to any lead).
-            </div>
-          </div>
-          <div style="display:flex; gap:10px;">
-            <button class="btn small" id="refreshGlobalPauseBtn">Refresh status</button>
-          </div>
-        </div>
+</div>
 
-        <div class="globalRow">
-          <div class="globalLeft">
-            <div class="takeoverTopLine">
-              <span class="badge" id="globalPauseBadge">Assistant running</span>
-              <span class="mono" id="globalPauseMeta">—</span>
-            </div>
+<div class="note">
+After connecting, your assistant will be able to receive and reply to Instagram DMs using your saved settings.
+</div>
 
-            <label style="margin-top:6px;">Reason (optional)</label>
-            <input id="globalPauseReason" placeholder="e.g. Busy this afternoon, handling manually" />
-            <div class="takeoverMeta" id="globalPauseHint">
-              Tip: You can turn this on for holidays, launches, or when you want full control.
-            </div>
-          </div>
+<div class="note">
+<strong>Note:</strong> Meta may ask you to create a free <strong>Business Portfolio</strong>.  
+This takes about 60 seconds and is required for Instagram automation tools.
+</div>
 
-          <div class="globalRight">
-            <button class="btn primary" id="toggleGlobalPauseBtn">Pause assistant globally</button>
-          </div>
-        </div>
-      </div>
+</div>
 
-      <div class="card" id="manualTakeoversCard">
-        <div class="takeoverHeader">
-          <div>
-            <div class="takeoverTitle">Manual Takeovers</div>
-            <div class="takeoverSub">
-              If you reply manually on Instagram, the assistant pauses for that lead. You can resume it here.
-            </div>
-          </div>
-          <button class="btn small" id="refreshTakeoversBtn">Refresh list</button>
-        </div>
 
-        <div class="takeoverList" id="takeoverList">
-          <div class="takeoverMeta" id="takeoverLoading">Loading…</div>
-        </div>
+<!-- Booking / Prompt -->
+<div class="card">
 
-        <div class="takeoverMeta" style="margin-top:10px;" id="takeoverHint">
-          Auto-resume: if you stop replying, the assistant will start replying again after 24 hours.
-        </div>
-      </div>
-    </div>
+<div class="row">
 
-    <script src="/coach/coach.js"></script>
-  </body>
+<div>
+<label>Booking URL</label>
+<input id="booking_url" placeholder="https://calendly.com/yourname/15min" />
+</div>
+
+<div>
+<label>Alt Booking URL (optional)</label>
+<input id="booking_url_alt" placeholder="https://…" />
+</div>
+
+</div>
+
+<label>Instagram handle</label>
+<input id="instagram_handle" placeholder="looped.ltd" />
+
+<div class="helper">
+Used to generate a suggested prompt (you can still edit it).
+</div>
+
+<div style="margin-top:10px;">
+<button class="btn" id="generatePromptBtn">Generate Prompt</button>
+</div>
+
+<div class="divider"></div>
+
+<label>How your bot should reply</label>
+
+<textarea id="system_prompt"></textarea>
+
+<div class="tip">
+Tip: keep it specific (tone + rules + what to do when asked price + when to send booking link).
+</div>
+
+<div class="actions">
+<button class="btn primary" id="saveBtn">Save</button>
+</div>
+
+</div>
+
+
+<!-- Global Manual Mode -->
+<div class="card" id="globalPauseCard">
+
+<div style="font-weight:800;margin-bottom:8px;">
+Global Manual Mode
+</div>
+
+<div class="muted">
+Pause the bot completely. When ON, your Instagram becomes fully manual.
+</div>
+
+<div style="margin-top:12px;">
+<button class="btn primary" id="toggleGlobalPauseBtn">
+Pause bot globally
+</button>
+</div>
+
+</div>
+
+
+<!-- Manual Takeovers -->
+<div class="card" id="manualTakeoversCard">
+
+<div style="font-weight:800;margin-bottom:8px;">
+Manual Takeovers
+</div>
+
+<div class="muted">
+If you reply manually on Instagram, the bot pauses for that lead.
+</div>
+
+</div>
+
+</div>
+
+<script src="./coach.js"></script>
+
+</body>
 </html>
