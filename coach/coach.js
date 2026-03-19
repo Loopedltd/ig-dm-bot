@@ -198,12 +198,41 @@ async function loadInstagramConnectionStatus() {
   if (!badgeEl || !metaEl || !btn) return;
 
   try {
-    const r = await fetch(`${API}/instagram/status`, {
-      headers: {
-        Authorization: `Bearer ${getToken()}`
-      }
+    const data = await apiFetch(`${API}/instagram/status`, {
+      method: "GET",
     });
 
+    if (data?.connected) {
+      badgeEl.className = "badge success";
+      badgeEl.textContent = "Connected";
+
+      metaEl.textContent = data.username
+        ? `Connected as @${data.username}`
+        : "Instagram connected";
+
+      btn.textContent = "Reconnect Instagram";
+      btn.disabled = false;
+      btn.style.opacity = "1";
+    } else {
+      badgeEl.className = "badge warn";
+      badgeEl.textContent = "Not connected";
+
+      metaEl.textContent = "No Instagram account connected yet.";
+
+      btn.textContent = "Connect Instagram";
+      btn.disabled = false;
+      btn.style.opacity = "1";
+    }
+  } catch (e) {
+    badgeEl.className = "badge warn";
+    badgeEl.textContent = "Error";
+
+    metaEl.textContent = "Failed to load Instagram status.";
+
+    btn.disabled = false;
+    btn.style.opacity = "1";
+  }
+}
     const j = await r.json().catch(() => ({}));
 
     if (r.ok && j?.connected) {
