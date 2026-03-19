@@ -489,6 +489,31 @@ app.get("/coach/api/instagram/connect-url", requireCoach, async (req, res) => {
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
 });
+app.get("/coach/api/instagram/status", requireCoach, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("ig_accounts")
+      .select("ig_user_id, ig_username, page_id, is_active")
+      .eq("client_id", req.coach.client_id)
+      .eq("is_active", true)
+      .single();
+
+    if (error || !data) {
+      return safeJson(res, 200, {
+        connected: false,
+      });
+    }
+
+    return safeJson(res, 200, {
+      connected: true,
+      username: data.ig_username || null,
+      ig_user_id: data.ig_user_id || null,
+      page_id: data.page_id || null,
+    });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
 
 async function getIgAccountByClientId(clientId) {
   const { data, error } = await supabase
@@ -1699,18 +1724,30 @@ const text = extractIgText(messaging);
           .eq("ig_psid", senderId)
           .single();
 
-        if (!lead) {
-          const { data: newLead } = await supabase
-            .from("leads")
-            .insert({
-              ig_psid: senderId,
-              stage: "new",
-            })
-            .select()
-            .single();
+if (!lead) {
+  const { data: igAccount } = await supabase
+    .from("ig_accounts")
+    .select("client_id, ig_user_id, page_id")
+    .eq("is_active", true)
+    .single();
 
-          lead = newLead;
-        }
+  if (!igAccount?.client_id) {
+    console.error("No active Instagram account/client mapping found");
+    return;
+  }
+
+  const { data: newLead } = await supabase
+    .from("leads")
+    .insert({
+      client_id: igAccount.client_id,
+      ig_psid: senderId,
+      stage: "new",
+    })
+    .select()
+    .single();
+
+  lead = newLead;
+}
 
         await supabase.from("messages").insert({
           lead_id: lead.id,

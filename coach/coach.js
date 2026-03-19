@@ -190,12 +190,33 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
   }
-  function loadInstagramConnectionStatus() {
-    const badgeEl = qs("#instagramConnectionBadge");
-    const metaEl = qs("#instagramConnectionMeta");
-    const btn = qs("#connectInstagramBtn");
+async function loadInstagramConnectionStatus() {
+  const badgeEl = qs("#instagramConnectionBadge");
+  const metaEl = qs("#instagramConnectionMeta");
+  const btn = qs("#connectInstagramBtn");
 
-    if (!badgeEl || !metaEl || !btn) return;
+  if (!badgeEl || !metaEl || !btn) return;
+
+  try {
+    const r = await fetch(`${API}/instagram/status`, {
+      headers: {
+        Authorization: `Bearer ${getToken()}`
+      }
+    });
+
+    const j = await r.json().catch(() => ({}));
+
+    if (r.ok && j?.connected) {
+      badgeEl.className = "badge connected";
+      badgeEl.textContent = "Connected";
+      metaEl.textContent = j.username
+        ? `Connected to @${j.username}`
+        : "Instagram account connected";
+      btn.textContent = "Reconnect Instagram";
+      btn.disabled = false;
+      btn.style.opacity = "1";
+      return;
+    }
 
     badgeEl.className = "badge warn";
     badgeEl.textContent = "Not connected";
@@ -203,7 +224,15 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.textContent = "Connect Instagram";
     btn.disabled = false;
     btn.style.opacity = "1";
+  } catch {
+    badgeEl.className = "badge warn";
+    badgeEl.textContent = "Not connected";
+    metaEl.textContent = "Could not load Instagram status.";
+    btn.textContent = "Connect Instagram";
+    btn.disabled = false;
+    btn.style.opacity = "1";
   }
+}
 
 function wireInstagramConnectButton() {
   const btn = qs("#connectInstagramBtn");
@@ -235,6 +264,213 @@ function wireInstagramConnectButton() {
     }
   });
 }
+function wireGeneratePromptButton() {
+  const btn = qs("#generatePromptBtn");
+  const igEl = qs("#instagram_handle");
+  const promptEl = qs("#system_prompt");
+
+  if (!btn || btn.__wired) return;
+  btn.__wired = true;
+
+  btn.addEventListener("click", async () => {
+    try {
+      clearErr();
+
+      const instagram_handle = igEl ? String(igEl.value || "").trim() : "";
+      if (!instagram_handle) {
+        setErr("Enter your Instagram handle first.");
+        return;
+      }
+
+      btn.disabled = true;
+      btn.style.opacity = "0.75";
+      btn.textContent = "Generating...";
+
+      const data = await apiFetch(`${API}/generate-prompt`, {
+        method: "POST",
+        body: JSON.stringify({ instagram_handle }),
+      });
+
+async function loadGlobalPauseStatus() {
+  const badge = qs("#globalPauseBadge");
+  const meta = qs("#globalPauseMeta");
+  const input = qs("#globalPauseReason");
+  const btn = qs("#toggleGlobalPauseBtn");
+
+  if (!badge || !meta || !btn) return;
+
+  const data = await apiFetch(`${API}/bot-paused`, { method: "GET" });
+  const status = data?.status || {};
+  const paused = !!status.bot_paused;
+
+  badge.className = paused ? "badge globalPaused" : "badge";
+  badge.textContent = paused ? "Bot paused" : "Bot running";
+  meta.textContent = status.bot_paused_at
+    ? `Updated ${fmtTime(status.bot_paused_at)}`
+    : "—";
+
+  if (input) input.value = status.bot_paused_reason || "";
+
+  btn.textContent = paused ? "Resume bot globally" : "Pause bot globally";
+}
+
+function wireGlobalPauseButton() {
+  const btn = qs("#toggleGlobalPauseBtn");
+  const input = qs("#globalPauseReason");
+  const refreshBtn = qs("#refreshGlobalPauseBtn");
+
+  if (btn && !btn.__wired) {
+    btn.__wired = true;
+    btn.addEventListener("click", async () => {
+      try {
+        clearErr();
+
+        const paused =
+          (qs("#globalPauseBadge")?.textContent || "")
+            .toLowerCase()
+            .includes("paused");
+
+        btn.disabled = true;
+        btn.style.opacity = "0.75";
+
+        await apiFetch(`${API}/bot-paused`, {
+          method: "POST",
+          body: JSON.stringify({
+            enabled: !paused,
+            reason: input ? String(input.value || "").trim() : "",
+          }),
+        });
+
+async function loadManualTakeovers() {
+  const list = qs("#takeoverList");
+  if (!list) return;
+
+  list.innerHTML = `<div class="takeoverMeta" id="takeoverLoading">Loading...</div>`;
+
+  const data = await apiFetch(`${API}/leads`, { method: "GET" });
+  const leads = Array.isArray(data?.leads) ? data.leads : [];
+
+  const overridden = leads.filter((lead) => !!lead.manual_override);
+
+  if (!overridden.length) {
+    list.innerHTML = `<div class="takeoverMeta">No manual takeovers right now.</div>`;
+    return;
+  }
+
+  list.innerHTML = overridden
+    .map(
+      (lead) => `
+        <div class="takeoverRow" data-lead-id="${lead.id}">
+          <div class="takeoverLeft">
+            <div class="takeoverTopLine">
+              <span class="badge paused">Manual takeover</span>
+              <span class="mono">${lead.ig_psid || "Unknown IG user"}</span>
+            </div>
+            <div class="takeoverMeta">
+              ${lead.manual_override_reason || "Manually paused"}
+            </div>
+            <div class="takeoverMeta">
+              Updated: ${fmtTime(lead.manual_override_at)}
+            </div>
+          </div>
+          <div class="takeoverRight">
+            <button class="btn small resumeTakeoverBtn" data-lead-id="${lead.id}">
+              Resume bot
+            </button>
+          </div>
+        </div>
+      `
+    )
+    .join("");
+
+  wireResumeTakeoverButtons();
+}
+
+function wireResumeTakeoverButtons() {
+  const buttons = document.querySelectorAll(".resumeTakeoverBtn");
+
+  buttons.forEach((btn) => {
+    if (btn.__wired) return;
+    btn.__wired = true;
+
+    btn.addEventListener("click", async () => {
+      const leadId = btn.getAttribute("data-lead-id");
+      if (!leadId) return;
+
+      try {
+        clearErr();
+        btn.disabled = true;
+        btn.style.opacity = "0.75";
+        btn.textContent = "Resuming...";
+
+        await apiFetch(`${API}/leads/${leadId}/manual-override`, {
+          method: "POST",
+          body: JSON.stringify({
+            enabled: false,
+            reason: "Resumed by coach",
+          }),
+        });
+
+        await loadManualTakeovers();
+      } catch (e) {
+        setErr(String(e.message || e));
+        btn.disabled = false;
+        btn.style.opacity = "1";
+        btn.textContent = "Resume bot";
+      }
+    });
+  });
+}
+
+function wireManualTakeoversRefreshButton() {
+  const btn = qs("#refreshTakeoversBtn");
+  if (!btn || btn.__wired) return;
+  btn.__wired = true;
+
+  btn.addEventListener("click", async () => {
+    try {
+      clearErr();
+      await loadManualTakeovers();
+    } catch (e) {
+      setErr(String(e.message || e));
+    }
+  });
+}
+        await loadGlobalPauseStatus();
+      } catch (e) {
+        setErr(String(e.message || e));
+      } finally {
+        btn.disabled = false;
+        btn.style.opacity = "1";
+      }
+    });
+  }
+
+  if (refreshBtn && !refreshBtn.__wired) {
+    refreshBtn.__wired = true;
+    refreshBtn.addEventListener("click", async () => {
+      try {
+        clearErr();
+        await loadGlobalPauseStatus();
+      } catch (e) {
+        setErr(String(e.message || e));
+      }
+    });
+  }
+}
+
+      if (promptEl && data?.system_prompt) {
+        promptEl.value = data.system_prompt;
+      }
+    } catch (e) {
+      setErr(String(e.message || e));
+    } finally {
+      btn.disabled = false;
+      btn.style.opacity = "1";
+      btn.textContent = "Generate Prompt";
+    }
+  });
+}
   async function loadDashboard() {
     const bookingEl = qs("#booking_url");
     const bookingAltEl = qs("#booking_url_alt");
@@ -258,8 +494,13 @@ function wireInstagramConnectButton() {
     if (igEl) igEl.value = config.instagram_handle || "";
     if (promptEl) promptEl.value = config.system_prompt || "";
 
-    wireInstagramConnectButton();
-    loadInstagramConnectionStatus();
+wireInstagramConnectButton();
+wireGeneratePromptButton();
+wireGlobalPauseButton();
+wireManualTakeoversRefreshButton();
+await loadInstagramConnectionStatus();
+await loadGlobalPauseStatus();
+await loadManualTakeovers();
 
     if (saveBtn && !saveBtn.__wired) {
       saveBtn.__wired = true;
