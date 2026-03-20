@@ -203,7 +203,7 @@ async function loadInstagramConnectionStatus() {
     });
 
     if (data?.connected) {
-      badgeEl.className = "badge success";
+badgeEl.className = "badge connected";
       badgeEl.textContent = "Connected";
 
       metaEl.textContent = data.username
@@ -229,35 +229,6 @@ async function loadInstagramConnectionStatus() {
 
     metaEl.textContent = "Failed to load Instagram status.";
 
-    btn.disabled = false;
-    btn.style.opacity = "1";
-  }
-}
-    const j = await r.json().catch(() => ({}));
-
-    if (r.ok && j?.connected) {
-      badgeEl.className = "badge connected";
-      badgeEl.textContent = "Connected";
-      metaEl.textContent = j.username
-        ? `Connected to @${j.username}`
-        : "Instagram account connected";
-      btn.textContent = "Reconnect Instagram";
-      btn.disabled = false;
-      btn.style.opacity = "1";
-      return;
-    }
-
-    badgeEl.className = "badge warn";
-    badgeEl.textContent = "Not connected";
-    metaEl.textContent = "No Instagram account connected yet.";
-    btn.textContent = "Connect Instagram";
-    btn.disabled = false;
-    btn.style.opacity = "1";
-  } catch {
-    badgeEl.className = "badge warn";
-    badgeEl.textContent = "Not connected";
-    metaEl.textContent = "Could not load Instagram status.";
-    btn.textContent = "Connect Instagram";
     btn.disabled = false;
     btn.style.opacity = "1";
   }
