@@ -291,6 +291,19 @@ function wireGeneratePromptButton() {
         body: JSON.stringify({ instagram_handle }),
       });
 
+
+      if (promptEl && data?.system_prompt) {
+        promptEl.value = data.system_prompt;
+      }
+    } catch (e) {
+      setErr(String(e.message || e));
+    } finally {
+      btn.disabled = false;
+      btn.style.opacity = "1";
+      btn.textContent = "Generate Prompt";
+    }
+  });
+}
 async function loadGlobalPauseStatus() {
   const badge = qs("#globalPauseBadge");
   const meta = qs("#globalPauseMeta");
@@ -305,13 +318,16 @@ async function loadGlobalPauseStatus() {
 
   badge.className = paused ? "badge globalPaused" : "badge";
   badge.textContent = paused ? "Bot paused" : "Bot running";
+
   meta.textContent = status.bot_paused_at
     ? `Updated ${fmtTime(status.bot_paused_at)}`
     : "—";
 
   if (input) input.value = status.bot_paused_reason || "";
 
-  btn.textContent = paused ? "Resume bot globally" : "Pause bot globally";
+  btn.textContent = paused
+    ? "Resume bot globally"
+    : "Pause bot globally";
 }
 
 function wireGlobalPauseButton() {
@@ -321,6 +337,7 @@ function wireGlobalPauseButton() {
 
   if (btn && !btn.__wired) {
     btn.__wired = true;
+
     btn.addEventListener("click", async () => {
       try {
         clearErr();
@@ -341,101 +358,6 @@ function wireGlobalPauseButton() {
           }),
         });
 
-async function loadManualTakeovers() {
-  const list = qs("#takeoverList");
-  if (!list) return;
-
-  list.innerHTML = `<div class="takeoverMeta" id="takeoverLoading">Loading...</div>`;
-
-  const data = await apiFetch(`${API}/leads`, { method: "GET" });
-  const leads = Array.isArray(data?.leads) ? data.leads : [];
-
-  const overridden = leads.filter((lead) => !!lead.manual_override);
-
-  if (!overridden.length) {
-    list.innerHTML = `<div class="takeoverMeta">No manual takeovers right now.</div>`;
-    return;
-  }
-
-  list.innerHTML = overridden
-    .map(
-      (lead) => `
-        <div class="takeoverRow" data-lead-id="${lead.id}">
-          <div class="takeoverLeft">
-            <div class="takeoverTopLine">
-              <span class="badge paused">Manual takeover</span>
-              <span class="mono">${lead.ig_psid || "Unknown IG user"}</span>
-            </div>
-            <div class="takeoverMeta">
-              ${lead.manual_override_reason || "Manually paused"}
-            </div>
-            <div class="takeoverMeta">
-              Updated: ${fmtTime(lead.manual_override_at)}
-            </div>
-          </div>
-          <div class="takeoverRight">
-            <button class="btn small resumeTakeoverBtn" data-lead-id="${lead.id}">
-              Resume bot
-            </button>
-          </div>
-        </div>
-      `
-    )
-    .join("");
-
-  wireResumeTakeoverButtons();
-}
-
-function wireResumeTakeoverButtons() {
-  const buttons = document.querySelectorAll(".resumeTakeoverBtn");
-
-  buttons.forEach((btn) => {
-    if (btn.__wired) return;
-    btn.__wired = true;
-
-    btn.addEventListener("click", async () => {
-      const leadId = btn.getAttribute("data-lead-id");
-      if (!leadId) return;
-
-      try {
-        clearErr();
-        btn.disabled = true;
-        btn.style.opacity = "0.75";
-        btn.textContent = "Resuming...";
-
-        await apiFetch(`${API}/leads/${leadId}/manual-override`, {
-          method: "POST",
-          body: JSON.stringify({
-            enabled: false,
-            reason: "Resumed by coach",
-          }),
-        });
-
-        await loadManualTakeovers();
-      } catch (e) {
-        setErr(String(e.message || e));
-        btn.disabled = false;
-        btn.style.opacity = "1";
-        btn.textContent = "Resume bot";
-      }
-    });
-  });
-}
-
-function wireManualTakeoversRefreshButton() {
-  const btn = qs("#refreshTakeoversBtn");
-  if (!btn || btn.__wired) return;
-  btn.__wired = true;
-
-  btn.addEventListener("click", async () => {
-    try {
-      clearErr();
-      await loadManualTakeovers();
-    } catch (e) {
-      setErr(String(e.message || e));
-    }
-  });
-}
         await loadGlobalPauseStatus();
       } catch (e) {
         setErr(String(e.message || e));
@@ -448,6 +370,7 @@ function wireManualTakeoversRefreshButton() {
 
   if (refreshBtn && !refreshBtn.__wired) {
     refreshBtn.__wired = true;
+
     refreshBtn.addEventListener("click", async () => {
       try {
         clearErr();
@@ -459,15 +382,84 @@ function wireManualTakeoversRefreshButton() {
   }
 }
 
-      if (promptEl && data?.system_prompt) {
-        promptEl.value = data.system_prompt;
+async function loadManualTakeovers() {
+  const list = qs("#takeoverList");
+  if (!list) return;
+
+  list.innerHTML = `<div class="takeoverMeta">Loading...</div>`;
+
+  const data = await apiFetch(`${API}/leads`, { method: "GET" });
+  const leads = Array.isArray(data?.leads) ? data.leads : [];
+
+  const overridden = leads.filter((l) => !!l.manual_override);
+
+  if (!overridden.length) {
+    list.innerHTML = `<div class="takeoverMeta">No manual takeovers right now.</div>`;
+    return;
+  }
+
+  list.innerHTML = overridden
+    .map(
+      (lead) => `
+        <div class="takeoverRow">
+          <div>
+            <div><strong>${lead.ig_psid || "Unknown"}</strong></div>
+            <div>${lead.manual_override_reason || "Manual override"}</div>
+            <div>${fmtTime(lead.manual_override_at)}</div>
+          </div>
+          <button data-id="${lead.id}" class="resumeTakeoverBtn">Resume</button>
+        </div>
+      `
+    )
+    .join("");
+
+  wireResumeTakeoverButtons();
+}
+
+function wireResumeTakeoverButtons() {
+  document.querySelectorAll(".resumeTakeoverBtn").forEach((btn) => {
+    if (btn.__wired) return;
+    btn.__wired = true;
+
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-id");
+
+      try {
+        clearErr();
+
+        btn.disabled = true;
+        btn.textContent = "Resuming...";
+
+        await apiFetch(`${API}/leads/${id}/manual-override`, {
+          method: "POST",
+          body: JSON.stringify({
+            enabled: false,
+            reason: "Resumed by coach",
+          }),
+        });
+
+        await loadManualTakeovers();
+      } catch (e) {
+        setErr(String(e.message || e));
+        btn.disabled = false;
+        btn.textContent = "Resume";
       }
+    });
+  });
+}
+
+function wireManualTakeoversRefreshButton() {
+  const btn = qs("#refreshTakeoversBtn");
+
+  if (!btn || btn.__wired) return;
+  btn.__wired = true;
+
+  btn.addEventListener("click", async () => {
+    try {
+      clearErr();
+      await loadManualTakeovers();
     } catch (e) {
       setErr(String(e.message || e));
-    } finally {
-      btn.disabled = false;
-      btn.style.opacity = "1";
-      btn.textContent = "Generate Prompt";
     }
   });
 }
