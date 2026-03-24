@@ -44,12 +44,13 @@ app.use("/coach", express.static(path.join(__dirname, "coach")));
 app.get("/admin", (req, res) => res.redirect("/admin/login.html"));
 app.get("/coach", (req, res) => res.redirect("/coach/login.html"));
 
-  res.sendFile(path.join(process.cwd()app.get("/privacy", (req, res) => {
-  res.sendFile(path.join(process.cwd(), "public", "privacy.html"));
+// Privacy + Terms pages
+app.get("/privacy", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "privacy.html"));
 });
 
 app.get("/terms", (req, res) => {
-  res.sendFile(path.join(process.cwd(), "public", "terms.html"));
+  res.sendFile(path.join(__dirname, "public", "terms.html"));
 });
 
 // Clean SaaS routes
