@@ -1,3 +1,4 @@
+
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 import express from "express";
@@ -42,9 +43,8 @@ app.use("/coach", express.static(path.join(__dirname, "coach")));
 // Redirects
 app.get("/admin", (req, res) => res.redirect("/admin/login.html"));
 app.get("/coach", (req, res) => res.redirect("/coach/login.html"));
-import path from "path";
 
-app.get("/privacy", (req, res) => {
+  res.sendFile(path.join(process.cwd()app.get("/privacy", (req, res) => {
   res.sendFile(path.join(process.cwd(), "public", "privacy.html"));
 });
 
