@@ -1758,13 +1758,16 @@ if (!lead) {
 
   lead = newLead;
 }
+const { error: insertIncomingError } = await supabase.from("messages").insert({
+  lead_id: lead.id,
+  direction: isEcho ? "out" : "in",
+  text,
+  created_at: new Date().toISOString(),
+});
 
-        await supabase.from("messages").insert({
-          lead_id: lead.id,
-          direction: isEcho ? "out" : "in",
-          text,
-          created_at: new Date().toISOString(),
-        });
+if (insertIncomingError) {
+  console.error("messages insert incoming failed:", insertIncomingError);
+}
 
         if (!lead.client_id) return;
 
@@ -1845,13 +1848,17 @@ console.log("SEND DATA:", JSON.stringify(sendData, null, 2));
 if (!sendResp.ok) {
   throw new Error(`Failed to send IG message: ${JSON.stringify(sendData)}`);
 }        
+const { error: insertOutgoingError } = await supabase.from("messages").insert({
+  lead_id: lead.id,
+  direction: "out",
+  text: reply,
+  created_at: new Date().toISOString(),
+});
 
-        await supabase.from("messages").insert({
-          lead_id: lead.id,
-          direction: "out",
-          text: reply,
-          created_at: new Date().toISOString(),
-        });
+if (insertOutgoingError) {
+  console.error("messages insert outgoing failed:", insertOutgoingError);
+}
+
       } catch (err) {
         console.error("Webhook async error:", err);
       }
