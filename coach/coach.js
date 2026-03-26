@@ -149,7 +149,6 @@ function parseExampleMessages(raw) {
           "Invalid format.\n\nUse:\nuser: ...\nassistant: ...",
       };
     }
-
     const user = String(match[1] || "").trim();
     const assistant = String(match[2] || "").trim();
 
@@ -168,7 +167,22 @@ function parseExampleMessages(raw) {
     value: cleaned.join("\n\n"),
   };
 }
+function getDefaultExampleMessages() {
+  return `user: how much is it?
+assistant:
 
+user: what do you actually help with?
+assistant:
+
+user: i’m not sure if it’s for me
+assistant:
+
+user: how quickly will i see results?
+assistant:
+
+user: i’ll think about it
+assistant:`;
+}
   async function apiFetch(path, opts = {}) {
     const token = getToken();
 
@@ -391,7 +405,7 @@ async function loadGlobalPauseStatus() {
   const status = data?.status || {};
   const paused = !!status.bot_paused;
 
-  badge.className = paused ? "badge globalPaused" : "badge";
+badge.className = paused ? "badge globalPaused" : "badge connected";
   badge.textContent = paused ? "Bot paused" : "Bot running";
 
   meta.textContent = status.bot_paused_at
@@ -475,33 +489,31 @@ async function loadManualTakeovers() {
 
 list.innerHTML = overridden
   .map((lead) => {
-    const displayName =
-      lead.ig_username && String(lead.ig_username).trim()
-        ? `@${String(lead.ig_username).trim()}`
-        : `Instagram lead • ${String(lead.ig_psid || "").slice(-4) || "unknown"}`;
+    const name = lead.ig_username
+      ? `@${lead.ig_username}`
+      : `Lead ${String(lead.ig_psid || "").slice(-4)}`;
 
     return `
       <div class="takeoverRow">
         <div class="takeoverLeft">
-          <div class="takeoverTopLine">
-            <span class="badge paused">Bot paused</span>
-            <strong>${displayName}</strong>
-          </div>
+          <div class="takeoverName">${name}</div>
           <div class="takeoverMeta">
-            ${lead.manual_override_reason || "Manual takeover active"}
+            ${lead.manual_override_reason || "Manual reply detected"}
           </div>
           <div class="takeoverMeta">
             ${fmtTime(lead.manual_override_at)}
           </div>
         </div>
+
         <div class="takeoverRight">
-          <button data-id="${lead.id}" class="btn small resumeTakeoverBtn">Resume bot</button>
+          <button data-id="${lead.id}" class="btn small resumeTakeoverBtn">
+            Resume bot
+          </button>
         </div>
       </div>
     `;
   })
   .join("");
-
   wireResumeTakeoverButtons();
 }
 
@@ -582,7 +594,9 @@ if (vocabularyEl) vocabularyEl.value = config.vocabulary || "";
 if (promptEl) promptEl.value = config.system_prompt || "";
 
 const exampleEl = qs("#example_messages");
-if (exampleEl) exampleEl.value = config.example_messages || "";
+if (exampleEl) {
+  exampleEl.value = config.example_messages || getDefaultExampleMessages();
+}
 wireInstagramConnectButton();
 wireGeneratePromptButton();
 wireGlobalPauseButton();

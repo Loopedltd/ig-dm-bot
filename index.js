@@ -1332,9 +1332,9 @@ app.get("/coach/api/leads", requireCoach, async (req, res) => {
   try {
     const { data: leads, error } = await supabase
       .from("leads")
-      .select(
-        "id,created_at,ig_psid,stage,booking_sent,call_completed,manual_override,manual_override_reason,manual_override_by,manual_override_at"
-      )
+.select(
+  "id,created_at,ig_psid,ig_username,stage,booking_sent,call_completed,manual_override,manual_override_reason,manual_override_by,manual_override_at"
+)
       .eq("client_id", req.coach.client_id)
       .order("created_at", { ascending: false })
       .limit(300);
