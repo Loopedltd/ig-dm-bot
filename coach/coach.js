@@ -473,20 +473,34 @@ async function loadManualTakeovers() {
     return;
   }
 
-  list.innerHTML = overridden
-    .map(
-      (lead) => `
-        <div class="takeoverRow">
-          <div>
-            <div><strong>${lead.ig_psid || "Unknown"}</strong></div>
-            <div>${lead.manual_override_reason || "Manual override"}</div>
-            <div>${fmtTime(lead.manual_override_at)}</div>
+list.innerHTML = overridden
+  .map((lead) => {
+    const displayName =
+      lead.ig_username && String(lead.ig_username).trim()
+        ? `@${String(lead.ig_username).trim()}`
+        : `Instagram lead • ${String(lead.ig_psid || "").slice(-4) || "unknown"}`;
+
+    return `
+      <div class="takeoverRow">
+        <div class="takeoverLeft">
+          <div class="takeoverTopLine">
+            <span class="badge paused">Bot paused</span>
+            <strong>${displayName}</strong>
           </div>
-          <button data-id="${lead.id}" class="resumeTakeoverBtn">Resume</button>
+          <div class="takeoverMeta">
+            ${lead.manual_override_reason || "Manual takeover active"}
+          </div>
+          <div class="takeoverMeta">
+            ${fmtTime(lead.manual_override_at)}
+          </div>
         </div>
-      `
-    )
-    .join("");
+        <div class="takeoverRight">
+          <button data-id="${lead.id}" class="btn small resumeTakeoverBtn">Resume bot</button>
+        </div>
+      </div>
+    `;
+  })
+  .join("");
 
   wireResumeTakeoverButtons();
 }
