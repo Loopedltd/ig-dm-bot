@@ -422,18 +422,39 @@
           </div>
         </div>
 
-        <label>Instagram handle</label>
-        <input id="instagram_handle" placeholder="looped.ltd" />
+<label>Instagram handle</label>
+<input id="instagram_handle" placeholder="looped.ltd" />
 
-        <div class="helper">Used to generate a suggested prompt (you can still edit it).</div>
-        <div style="margin-top:10px;">
-          <button class="btn" id="generatePromptBtn">Generate Prompt</button>
-        </div>
+<div class="row">
+  <div>
+    <label>Tone</label>
+    <input id="tone" placeholder="e.g. direct, calm, blunt, friendly" />
+  </div>
+  <div>
+    <label>Style</label>
+    <input id="style" placeholder="e.g. short, punchy, concise" />
+  </div>
+</div>
 
+<label>Vocabulary</label>
+<input id="vocabulary" placeholder="e.g. casual, slangy, clean, coach-like" />
+
+<div class="helper">
+  These shape how the bot speaks. Example messages still matter most.
+</div>
+
+<div class="helper">
+  Used to generate a suggested prompt (you can still edit it).
+</div>
+
+<div style="margin-top:10px;">
+  <button class="btn" id="generatePromptBtn">Generate Prompt</button>
+  <div id="promptStatus" class="helper"></div>
+</div>
         <div class="divider"></div>
 
-        <label>How your bot should reply</label>
-        <textarea id="system_prompt" placeholder="Example:
+<label>How your bot should reply</label>
+<textarea id="system_prompt" placeholder="Example:
 - Tone: friendly, confident, UK vibe. Short replies.
 - Rules: 1–2 sentences, ask ONE question at the end.
 - If asked price: ask goal + current situation, don’t invent numbers.
@@ -442,9 +463,28 @@
 
 Write yours here…"></textarea>
 
-        <div class="tip">
-          Tip: keep it specific (tone + rules + what to do when asked price + when to send booking link).
-        </div>
+<div class="tip">
+  Tip: keep it specific (tone + rules + what to do when asked price + when to send booking link).
+</div>
+
+<div class="divider"></div>
+
+<label>Example messages (your real DMs)</label>
+<textarea id="example_messages" placeholder="Paste 5–10 real message exchanges.
+
+Format like:
+
+user: how much is it?
+assistant: depends what you need tbh, what’s your goal?
+
+user: i’ll think about it
+assistant: yeah fair, what do you need to know before deciding?
+
+Keep them short and natural."></textarea>
+
+<div class="tip">
+  Tip: This is the fastest way to make the bot sound like you. Real messages > prompts.
+</div>
 
         <div class="actions">
           <button class="btn primary" id="saveBtn">Save</button>

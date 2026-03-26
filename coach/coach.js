@@ -128,6 +128,46 @@ document.addEventListener("DOMContentLoaded", () => {
     if (Number.isNaN(d.getTime())) return "—";
     return d.toLocaleString();
   }
+function parseExampleMessages(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return { ok: true, value: "" };
+
+  const blocks = text
+    .split(/\n\s*\n/)
+    .map((b) => b.trim())
+    .filter(Boolean);
+
+  const cleaned = [];
+
+  for (const block of blocks) {
+    const match = block.match(/user:\s*([\s\S]*?)\nassistant:\s*([\s\S]*)/i);
+
+    if (!match) {
+      return {
+        ok: false,
+        error:
+          "Invalid format.\n\nUse:\nuser: ...\nassistant: ...",
+      };
+    }
+
+    const user = String(match[1] || "").trim();
+    const assistant = String(match[2] || "").trim();
+
+    if (!user || !assistant) {
+      return {
+        ok: false,
+        error: "Each example must include both user and assistant.",
+      };
+    }
+
+    cleaned.push(`user: ${user}\nassistant: ${assistant}`);
+  }
+
+  return {
+    ok: true,
+    value: cleaned.join("\n\n"),
+  };
+}
 
   async function apiFetch(path, opts = {}) {
     const token = getToken();
@@ -268,6 +308,11 @@ function wireGeneratePromptButton() {
   const btn = qs("#generatePromptBtn");
   const igEl = qs("#instagram_handle");
   const promptEl = qs("#system_prompt");
+  const exampleEl = qs("#example_messages");
+  const toneEl = qs("#tone");
+  const styleEl = qs("#style");
+  const vocabularyEl = qs("#vocabulary");
+  const promptStatusEl = qs("#promptStatus");
 
   if (!btn || btn.__wired) return;
   btn.__wired = true;
@@ -276,7 +321,12 @@ function wireGeneratePromptButton() {
     try {
       clearErr();
 
+      if (promptStatusEl) {
+        promptStatusEl.textContent = "";
+      }
+
       const instagram_handle = igEl ? String(igEl.value || "").trim() : "";
+
       if (!instagram_handle) {
         setErr("Enter your Instagram handle first.");
         return;
@@ -286,17 +336,42 @@ function wireGeneratePromptButton() {
       btn.style.opacity = "0.75";
       btn.textContent = "Generating...";
 
+      if (promptStatusEl) {
+        promptStatusEl.textContent =
+          "Generating coach voice from your settings...";
+      }
+
       const data = await apiFetch(`${API}/generate-prompt`, {
         method: "POST",
-        body: JSON.stringify({ instagram_handle }),
+body: JSON.stringify({
+  instagram_handle,
+  example_messages: exampleEl
+    ? String(exampleEl.value || "").trim()
+    : "",
+  tone: toneEl ? String(toneEl.value || "").trim() : "",
+  style: styleEl ? String(styleEl.value || "").trim() : "",
+  vocabulary: vocabularyEl ? String(vocabularyEl.value || "").trim() : "",
+}),
       });
-
 
       if (promptEl && data?.system_prompt) {
         promptEl.value = data.system_prompt;
       }
+
+      if (promptStatusEl) {
+        const tone = data?.tone || "direct";
+        const style = data?.style || "short, punchy";
+        const vocabulary = data?.vocabulary || "casual";
+
+        promptStatusEl.textContent =
+          `Updated. Tone: ${tone}. Style: ${style}. Vocabulary: ${vocabulary}.`;
+      }
     } catch (e) {
       setErr(String(e.message || e));
+
+      if (promptStatusEl) {
+        promptStatusEl.textContent = "Failed to generate prompt.";
+      }
     } finally {
       btn.disabled = false;
       btn.style.opacity = "1";
@@ -464,12 +539,15 @@ function wireManualTakeoversRefreshButton() {
   });
 }
   async function loadDashboard() {
-    const bookingEl = qs("#booking_url");
-    const bookingAltEl = qs("#booking_url_alt");
-    const igEl = qs("#instagram_handle");
-    const promptEl = qs("#system_prompt");
-    const saveBtn = qs("#saveBtn");
-    const genBtn = qs("#generatePromptBtn");
+const bookingEl = qs("#booking_url");
+const bookingAltEl = qs("#booking_url_alt");
+const igEl = qs("#instagram_handle");
+const toneEl = qs("#tone");
+const styleEl = qs("#style");
+const vocabularyEl = qs("#vocabulary");
+const promptEl = qs("#system_prompt");
+const saveBtn = qs("#saveBtn");
+const genBtn = qs("#generatePromptBtn");
 
     if (!promptEl && !saveBtn && !genBtn) return;
 
@@ -481,11 +559,16 @@ function wireManualTakeoversRefreshButton() {
     const cfg = await apiFetch(`${API}/config`, { method: "GET" });
     const config = cfg?.config || {};
 
-    if (bookingEl) bookingEl.value = config.booking_url || "";
-    if (bookingAltEl) bookingAltEl.value = config.booking_url_alt || "";
-    if (igEl) igEl.value = config.instagram_handle || "";
-    if (promptEl) promptEl.value = config.system_prompt || "";
+if (bookingEl) bookingEl.value = config.booking_url || "";
+if (bookingAltEl) bookingAltEl.value = config.booking_url_alt || "";
+if (igEl) igEl.value = config.instagram_handle || "";
+if (toneEl) toneEl.value = config.tone || "";
+if (styleEl) styleEl.value = config.style || "";
+if (vocabularyEl) vocabularyEl.value = config.vocabulary || "";
+if (promptEl) promptEl.value = config.system_prompt || "";
 
+const exampleEl = qs("#example_messages");
+if (exampleEl) exampleEl.value = config.example_messages || "";
 wireInstagramConnectButton();
 wireGeneratePromptButton();
 wireGlobalPauseButton();
@@ -501,13 +584,25 @@ await loadManualTakeovers();
         try {
           clearErr();
 
-          const booking_url = bookingEl ? String(bookingEl.value || "").trim() : "";
-          const booking_url_alt = bookingAltEl
-            ? String(bookingAltEl.value || "").trim()
-            : "";
-          const instagram_handle = igEl ? String(igEl.value || "").trim() : "";
-          const system_prompt = promptEl ? String(promptEl.value || "").trim() : "";
+const booking_url = bookingEl ? String(bookingEl.value || "").trim() : "";
+const booking_url_alt = bookingAltEl
+  ? String(bookingAltEl.value || "").trim()
+  : "";
+const instagram_handle = igEl ? String(igEl.value || "").trim() : "";
+const tone = toneEl ? String(toneEl.value || "").trim() : "";
+const style = styleEl ? String(styleEl.value || "").trim() : "";
+const vocabulary = vocabularyEl ? String(vocabularyEl.value || "").trim() : "";
+const system_prompt = promptEl ? String(promptEl.value || "").trim() : "";
+const parsedExamples = parseExampleMessages(
+  exampleEl ? exampleEl.value : ""
+);
 
+if (!parsedExamples.ok) {
+  setErr(parsedExamples.error);
+  return;
+}
+
+const example_messages = parsedExamples.value;
           if (!system_prompt) {
             setErr("Please fill in “How your assistant should reply”.");
             return;
@@ -516,13 +611,16 @@ await loadManualTakeovers();
           saveBtn.disabled = true;
           saveBtn.style.opacity = "0.75";
 
-          const payload = {
-            booking_url: booking_url || null,
-            booking_url_alt: booking_url_alt || null,
-            instagram_handle: instagram_handle || null,
-            system_prompt,
-          };
-
+const payload = {
+  booking_url: booking_url || null,
+  booking_url_alt: booking_url_alt || null,
+  instagram_handle: instagram_handle || null,
+  tone: tone || null,
+  style: style || null,
+  vocabulary: vocabulary || null,
+  system_prompt,
+  example_messages,
+};
           await apiFetch(`${API}/config`, {
             method: "POST",
             body: JSON.stringify(payload),
