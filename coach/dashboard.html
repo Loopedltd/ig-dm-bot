@@ -216,6 +216,50 @@
         font-size: 13px;
       }
 
+.takeoverTopLine{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.badge{
+  display:inline-flex;
+  align-items:center;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:850;
+  line-height:1;
+  border:1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.04);
+  color: rgba(15, 23, 42, 0.78);
+}
+
+.badge.paused{
+  border-color: rgba(192, 38, 45, 0.25);
+  background: rgba(192, 38, 45, 0.08);
+  color: #7f1d1d;
+}
+
+.badge.connected{
+  border-color: var(--okBorder);
+  background: var(--okBg);
+  color: var(--okText);
+}
+
+.badge.warn{
+  border-color: var(--warnBorder);
+  background: var(--warnBg);
+  color: var(--warnText);
+}
+
+.mono{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size:12px;
+  color: rgba(15, 23, 42, 0.55);
+  word-break: break-all;
+}
       .takeoverList{
         margin-top:14px;
         display:flex;
