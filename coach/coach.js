@@ -607,16 +607,43 @@ const tone = toneEl ? String(toneEl.value || "").trim() : "";
 const style = styleEl ? String(styleEl.value || "").trim() : "";
 const vocabulary = vocabularyEl ? String(vocabularyEl.value || "").trim() : "";
 const system_prompt = promptEl ? String(promptEl.value || "").trim() : "";
-const parsedExamples = parseExampleMessages(
-  exampleEl ? exampleEl.value : ""
-);
+const rawExamples = exampleEl ? String(exampleEl.value || "").trim() : "";
+
+const parsedExamples = parseExampleMessages(rawExamples);
 
 if (!parsedExamples.ok) {
   setErr(parsedExamples.error);
   return;
 }
 
+// 🚨 NEW: enforce all 5 answers filled
+const blocks = rawExamples
+  .split(/\n\s*\n/)
+  .map(b => b.trim())
+  .filter(Boolean);
+
+if (blocks.length < 5) {
+  setErr("Please answer all 5 example questions.");
+  return;
+}
+
+for (const block of blocks) {
+  const match = block.match(/assistant:\s*([\s\S]*)/i);
+  const answer = match ? String(match[1]).trim() : "";
+
+  if (!answer) {
+    setErr("Fill in all assistant replies before saving.");
+    return;
+  }
+
+  if (answer.length < 5) {
+    setErr("Replies are too short — write how you’d actually respond.");
+    return;
+  }
+}
+
 const example_messages = parsedExamples.value;
+
           if (!system_prompt) {
             setErr("Please fill in “How your assistant should reply”.");
             return;
