@@ -376,22 +376,51 @@ body: JSON.stringify({
         const tone = data?.tone || "direct";
         const style = data?.style || "short, punchy";
         const vocabulary = data?.vocabulary || "casual";
+        const remaining = Number(data?.remaining ?? 0);
 
         promptStatusEl.textContent =
-          `Updated. Tone: ${tone}. Style: ${style}. Vocabulary: ${vocabulary}.`;
+          `Updated. Tone: ${tone}. Style: ${style}. Vocabulary: ${vocabulary}. ${remaining} left today.`;
       }
+
+      await loadPromptUsageStatus();
     } catch (e) {
       setErr(String(e.message || e));
 
       if (promptStatusEl) {
-        promptStatusEl.textContent = "Failed to generate prompt.";
+        if (String(e.message || "").includes("daily_limit_reached")) {
+          promptStatusEl.textContent = "Daily prompt limit reached.";
+        } else {
+          promptStatusEl.textContent = "Failed to generate prompt.";
+        }
       }
+
+      await loadPromptUsageStatus();
     } finally {
       btn.disabled = false;
       btn.style.opacity = "1";
       btn.textContent = "Generate Prompt";
     }
   });
+}
+async function loadPromptUsageStatus() {
+  const el = qs("#promptUsageStatus");
+  if (!el) return;
+
+  try {
+    const data = await apiFetch(`${API}/prompt-usage`, {
+      method: "GET",
+    });
+
+    const remaining = Number(data?.remaining ?? 0);
+    const max = Number(data?.max ?? 10);
+    const used = Number(data?.used ?? 0);
+
+    el.textContent = `${remaining} / ${max} prompt generations left today`;
+    el.style.color = remaining <= 2 ? "#b54708" : "var(--muted)";
+  } catch (e) {
+    el.textContent = "Could not load prompt usage";
+    el.style.color = "#c0262d";
+  }
 }
 async function loadGlobalPauseStatus() {
   const badge = qs("#globalPauseBadge");
@@ -584,7 +613,24 @@ const genBtn = qs("#generatePromptBtn");
 
     const cfg = await apiFetch(`${API}/config`, { method: "GET" });
     const config = cfg?.config || {};
+const promptLimitStatusEl = qs("#promptLimitStatus");
 
+if (promptLimitStatusEl) {
+  const remaining =
+    typeof config.prompt_generations_remaining === "number"
+      ? config.prompt_generations_remaining
+      : null;
+
+  const max =
+    typeof config.max_prompt_generations_per_day === "number"
+      ? config.max_prompt_generations_per_day
+      : 10;
+
+  promptLimitStatusEl.textContent =
+    remaining === null
+      ? ""
+      : `Prompts left today: ${remaining}/${max}`;
+}
 if (bookingEl) bookingEl.value = config.booking_url || "";
 if (bookingAltEl) bookingAltEl.value = config.booking_url_alt || "";
 if (igEl) igEl.value = config.instagram_handle || "";
@@ -602,6 +648,7 @@ wireGeneratePromptButton();
 wireGlobalPauseButton();
 wireManualTakeoversRefreshButton();
 await loadInstagramConnectionStatus();
+await loadPromptUsageStatus();
 await loadGlobalPauseStatus();
 await loadManualTakeovers();
 
