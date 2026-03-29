@@ -862,11 +862,19 @@ app.post("/admin/api/clients/:clientId/config", requireAdmin, async (req, res) =
     if (typeof patch.followup_rules === "object")
       allowed.followup_rules = patch.followup_rules;
 
-    if (
-      typeof patch.instagram_handle === "string" ||
-      patch.instagram_handle === null
-    )
-      allowed.instagram_handle = patch.instagram_handle;
+if (
+  typeof patch.instagram_handle === "string" ||
+  patch.instagram_handle === null
+) {
+  allowed.instagram_handle = patch.instagram_handle;
+}
+
+if (
+  typeof patch.offer_description === "string" ||
+  patch.offer_description === null
+) {
+  allowed.offer_description = patch.offer_description;
+}
 
     if (typeof patch.bot_paused === "boolean")
       allowed.bot_paused = patch.bot_paused;
@@ -1211,7 +1219,7 @@ app.get("/coach/api/config", requireCoach, async (req, res) => {
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
 });
-app.get("/coach/api/usage", requireCoach, async (req, res) => {
+app.get("/coach/api/prompt-usage", requireCoach, async (req, res) => {
   try {
     const today = new Date().toISOString().slice(0, 10);
 
@@ -1402,7 +1410,7 @@ if (used >= MAX_PROMPTS_PER_DAY) {
   });
 }
   try {
-const { instagram_handle, example_messages } = req.body || {};
+const { instagram_handle, example_messages, offer_description } = req.body || {};
     const handleRaw = String(instagram_handle || "").trim();
 
     if (!handleRaw) {
@@ -1421,6 +1429,8 @@ const { instagram_handle, example_messages } = req.body || {};
       .single();
 const exampleMessages =
   String(example_messages || cfg?.example_messages || "").trim();
+const offerDescription =
+  String(offer_description || cfg?.offer_description || "").trim();
     if (!openai) {
       const stub = [
         "You are the coach's Instagram DM assistant.",
@@ -1502,6 +1512,9 @@ STRICT RULES:
 
 GOAL:
 Make the conversation feel like a normal Instagram DM, not a business interaction.
+
+WHAT THE COACH SELLS:
+${offerDescription || "(not provided)"}
 
 REAL MESSAGE EXAMPLES FROM THE COACH:
 ${exampleMessages || "(none provided)"}

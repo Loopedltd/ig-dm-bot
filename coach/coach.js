@@ -344,6 +344,7 @@ function wireGeneratePromptButton() {
   const vocabularyEl = qs("#vocabulary");
   const promptStatusEl = qs("#promptStatus");
 const promptLimitEl = qs("#promptLimitStatus");
+const offerEl = qs("#offer_description");
 
   if (!btn || btn.__wired) return;
   btn.__wired = true;
@@ -431,14 +432,6 @@ const el = qs("#promptLimitStatus");
     const remaining = Number(data?.remaining ?? 0);
     const max = Number(data?.max ?? 10);
     const used = Number(data?.used ?? 0);
-
-const resetTime = getTimeUntilTomorrow();
-
-el.textContent =
-  remaining > 0
-    ? `${remaining} / ${max} prompt generations left today (resets in ${resetTime})`
-    : `Limit reached — resets in ${resetTime}`;
-    el.style.color = remaining <= 2 ? "#b54708" : "var(--muted)";
 const btn = qs("#generatePromptBtn");
 
 if (btn) {
@@ -451,7 +444,14 @@ if (btn) {
     btn.classList.remove("disabled");
     btn.textContent = "Generate Prompt";
   }
-} 
+}
+const resetTime = getTimeUntilTomorrow();
+
+el.textContent =
+  remaining > 0
+    ? `${remaining} / ${max} prompt generations left today (resets in ${resetTime})`
+    : `Limit reached — resets in ${resetTime}`;
+    el.style.color = remaining <= 2 ? "#b54708" : "var(--muted)";
  } catch (e) {
     el.textContent = "Could not load prompt usage";
     el.style.color = "#c0262d";
@@ -640,6 +640,7 @@ const promptEl = qs("#system_prompt");
 const saveBtn = qs("#saveBtn");
 const genBtn = qs("#generatePromptBtn");
 await loadPromptUsageStatus();
+const offerEl = qs("#offer_description");
 
     if (!promptEl && !saveBtn && !genBtn) return;
 
@@ -658,6 +659,7 @@ if (toneEl) toneEl.value = config.tone || "";
 if (styleEl) styleEl.value = config.style || "";
 if (vocabularyEl) vocabularyEl.value = config.vocabulary || "";
 if (promptEl) promptEl.value = config.system_prompt || "";
+if (offerEl) offerEl.value = config.offer_description || "";
 
 const exampleEl = qs("#example_messages");
 if (exampleEl) {
@@ -689,6 +691,7 @@ const style = styleEl ? String(styleEl.value || "").trim() : "";
 const vocabulary = vocabularyEl ? String(vocabularyEl.value || "").trim() : "";
 const system_prompt = promptEl ? String(promptEl.value || "").trim() : "";
 const rawExamples = exampleEl ? String(exampleEl.value || "").trim() : "";
+const offer_description = offerEl ? String(offerEl.value || "").trim() : "";
 
 const parsedExamples = parseExampleMessages(rawExamples);
 
@@ -742,6 +745,7 @@ const payload = {
   vocabulary: vocabulary || null,
   system_prompt,
   example_messages,
+offer_description: offer_description || null,
 };
           await apiFetch(`${API}/config`, {
             method: "POST",
