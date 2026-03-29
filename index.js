@@ -154,7 +154,7 @@ function assertStripeConfigured() {
     throw new Error("Stripe not configured: missing STRIPE_WEBHOOK_SECRET");
   }
 }
-
+const MAX_PROMPTS_PER_DAY = 10;
 // ---- SMALL HELPERS ----
 const nowIso = () => new Date().toISOString();
 
@@ -1211,6 +1211,35 @@ app.get("/coach/api/config", requireCoach, async (req, res) => {
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
 });
+app.get("/coach/api/usage", requireCoach, async (req, res) => {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const { data, error } = await supabase
+      .from("client_usage")
+      .select("prompt_generations")
+      .eq("client_id", req.coach.client_id)
+      .eq("date", today)
+      .single();
+
+    // no row yet = 0 usage
+    if (error && error.code !== "PGRST116") {
+      return safeJson(res, 500, { error: String(error.message || error) });
+    }
+
+    const used = data?.prompt_generations || 0;
+    const remaining = Math.max(0, MAX_PROMPTS_PER_DAY - used);
+
+    return safeJson(res, 200, {
+      ok: true,
+      used,
+      remaining,
+      max: MAX_PROMPTS_PER_DAY,
+    });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
 
 app.post("/coach/api/config", requireCoach, async (req, res) => {
   try {
@@ -1353,6 +1382,25 @@ app.get("/coach/api/leads", requireCoach, async (req, res) => {
  * ===========================
  */
 app.post("/coach/api/generate-prompt", requireCoach, async (req, res) => {
+// 🔒 DAILY LIMIT PROTECTION (PUT HERE ONLY)
+const today = new Date().toISOString().slice(0, 10);
+
+const { data: usageRow } = await supabase
+  .from("client_usage")
+  .select("*")
+  .eq("client_id", req.coach.client_id)
+  .eq("date", today)
+  .single();
+
+const used = usageRow?.prompt_generations || 0;
+
+if (used >= MAX_PROMPTS_PER_DAY) {
+  return safeJson(res, 429, {
+    error: "daily_limit_reached",
+    message: "You’ve reached your daily limit for generating prompts.",
+    remaining: 0,
+  });
+}
   try {
 const { instagram_handle, example_messages } = req.body || {};
     const handleRaw = String(instagram_handle || "").trim();
@@ -1367,7 +1415,7 @@ const { instagram_handle, example_messages } = req.body || {};
     }
 
     const { data: cfg } = await supabase
-      .from("client_configs")
+  .from("client_configs")
       .select("*")
       .eq("client_id", req.coach.client_id)
       .single();
@@ -1385,14 +1433,21 @@ const exampleMessages =
         `Coach context: Instagram handle is @${handle}. Mirror their style (short, punchy, motivating).`,
       ].join("\n");
 
-      return safeJson(res, 200, {
-        ok: true,
-        system_prompt: stub,
-        tone: "direct",
-        style: "short, punchy",
-        vocabulary: "casual",
-        used_ai: false,
-      });
+// ✅ increment usage AFTER successful generation
+await supabase.from("client_usage").upsert({
+  client_id: req.coach.client_id,
+  date: today,
+  prompt_generations: used + 1,
+});
+return safeJson(res, 200, {
+  ok: true,
+  system_prompt: stub,
+  tone: "direct",
+  style: "short, punchy",
+  vocabulary: "casual",
+  used_ai: false,
+  remaining: MAX_PROMPTS_PER_DAY - (used + 1),
+});
     }
 
     const messages = [
@@ -1507,14 +1562,22 @@ ${cfg?.system_prompt || "(none)"}
       });
     }
 
-    return safeJson(res, 200, {
-      ok: true,
-      system_prompt: generatedPrompt,
-      tone: generatedTone,
-      style: generatedStyle,
-      vocabulary: generatedVocab,
-      used_ai: true,
-    });
+// ✅ increment usage AFTER successful AI generation
+await supabase.from("client_usage").upsert({
+  client_id: req.coach.client_id,
+  date: today,
+  prompt_generations: used + 1,
+});
+
+return safeJson(res, 200, {
+  ok: true,
+  system_prompt: generatedPrompt,
+  tone: generatedTone,
+  style: generatedStyle,
+  vocabulary: generatedVocab,
+  used_ai: true,
+  remaining: MAX_PROMPTS_PER_DAY - (used + 1),
+});
   } catch (e) {
     return safeJson(res, 500, { error: String(e?.message || e) });
   }

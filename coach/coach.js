@@ -128,6 +128,22 @@ document.addEventListener("DOMContentLoaded", () => {
     if (Number.isNaN(d.getTime())) return "—";
     return d.toLocaleString();
   }
+function getTimeUntilTomorrow() {
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setHours(24, 0, 0, 0);
+
+  const diffMs = tomorrow.getTime() - now.getTime();
+  const totalMinutes = Math.max(0, Math.floor(diffMs / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours <= 0) {
+    return `${minutes}m`;
+  }
+
+  return `${hours}h ${minutes}m`;
+}
 function parseExampleMessages(raw) {
   const text = String(raw || "").trim();
   if (!text) return { ok: true, value: "" };
@@ -327,6 +343,7 @@ function wireGeneratePromptButton() {
   const styleEl = qs("#style");
   const vocabularyEl = qs("#vocabulary");
   const promptStatusEl = qs("#promptStatus");
+const promptLimitEl = qs("#promptLimitStatus");
 
   if (!btn || btn.__wired) return;
   btn.__wired = true;
@@ -403,7 +420,7 @@ body: JSON.stringify({
   });
 }
 async function loadPromptUsageStatus() {
-  const el = qs("#promptUsageStatus");
+const el = qs("#promptLimitStatus");
   if (!el) return;
 
   try {
@@ -415,13 +432,32 @@ async function loadPromptUsageStatus() {
     const max = Number(data?.max ?? 10);
     const used = Number(data?.used ?? 0);
 
-    el.textContent = `${remaining} / ${max} prompt generations left today`;
+const resetTime = getTimeUntilTomorrow();
+
+el.textContent =
+  remaining > 0
+    ? `${remaining} / ${max} prompt generations left today (resets in ${resetTime})`
+    : `Limit reached — resets in ${resetTime}`;
     el.style.color = remaining <= 2 ? "#b54708" : "var(--muted)";
-  } catch (e) {
+const btn = qs("#generatePromptBtn");
+
+if (btn) {
+  if (remaining <= 0) {
+    btn.disabled = true;
+    btn.classList.add("disabled");
+    btn.textContent = "Limit reached";
+  } else {
+    btn.disabled = false;
+    btn.classList.remove("disabled");
+    btn.textContent = "Generate Prompt";
+  }
+} 
+ } catch (e) {
     el.textContent = "Could not load prompt usage";
     el.style.color = "#c0262d";
   }
 }
+
 async function loadGlobalPauseStatus() {
   const badge = qs("#globalPauseBadge");
   const meta = qs("#globalPauseMeta");
@@ -603,6 +639,7 @@ const vocabularyEl = qs("#vocabulary");
 const promptEl = qs("#system_prompt");
 const saveBtn = qs("#saveBtn");
 const genBtn = qs("#generatePromptBtn");
+await loadPromptUsageStatus();
 
     if (!promptEl && !saveBtn && !genBtn) return;
 
@@ -613,24 +650,7 @@ const genBtn = qs("#generatePromptBtn");
 
     const cfg = await apiFetch(`${API}/config`, { method: "GET" });
     const config = cfg?.config || {};
-const promptLimitStatusEl = qs("#promptLimitStatus");
 
-if (promptLimitStatusEl) {
-  const remaining =
-    typeof config.prompt_generations_remaining === "number"
-      ? config.prompt_generations_remaining
-      : null;
-
-  const max =
-    typeof config.max_prompt_generations_per_day === "number"
-      ? config.max_prompt_generations_per_day
-      : 10;
-
-  promptLimitStatusEl.textContent =
-    remaining === null
-      ? ""
-      : `Prompts left today: ${remaining}/${max}`;
-}
 if (bookingEl) bookingEl.value = config.booking_url || "";
 if (bookingAltEl) bookingAltEl.value = config.booking_url_alt || "";
 if (igEl) igEl.value = config.instagram_handle || "";
