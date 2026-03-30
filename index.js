@@ -835,32 +835,6 @@ function deriveLeadStage({
   leadMemory,
 }) {
   if (lead?.call_completed) return "post_call";
-      : turnStrategy?.type === "answer_price_after_cta"
-      ? [
-          "TURN STRATEGY: answer_price_after_cta",
-          "The booking link has already been sent before.",
-          "Do not resend the booking link.",
-          "Answer the user's price question directly.",
-          "If offer_price exists in context, use it plainly.",
-          "After answering, you may add a light nudge, but do not push hard.",
-        ]
-      : turnStrategy?.type === "answer_offer_question_after_cta"
-      ? [
-          "TURN STRATEGY: answer_offer_question_after_cta",
-          "The booking link has already been sent before.",
-          "Do not resend the booking link.",
-          "Answer what the offer is in plain English.",
-          "If offer_description exists in context, use it naturally.",
-          "Do not dodge the question.",
-        ]
-      : turnStrategy?.type === "answer_question_after_cta"
-      ? [
-          "TURN STRATEGY: answer_question_after_cta",
-          "The booking link has already been sent before.",
-          "Do not resend the booking link.",
-          "Answer the user's question first.",
-          "Sound calm and human, not pushy.",
-        ]
 
   if (turnStrategy?.type === "send_booking_link_now") return "booking_pushed";
   if (turnStrategy?.type === "soft_close_to_booking") return "booking_pushed";
@@ -1081,54 +1055,81 @@ const guardrails = [
         "This user has not completed a call yet.",
         "Qualify them: goal, timeline, current situation.",
       ];
-  const strategyRules =
-    turnStrategy?.type === "send_booking_link_now"
-      ? [
-          "TURN STRATEGY: send_booking_link_now",
-          "Do not ask a question first.",
-          "Send or direct the user to the booking link immediately.",
-          "Be confident and assume intent is real.",
-        ]
-      : turnStrategy?.type === "handle_price_then_cta"
-      ? [
-          "TURN STRATEGY: handle_price_then_cta",
-          "Acknowledge the price question briefly.",
-          "Do not invent detailed pricing.",
-          "Move the user toward booking or the booking link quickly.",
-        ]
-      : turnStrategy?.type === "handle_think_about_it"
-      ? [
-          "TURN STRATEGY: handle_think_about_it",
-          "Do not accept the stall passively.",
-          "Acknowledge calmly and ask what they need to decide.",
-          "Keep pressure low but keep the conversation moving.",
-        ]
-      : turnStrategy?.type === "soft_close_to_booking"
-      ? [
-          "TURN STRATEGY: soft_close_to_booking",
-          "The user is warm enough to move forward.",
-          "Guide them toward booking instead of asking more qualifiers.",
-        ]
-      : turnStrategy?.type === "ask_qualifying_question"
-      ? [
-          "TURN STRATEGY: ask_qualifying_question",
-          "Ask one useful question only.",
-          "Ask for the most important missing sales context.",
-          "Do not ask something already stored in lead_memory.",
-        ]
-      : turnStrategy?.type === "nudge_forward"
-      ? [
-          "TURN STRATEGY: nudge_forward",
-          "Do not restart qualification from scratch.",
-          "Move the user toward a decision or next step.",
-        ]
-      : turnStrategy?.type === "post_call_support"
-      ? [
-          "TURN STRATEGY: post_call_support",
-          "Be helpful and supportive.",
-          "Do not push booking.",
-        ]
-      : [];
+const strategyRules =
+  turnStrategy?.type === "send_booking_link_now"
+    ? [
+        "TURN STRATEGY: send_booking_link_now",
+        "Do not ask a question first.",
+        "Send or direct the user to the booking link immediately.",
+        "Be confident and assume intent is real.",
+      ]
+    : turnStrategy?.type === "handle_price_then_cta"
+    ? [
+        "TURN STRATEGY: handle_price_then_cta",
+        "Answer the price question briefly and clearly.",
+        "If offer_price exists in context, use it directly.",
+        "Do not resend the booking link unless the user asks for it.",
+        "After answering, you can give a light next step.",
+      ]
+    : turnStrategy?.type === "answer_price_after_cta"
+    ? [
+        "TURN STRATEGY: answer_price_after_cta",
+        "The booking link has already been sent before.",
+        "Do not resend the booking link.",
+        "Answer the user's price question directly.",
+        "If offer_price exists in context, use it plainly.",
+        "After answering, you may add a light nudge, but do not push hard.",
+      ]
+    : turnStrategy?.type === "answer_offer_question_after_cta"
+    ? [
+        "TURN STRATEGY: answer_offer_question_after_cta",
+        "The booking link has already been sent before.",
+        "Do not resend the booking link.",
+        "Answer what the offer is in plain English.",
+        "If offer_description exists in context, use it naturally.",
+        "Do not dodge the question.",
+      ]
+    : turnStrategy?.type === "answer_question_after_cta"
+    ? [
+        "TURN STRATEGY: answer_question_after_cta",
+        "The booking link has already been sent before.",
+        "Do not resend the booking link.",
+        "Answer the user's question first.",
+        "Sound calm and human, not pushy.",
+      ]
+    : turnStrategy?.type === "handle_think_about_it"
+    ? [
+        "TURN STRATEGY: handle_think_about_it",
+        "Do not accept the stall passively.",
+        "Acknowledge calmly and ask what they need to decide.",
+        "Keep pressure low but keep the conversation moving.",
+      ]
+    : turnStrategy?.type === "soft_close_to_booking"
+    ? [
+        "TURN STRATEGY: soft_close_to_booking",
+        "The user is warm enough to move forward.",
+        "Guide them toward booking instead of asking more qualifiers.",
+      ]
+    : turnStrategy?.type === "ask_qualifying_question"
+    ? [
+        "TURN STRATEGY: ask_qualifying_question",
+        "Ask one useful question only.",
+        "Ask for the most important missing sales context.",
+        "Do not ask something already stored in lead_memory.",
+      ]
+    : turnStrategy?.type === "nudge_forward"
+    ? [
+        "TURN STRATEGY: nudge_forward",
+        "Do not restart qualification from scratch.",
+        "Move the user toward a decision or next step.",
+      ]
+    : turnStrategy?.type === "post_call_support"
+    ? [
+        "TURN STRATEGY: post_call_support",
+        "Be helpful and supportive.",
+        "Do not push booking.",
+      ]
+    : [];
 const parsedExamples = parseExampleMessages(cfg?.example_messages);
 const examplesToUse =
   hasStrongCustomExamples(cfg?.example_messages)
@@ -1567,16 +1568,15 @@ app.post("/admin/api/clients/create", requireAdmin, async (req, res) => {
 const { data: config, error: configErr } = await supabase
   .from("client_configs")
   .insert({
-{
-  client_id: client.id,
-  stripe_subscription_status: null,
-  system_prompt: null,
-  tone: "direct",
-  style: "short, punchy",
-  vocabulary: "casual UK coach",
-  offer_description: null,
-  offer_price: null,
-}
+    client_id: client.id,
+    stripe_subscription_status: null,
+    system_prompt: null,
+    tone: "direct",
+    style: "short, punchy",
+    vocabulary: "casual UK coach",
+    offer_description: null,
+    offer_price: null,
+  })
   .select()
   .single();
 
