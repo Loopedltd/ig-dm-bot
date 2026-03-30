@@ -1953,6 +1953,12 @@ if (typeof patch.vocabulary === "string" || patch.vocabulary === null) {
     ) {
       allowed.instagram_handle = patch.instagram_handle;
     }
+    if (
+      typeof patch.offer_description === "string" ||
+      patch.offer_description === null
+    ) {
+      allowed.offer_description = patch.offer_description;
+    }
 
     const { data, error } = await supabase
       .from("client_configs")
