@@ -252,6 +252,21 @@ function sanitizeReply(text) {
 
   return out;
 }
+function stripWeakPhrases(text) {
+  let out = String(text || "").trim();
+
+  out = out.replace(/\bhappy to help\b/gi, "");
+  out = out.replace(/\bi['’]d be happy to\b/gi, "");
+  out = out.replace(/\blet me know\b/gi, "");
+  out = out.replace(/\babsolutely\b/gi, "yeah");
+  out = out.replace(/\bno worries at all\b/gi, "no worries");
+
+  out = out.replace(/\s+([,!.?])/g, "$1");
+  out = out.replace(/\(\s*\)/g, "");
+  out = out.replace(/\s{2,}/g, " ").trim();
+
+  return out;
+}
 
 function humaniseText(text) {
   let t = String(text || "").trim();
@@ -322,8 +337,48 @@ function parseExampleMessages(raw) {
 
   return parsed;
 }
+function getDefaultFallbackExamples() {
+  return [
+    {
+      user: "i'm not sure what skill to focus on",
+      assistant: "fair, what are you actually leaning toward right now?",
+    },
+    {
+      user: "i want to make more money online",
+      assistant: "yeah makes sense, what have you tried already?",
+    },
+    {
+      user: "how does it work",
+      assistant: "pretty simple, i’ll explain it properly but first where are you at right now?",
+    },
+    {
+      user: "how much is it?",
+      assistant: "i’ll run you through it properly, easiest thing is to get you booked in here",
+    },
+    {
+      user: "i want it",
+      assistant: "perfect, use this and get yourself booked in",
+    },
+    {
+      user: "send me the link",
+      assistant: "here you go, get booked in and we’ll take it from there",
+    },
+    {
+      user: "i’ll think about it",
+      assistant: "yeah that’s fine, what do you need to see to make a decision?",
+    },
+    {
+      user: "not sure if it’s for me",
+      assistant: "fair, what’s making you unsure?",
+    },
+    {
+      user: "sounds good",
+      assistant: "good, then let’s stop dragging it out and get you booked in",
+    },
+  ];
+}
 
-async function getLeadMessageHistory(leadId, limit = 10) {
+async function getLeadMessageHistory(leadId, limit = 30) {
   const { data, error } = await supabase
     .from("messages")
     .select("direction,text,created_at")
@@ -343,11 +398,478 @@ async function getLeadMessageHistory(leadId, limit = 10) {
     })
     .filter(Boolean);
 }
+async function getLeadMemory(leadId) {
+  const { data, error } = await supabase
+    .from("lead_memory")
+    .select("*")
+    .eq("lead_id", leadId)
+    .maybeSingle();
 
+  if (error) throw error;
+  return data || null;
+}
+
+function cleanMemoryField(value) {
+  if (value === null || value === undefined) return null;
+  const out = String(value).trim();
+  if (!out) return null;
+  if (out.toLowerCase() === "unknown") return null;
+  if (out.toLowerCase() === "not provided") return null;
+  if (out.toLowerCase() === "null") return null;
+  return out;
+}
+
+function normaliseIntentLevel(value) {
+  const v = String(value || "").trim().toLowerCase();
+  if (["cold", "warm", "hot"].includes(v)) return v;
+  return null;
+}
+
+function mergeLeadMemory(existing, patch) {
+  return {
+    summary: cleanMemoryField(patch.summary) || existing?.summary || null,
+    goal: cleanMemoryField(patch.goal) || existing?.goal || null,
+    current_situation:
+      cleanMemoryField(patch.current_situation) ||
+      existing?.current_situation ||
+      null,
+    pain_points:
+      cleanMemoryField(patch.pain_points) || existing?.pain_points || null,
+    desired_outcome:
+      cleanMemoryField(patch.desired_outcome) ||
+      existing?.desired_outcome ||
+      null,
+    objection: cleanMemoryField(patch.objection) || existing?.objection || null,
+    intent_level:
+      normaliseIntentLevel(patch.intent_level) ||
+      existing?.intent_level ||
+      null,
+    last_question_asked:
+      cleanMemoryField(patch.last_question_asked) ||
+      existing?.last_question_asked ||
+      null,
+    last_cta_type:
+      cleanMemoryField(patch.last_cta_type) || existing?.last_cta_type || null,
+    last_cta_at: patch.last_cta_at || existing?.last_cta_at || null,
+    booking_link_sent_count:
+      typeof patch.booking_link_sent_count === "number"
+        ? patch.booking_link_sent_count
+        : existing?.booking_link_sent_count || 0,
+  };
+}
+
+async function upsertLeadMemory({ leadId, clientId, patch, existing }) {
+  const merged = mergeLeadMemory(existing, patch);
+
+  const { data, error } = await supabase
+    .from("lead_memory")
+    .upsert(
+      {
+        lead_id: leadId,
+        client_id: clientId,
+        ...merged,
+      },
+      { onConflict: "lead_id" }
+    )
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+async function extractLeadMemory({
+  lead,
+  historyMessages,
+  existingMemory,
+  currentMessage,
+}) {
+  if (!openai) return existingMemory || null;
+
+  const recent = (historyMessages || []).slice(-12);
+
+  const messages = [
+    {
+      role: "system",
+      content: `
+You extract structured sales memory from Instagram DMs.
+
+Return ONLY valid JSON.
+
+Rules:
+- Keep values short and factual
+- Do not invent anything
+- If unknown, use null
+- intent_level must be one of: "cold", "warm", "hot", or null
+- last_question_asked should only capture the assistant's latest meaningful question if one exists
+- objection should capture the user's main hesitation if present
+- summary should be 1 short sentence max
+
+Return exactly this shape:
+{
+  "summary": null,
+  "goal": null,
+  "current_situation": null,
+  "pain_points": null,
+  "desired_outcome": null,
+  "objection": null,
+  "intent_level": null,
+  "last_question_asked": null
+}
+      `.trim(),
+    },
+    {
+      role: "user",
+      content: JSON.stringify(
+        {
+          existing_memory: existingMemory
+            ? {
+                summary: existingMemory.summary,
+                goal: existingMemory.goal,
+                current_situation: existingMemory.current_situation,
+                pain_points: existingMemory.pain_points,
+                desired_outcome: existingMemory.desired_outcome,
+                objection: existingMemory.objection,
+                intent_level: existingMemory.intent_level,
+                last_question_asked: existingMemory.last_question_asked,
+              }
+            : null,
+          latest_user_message: currentMessage,
+          recent_messages: recent,
+          lead_meta: {
+            stage: lead?.stage || null,
+            call_completed: !!lead?.call_completed,
+            booking_sent: !!lead?.booking_sent,
+          },
+        },
+        null,
+        2
+      ),
+    },
+  ];
+
+  try {
+    const resp = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      messages,
+      temperature: 0,
+      max_tokens: 220,
+      response_format: { type: "json_object" },
+    });
+
+    const text = resp?.choices?.[0]?.message?.content?.trim();
+    if (!text) return existingMemory || null;
+
+    const parsed = JSON.parse(text);
+
+    return mergeLeadMemory(existingMemory, {
+      summary: parsed.summary,
+      goal: parsed.goal,
+      current_situation: parsed.current_situation,
+      pain_points: parsed.pain_points,
+      desired_outcome: parsed.desired_outcome,
+      objection: parsed.objection,
+      intent_level: parsed.intent_level,
+      last_question_asked: parsed.last_question_asked,
+    });
+  } catch (e) {
+    console.warn("lead memory extraction failed:", e?.message || e);
+    return existingMemory || null;
+  }
+}
+function detectPriceQuestion(text) {
+  return /price|cost|how much|what'?s the price|how much is it|what do you charge|pricing/i.test(
+    String(text || "")
+  );
+}
+
+function detectHighIntent(text) {
+  return /ready|start|sign up|book|buy|join|i want it|let's do it|lets do it|how do i start|send me the link|where do i sign up|how do i join/i.test(
+    String(text || "")
+  );
+}
+
+function detectSoftIntent(text) {
+  return /sounds good|interesting|tell me more|how does it work|can i start|what do i do next|send details|i'm interested|im interested/i.test(
+    String(text || "")
+  );
+}
+
+function detectObjectionType(text) {
+  const t = String(text || "").toLowerCase();
+
+  if (
+    t.includes("think about it") ||
+    t.includes("let me think") ||
+    t.includes("i'll get back to you") ||
+    t.includes("ill get back to you")
+  ) {
+    return "think_about_it";
+  }
+
+  if (
+    t.includes("too expensive") ||
+    t.includes("cant afford") ||
+    t.includes("can't afford") ||
+    t.includes("price") ||
+    t.includes("cost")
+  ) {
+    return "price";
+  }
+
+  if (
+    t.includes("not sure") ||
+    t.includes("unsure") ||
+    t.includes("don’t know") ||
+    t.includes("dont know")
+  ) {
+    return "uncertain";
+  }
+
+  if (
+    t.includes("busy right now") ||
+    t.includes("not now") ||
+    t.includes("bad time") ||
+    t.includes("later")
+  ) {
+    return "timing";
+  }
+
+  return null;
+}
+
+function inferIntentScore(text, leadMemory) {
+  const t = String(text || "").toLowerCase();
+  let score = 0;
+
+  if (detectHighIntent(t)) score += 4;
+  if (detectSoftIntent(t)) score += 2;
+  if (detectPriceQuestion(t)) score += 1;
+
+  if (/\bok\b|\bokay\b|\byes\b|\byeah\b|\bsure\b/.test(t)) score += 1;
+
+  if (
+    t.includes("not sure") ||
+    t.includes("maybe") ||
+    t.includes("i'll think about it") ||
+    t.includes("let me think")
+  ) {
+    score -= 2;
+  }
+
+  if (leadMemory?.intent_level === "warm") score += 1;
+  if (leadMemory?.intent_level === "hot") score += 2;
+
+  return score;
+}
+
+function hasUsefulQualification(leadMemory) {
+  return !!(
+    leadMemory?.goal ||
+    leadMemory?.current_situation ||
+    leadMemory?.pain_points ||
+    leadMemory?.desired_outcome
+  );
+}
+
+function decideTurnStrategy({
+  lead,
+  leadMemory,
+  text,
+  bookingUrl,
+}) {
+  const currentText = String(text || "").trim();
+  const objectionType = detectObjectionType(currentText);
+  const asksPrice = detectPriceQuestion(currentText);
+  const intentScore = inferIntentScore(currentText, leadMemory);
+  const qualificationPresent = hasUsefulQualification(leadMemory);
+
+  if (lead?.call_completed) {
+    return {
+      type: "post_call_support",
+      asksPrice,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (bookingUrl && intentScore >= 4) {
+    return {
+      type: "send_booking_link_now",
+      asksPrice,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: true,
+    };
+  }
+
+  if (objectionType === "think_about_it") {
+    return {
+      type: "handle_think_about_it",
+      asksPrice,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (objectionType === "price" && bookingUrl) {
+    return {
+      type: "handle_price_then_cta",
+      asksPrice,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: true,
+    };
+  }
+
+  if (asksPrice && bookingUrl) {
+    return {
+      type: "handle_price_then_cta",
+      asksPrice,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: true,
+    };
+  }
+
+  if (qualificationPresent && bookingUrl && intentScore >= 2) {
+    return {
+      type: "soft_close_to_booking",
+      asksPrice,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: true,
+    };
+  }
+
+  if (!qualificationPresent) {
+    return {
+      type: "ask_qualifying_question",
+      asksPrice,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  return {
+    type: "nudge_forward",
+    asksPrice,
+    objectionType,
+    intentScore,
+    shouldSendBookingLink: false,
+  };
+}
+function deriveLeadStage({
+  lead,
+  turnStrategy,
+  leadMemory,
+}) {
+  if (lead?.call_completed) return "post_call";
+
+  if (turnStrategy?.type === "send_booking_link_now") return "booking_pushed";
+  if (turnStrategy?.type === "soft_close_to_booking") return "booking_pushed";
+  if (turnStrategy?.type === "handle_price_then_cta") return "objection_pending";
+  if (turnStrategy?.type === "handle_think_about_it") return "objection_pending";
+
+  if (
+    leadMemory?.intent_level === "hot" ||
+    turnStrategy?.intentScore >= 4
+  ) {
+    return "high_intent";
+  }
+
+  if (
+    leadMemory?.intent_level === "warm" ||
+    turnStrategy?.intentScore >= 2
+  ) {
+    return "warm";
+  }
+
+  if (
+    leadMemory?.goal ||
+    leadMemory?.current_situation ||
+    leadMemory?.pain_points ||
+    leadMemory?.desired_outcome
+  ) {
+    return "qualified";
+  }
+
+  return lead?.stage || "new";
+}
+
+async function updateLeadTracking(leadId, patch) {
+  const { data, error } = await supabase
+    .from("leads")
+    .update(patch)
+    .eq("id", leadId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+function replyContainsBookingLink(reply, bookingUrl) {
+  if (!reply || !bookingUrl) return false;
+  return String(reply).includes(String(bookingUrl));
+}
+async function saveLearnedExample({
+  clientId,
+  leadId,
+  userMessage,
+  assistantMessage,
+}) {
+  const cleanUser = String(userMessage || "").trim();
+  const cleanAssistant = String(assistantMessage || "").trim();
+
+  if (!cleanUser || !cleanAssistant) return null;
+
+  const { data, error } = await supabase
+    .from("learned_examples")
+    .insert({
+      client_id: clientId,
+      lead_id: leadId,
+      user_message: cleanUser,
+      assistant_message: cleanAssistant,
+      source: "auto",
+      approved: false,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+function hasStrongCustomExamples(raw) {
+  const parsed = parseExampleMessages(raw);
+  return parsed.length >= 3;
+}
+
+function getEffectiveTone(cfg) {
+  return cleanMemoryField(cfg?.tone) || "direct";
+}
+
+function getEffectiveStyle(cfg) {
+  return cleanMemoryField(cfg?.style) || "short, punchy";
+}
+
+function getEffectiveVocabulary(cfg) {
+  return cleanMemoryField(cfg?.vocabulary) || "casual, blunt, UK DM style";
+}
+
+function shouldUseCustomSystemPrompt(cfg) {
+  const prompt = String(cfg?.system_prompt || "").trim();
+  return prompt.length >= 120;
+}
 async function generateAiReply({
   cfg,
   lead,
   historyMessages,
+  leadMemory,
+  turnStrategy,
   postCallMode,
   asksPrice,
   highIntent,
@@ -356,23 +878,97 @@ async function generateAiReply({
 }) {
   if (!openai) return null;
 
-    const systemBase =
-    cfg?.system_prompt ||
-    "You are the coach's Instagram DM assistant. Be friendly, concise and human. Ask one clear question at a time.";
-  const guardrails = [
-    "Keep replies short (1-2 sentences).",
-    "Ask ONE clear question at the end unless giving a booking link is clearly the next step.",
-    "Do not mention OpenAI or AI.",
-    "No emojis by default.",
-    "Do not use em dashes or double hyphens.",
-    "Do not repeat yourself or re-ask questions already answered.",
-    "Move the conversation forward toward one clear next step.",
-    "Do not invent prices. If asked about price, ask goal and current situation and say exact options will be confirmed.",
-    "Never spam. No follow-up threats.",
-    `Tone: ${cfg?.tone || "direct"}.`,
-    `Style: ${cfg?.style || "short, punchy"}.`,
-    `Vocabulary: ${cfg?.vocabulary || "casual"}.`,
-  ];
+const systemBase =
+  shouldUseCustomSystemPrompt(cfg)
+    ? cfg.system_prompt
+    : `
+You are a high-converting Instagram DM setter and closer.
+
+You talk like a real person in Instagram DMs, not a sales rep, not support, and not a chatbot.
+
+PRIMARY JOB:
+Move the conversation toward a booked call or clear next step as fast as naturally possible.
+
+CORE BEHAVIOUR:
+- Be direct, calm, confident, and conversational
+- Sound like someone who does this all day
+- Keep replies short
+- Do not over-explain
+- Do not act needy
+- Do not try to impress the lead with long answers
+- Lead the conversation instead of reacting passively
+- If the lead is warm, stop over-qualifying and move forward
+- If the lead is high intent, close immediately
+- If the lead hesitates, stay composed and pull out the real objection
+
+HOW YOU SHOULD SOUND:
+- casual
+- slightly blunt
+- socially aware
+- confident without sounding try-hard
+- relaxed, not stiff
+- not overly enthusiastic
+- not corporate
+- imperfect grammar is fine if natural
+
+WHAT TO AVOID:
+- long paragraphs
+- corporate phrasing
+- “happy to help”
+- “let me know”
+- “I’d love to”
+- over-validation
+- fake excitement
+- multiple questions at once
+- repeating the same question in different words
+
+CLOSING RULE:
+If the lead is ready, interested, asks how it works, asks price, asks how to start, or asks for the link, your default bias should be to move them toward booking instead of stretching the conversation.
+
+QUESTION RULE:
+Only ask a question when it genuinely helps move the sale forward.
+
+MESSAGE LENGTH:
+Usually 1 sentence.
+Max 2 short sentences.
+
+GOAL:
+Make the lead feel like they’re speaking to a sharp human closer who knows where the conversation is going.
+`;
+const guardrails = [
+  "Keep replies short (1-2 sentences).",
+  "Ask ONE clear question OR move to a clear next step.",
+  "Do not mention OpenAI or AI.",
+  "No emojis by default.",
+  "Do not use em dashes or double hyphens.",
+  "Do not repeat yourself or re-ask questions already answered.",
+  "Move the conversation forward toward a decision.",
+"Never ask the same type of question twice in a row.",
+"After 1–2 questions, move toward a decision or booking.",
+"If the conversation stalls, guide toward booking instead of asking more questions.",
+  "Use lead_memory to avoid asking for info the user has already given.",
+  "If lead_memory already contains the answer, do not ask for it again.",
+  "Do not sound overeager or overly friendly.",
+  "Do not use customer support language.",
+  "Do not write like a copywriter.",
+  "Prefer confident plain wording over polished wording.",
+  "If booking is the obvious next step, do not hide behind another question.",
+  "If the user is vague, ask the most useful direct question, not a broad one.",
+  "Do not give motivational speeches.",
+
+  // 🔥 SALES RULES (NEW)
+  "If user shows buying intent (ready, want to join, how do I start, etc) → STOP asking questions and send the booking link immediately.",
+  "If booking link is available → prioritise sending it over continuing conversation.",
+  "Do not delay the sale with unnecessary questions.",
+  "If user is warm → guide them to booking.",
+  "If user is cold → ask 1 simple question.",
+  "Never stay stuck in qualification loop.",
+
+  "Do not invent prices. If asked about price, give direction then move toward booking.",
+  `Tone: ${getEffectiveTone(cfg)}.`,
+  `Style: ${getEffectiveStyle(cfg)}.`,
+  `Vocabulary: ${getEffectiveVocabulary(cfg)}.`,
+];
 
   const objectionRules = thinkAboutIt
     ? [
@@ -391,9 +987,61 @@ async function generateAiReply({
         "This user has not completed a call yet.",
         "Qualify them: goal, timeline, current situation.",
       ];
+  const strategyRules =
+    turnStrategy?.type === "send_booking_link_now"
+      ? [
+          "TURN STRATEGY: send_booking_link_now",
+          "Do not ask a question first.",
+          "Send or direct the user to the booking link immediately.",
+          "Be confident and assume intent is real.",
+        ]
+      : turnStrategy?.type === "handle_price_then_cta"
+      ? [
+          "TURN STRATEGY: handle_price_then_cta",
+          "Acknowledge the price question briefly.",
+          "Do not invent detailed pricing.",
+          "Move the user toward booking or the booking link quickly.",
+        ]
+      : turnStrategy?.type === "handle_think_about_it"
+      ? [
+          "TURN STRATEGY: handle_think_about_it",
+          "Do not accept the stall passively.",
+          "Acknowledge calmly and ask what they need to decide.",
+          "Keep pressure low but keep the conversation moving.",
+        ]
+      : turnStrategy?.type === "soft_close_to_booking"
+      ? [
+          "TURN STRATEGY: soft_close_to_booking",
+          "The user is warm enough to move forward.",
+          "Guide them toward booking instead of asking more qualifiers.",
+        ]
+      : turnStrategy?.type === "ask_qualifying_question"
+      ? [
+          "TURN STRATEGY: ask_qualifying_question",
+          "Ask one useful question only.",
+          "Ask for the most important missing sales context.",
+          "Do not ask something already stored in lead_memory.",
+        ]
+      : turnStrategy?.type === "nudge_forward"
+      ? [
+          "TURN STRATEGY: nudge_forward",
+          "Do not restart qualification from scratch.",
+          "Move the user toward a decision or next step.",
+        ]
+      : turnStrategy?.type === "post_call_support"
+      ? [
+          "TURN STRATEGY: post_call_support",
+          "Be helpful and supportive.",
+          "Do not push booking.",
+        ]
+      : [];
 const parsedExamples = parseExampleMessages(cfg?.example_messages);
+const examplesToUse =
+  hasStrongCustomExamples(cfg?.example_messages)
+    ? parsedExamples
+    : getDefaultFallbackExamples();
 
-const exampleMessages = parsedExamples.flatMap((ex) => [
+const exampleMessages = examplesToUse.flatMap((ex) => [
   { role: "user", content: ex.user },
   { role: "assistant", content: ex.assistant },
 ]);
@@ -408,7 +1056,30 @@ const exampleMessages = parsedExamples.flatMap((ex) => [
     think_about_it_objection: !!thinkAboutIt,
     manual_override: !!lead?.manual_override,
     bot_paused: !!cfg?.bot_paused,
-  };
+    lead_memory: leadMemory
+      ? {
+          summary: leadMemory.summary || null,
+          goal: leadMemory.goal || null,
+          current_situation: leadMemory.current_situation || null,
+          pain_points: leadMemory.pain_points || null,
+          desired_outcome: leadMemory.desired_outcome || null,
+          objection: leadMemory.objection || null,
+          intent_level: leadMemory.intent_level || null,
+          last_question_asked: leadMemory.last_question_asked || null,
+          last_cta_type: leadMemory.last_cta_type || null,
+          booking_link_sent_count: leadMemory.booking_link_sent_count || 0,
+        }
+      : null,
+    turn_strategy: turnStrategy
+      ? {
+          type: turnStrategy.type,
+          asksPrice: !!turnStrategy.asksPrice,
+          objectionType: turnStrategy.objectionType || null,
+          intentScore: turnStrategy.intentScore ?? null,
+          shouldSendBookingLink: !!turnStrategy.shouldSendBookingLink,
+        }
+      : null, 
+ };
 
 const messages = [
   {
@@ -419,6 +1090,7 @@ content: [
   "RULES:",
   ...guardrails.map((x) => `- ${x}`),
   ...postCallRules.map((x) => `- ${x}`),
+  ...strategyRules.map((x) => `- ${x}`),
   ...objectionRules.map((x) => `- ${x}`),
   "",
   "EXAMPLE USAGE RULES:",
@@ -432,24 +1104,20 @@ content: [
   },
   ...exampleMessages,
   ...(historyMessages || []),
-  {
-    role: "user",
-    content: lead?.last_message || "Respond to the latest message naturally",
-  },
 ];
 
   try {
     const resp = await openai.chat.completions.create({
       model: process.env.OPENAI_MODEL || "gpt-4o-mini",
       messages,
-      temperature: 0.6,
+temperature: 0.45,
       max_tokens: 160,
     });
 
     const text = resp?.choices?.[0]?.message?.content?.trim();
     if (!text) return null;
 
-    return sanitizeReply(text);
+return sanitizeReply(stripWeakPhrases(text));
   } catch (e) {
     console.warn("⚠️ OpenAI error, falling back:", e?.message || e);
     return null;
@@ -1501,7 +2169,8 @@ CONVERSATION RULES:
 - Never ask multiple questions
 - Don’t repeat yourself
 - Be slightly blunt when needed
-- Avoid sounding salesy
+- Avoid sounding fake, scripted, or pushy in a cringe way
+- But still sound commercially aware and willing to lead the conversation
 
 STRICT RULES:
 - No emojis unless natural
@@ -1511,7 +2180,12 @@ STRICT RULES:
 - Never write long structured messages
 
 GOAL:
-Make the conversation feel like a normal Instagram DM, not a business interaction.
+Make the conversation feel like a normal Instagram DM with someone sharp who knows how to lead a sale naturally.
+
+IMPORTANT SALES BEHAVIOUR:
+- If the lead is warm, interested, asks price, asks how it works, or asks how to start, the prompt should bias toward moving them closer to booking
+- The assistant should not stay stuck in endless conversation mode
+- The assistant should qualify briefly, then guide decisively
 
 WHAT THE COACH SELLS:
 ${offerDescription || "(not provided)"}
@@ -2025,6 +2699,16 @@ app.post("/webhook", async (req, res) => {
           console.error("messages insert incoming failed:", insertIncomingError);
         }
 
+        if (!isEcho) {
+          try {
+            lead = await updateLeadTracking(lead.id, {
+              last_inbound_at: nowIso(),
+            });
+          } catch (e) {
+            console.warn("last_inbound_at update failed:", e?.message || e);
+          }
+        }
+
         if (!lead.client_id) return;
 
         const cfg = await getClientConfig(lead.client_id);
@@ -2059,26 +2743,97 @@ app.post("/webhook", async (req, res) => {
 
         let historyMessages = [];
         try {
-          historyMessages = await getLeadMessageHistory(lead.id, 10);
+          historyMessages = await getLeadMessageHistory(lead.id, 30);
         } catch {}
 
+        let leadMemory = null;
+        try {
+          leadMemory = await getLeadMemory(lead.id);
+        } catch (e) {
+          console.warn("getLeadMemory failed:", e?.message || e);
+        }
+
+        try {
+          const extractedMemory = await extractLeadMemory({
+            lead,
+            historyMessages,
+            existingMemory: leadMemory,
+            currentMessage: text,
+          });
+
+          if (extractedMemory) {
+            leadMemory = await upsertLeadMemory({
+              leadId: lead.id,
+              clientId: lead.client_id,
+              patch: extractedMemory,
+              existing: leadMemory,
+            });
+          }
+        } catch (e) {
+          console.warn("lead memory update failed:", e?.message || e);
+        }
+        try {
+          const nextStage = deriveLeadStage({
+            lead,
+            turnStrategy: null,
+            leadMemory,
+          });
+
+          if (nextStage !== lead.stage) {
+            lead = await updateLeadTracking(lead.id, {
+              stage: nextStage,
+            });
+          }
+        } catch (e) {
+          console.warn("post-memory stage update failed:", e?.message || e);
+        }
+
         const thinkAboutIt = detectThinkAboutIt(text);
+        const asksPrice = detectPriceQuestion(text);
+        const highIntent = detectHighIntent(text);
+        const turnStrategy = decideTurnStrategy({
+          lead,
+          leadMemory,
+          text,
+          bookingUrl: cfg?.booking_url || null,
+        });
+
         lead.last_message = text;
 
         let reply = await generateAiReply({
           cfg,
           lead,
           historyMessages,
+          leadMemory,
+          turnStrategy,
           postCallMode: lead.call_completed,
-          asksPrice: /price|cost|how much/i.test(text),
-          highIntent: /ready|start|sign up|book/i.test(text),
+          asksPrice,
+          highIntent,
           bookingUrl: cfg?.booking_url || null,
           thinkAboutIt,
         });
 
+        if (turnStrategy?.type === "send_booking_link_now" && cfg?.booking_url) {
+          reply = `${cfg.booking_url}\n\nlet’s get you set up`;
+        }
+
         if (!reply) return;
 
         reply = humaniseText(reply);
+
+        try {
+          const nextStage = deriveLeadStage({
+            lead,
+            turnStrategy,
+            leadMemory,
+          });
+
+          lead = await updateLeadTracking(lead.id, {
+            stage: nextStage,
+          });
+        } catch (e) {
+          console.warn("lead stage update failed:", e?.message || e);
+        }
 
         const messagesToSend = splitIntoMessages(reply);
 
@@ -2143,42 +2898,50 @@ app.post("/webhook", async (req, res) => {
           if (insertOutgoingError) {
             console.error("messages insert outgoing failed:", insertOutgoingError);
           }
-// 🧠 learn from good replies (STRING FORMAT - matches dashboard)
-try {
-  if (msg.length < 120 && !msg.includes("http")) {
-    const { data: existing } = await supabase
-      .from("client_configs")
-      .select("example_messages")
-      .eq("client_id", lead.client_id)
-      .single();
+          try {
+            const sentBookingLink =
+              !!cfg?.booking_url && String(msg).includes(String(cfg.booking_url));
 
-    const lastUserMsg = historyMessages?.slice(-1)[0]?.content;
+            lead = await updateLeadTracking(lead.id, {
+              last_outbound_at: nowIso(),
+              last_outbound_text: msg,
+              booking_sent: sentBookingLink ? true : lead.booking_sent,
+              booking_sent_at: sentBookingLink ? nowIso() : lead.booking_sent_at,
+              booking_sent_count: sentBookingLink
+                ? (lead.booking_sent_count || 0) + 1
+                : lead.booking_sent_count || 0,
+              stage: sentBookingLink ? "booking_pushed" : lead.stage,
+            });
 
-    if (lastUserMsg) {
-      const newExample =
-        `user: ${lastUserMsg}\nassistant: ${msg}`;
+            if (sentBookingLink) {
+              leadMemory = await upsertLeadMemory({
+                leadId: lead.id,
+                clientId: lead.client_id,
+                existing: leadMemory,
+                patch: {
+                  last_cta_type: "booking_link",
+                  last_cta_at: nowIso(),
+                  booking_link_sent_count:
+                    (leadMemory?.booking_link_sent_count || 0) + 1,
+                },
+              });
+            }
+          } catch (e) {
+            console.warn("lead outbound tracking failed:", e?.message || e);
+          }
+          try {
+            if (msg.length < 120 && !msg.includes("http")) {
+              await saveLearnedExample({
+                clientId: lead.client_id,
+                leadId: lead.id,
+                userMessage: text,
+                assistantMessage: msg,
+              });
+            }
+          } catch (e) {
+            console.warn("learned example save failed:", e?.message || e);
+          }
 
-      const current = String(existing?.example_messages || "").trim();
-
-      const combined = current
-        ? `${current}\n\n${newExample}`
-        : newExample;
-
-      // keep last ~20 examples (by splitting blocks)
-      const trimmed = combined
-        .split(/\n\s*\n/)
-        .slice(-20)
-        .join("\n\n");
-
-      await supabase
-        .from("client_configs")
-        .update({ example_messages: trimmed })
-        .eq("client_id", lead.client_id);
-    }
-  }
-} catch (e) {
-  console.warn("example learning failed", e);
-}
         }
       } catch (err) {
         console.error("Webhook async error:", err);
