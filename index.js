@@ -252,6 +252,23 @@ function sanitizeReply(text) {
 
   return out;
 }
+function detectStartProcessQuestion(text) {
+  return /how do i get started|how do i start|what do i do next|what happens next|how does the process work|what happens after i book|how does onboarding work/i.test(
+    String(text || "")
+  );
+}
+
+function detectWhoItsForQuestion(text) {
+  return /who is this for|who do you help|what kind of people is this for|is this for me|is this suitable for/i.test(
+    String(text || "")
+  );
+}
+
+function detectWhatYouSellQuestion(text) {
+  return /what do you sell|what is it you sell|what do you actually help with|what do you do exactly/i.test(
+    String(text || "")
+  );
+}
 function stripWeakPhrases(text) {
   let out = String(text || "").trim();
 
@@ -696,14 +713,59 @@ function decideTurnStrategy({
   bookingUrl,
   cfg,
 }) {
-  const currentText = String(text || "").trim();
-  const objectionType = detectObjectionType(currentText);
-  const asksPrice = detectPriceQuestion(currentText);
-  const asksOfferQuestion = detectOfferQuestion(currentText);
-  const explicitLinkRequest = detectExplicitBookingLinkRequest(currentText);
-  const questionAfterLink = detectQuestionAfterLink(currentText);
-  const intentScore = inferIntentScore(currentText, leadMemory);
-  const qualificationPresent = hasUsefulQualification(leadMemory);
+const currentText = String(text || "").trim();
+const objectionType = detectObjectionType(currentText);
+const asksPrice = detectPriceQuestion(currentText);
+const asksOfferQuestion = detectOfferQuestion(currentText);
+const asksStartProcess = detectStartProcessQuestion(currentText);
+const asksWhoItsFor = detectWhoItsForQuestion(currentText);
+const asksWhatYouSell = detectWhatYouSellQuestion(currentText);
+const explicitLinkRequest = detectExplicitBookingLinkRequest(currentText);
+const questionAfterLink = detectQuestionAfterLink(currentText);
+const intentScore = inferIntentScore(currentText, leadMemory);
+const qualificationPresent = hasUsefulQualification(leadMemory);
+
+  if (bookingRecentlySent && asksStartProcess) {
+    return {
+      type: "answer_start_process_after_cta",
+      asksPrice,
+      asksOfferQuestion,
+      asksStartProcess,
+      asksWhoItsFor,
+      asksWhatYouSell,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (bookingRecentlySent && asksWhoItsFor) {
+    return {
+      type: "answer_who_its_for_after_cta",
+      asksPrice,
+      asksOfferQuestion,
+      asksStartProcess,
+      asksWhoItsFor,
+      asksWhatYouSell,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (bookingRecentlySent && asksWhatYouSell) {
+    return {
+      type: "answer_what_you_sell_after_cta",
+      asksPrice,
+      asksOfferQuestion,
+      asksStartProcess,
+      asksWhoItsFor,
+      asksWhatYouSell,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
 
   const bookingRecentlySent =
     !!lead?.booking_sent ||
@@ -1022,6 +1084,12 @@ const guardrails = [
   "If booking is the obvious next step, do not hide behind another question.",
   "If the user is vague, ask the most useful direct question, not a broad one.",
   "Do not give motivational speeches.",
+  "If the user asks what the offer is, what the coach helps with, who it is for, or how getting started works, answer directly.",
+  "Do not dodge real questions by repeating a booking instruction.",
+  "After the booking link has been sent once, your default should be to answer follow-up questions, not repeat the CTA.",
+  "Only reuse booking language when it genuinely helps the conversation move forward.",
+  "If the user asks how to get started, explain the process clearly instead of repeating that they can book.",
+  "Vary your wording. Do not repeat the same sentence structure across replies.",
 
   // 🔥 SALES RULES (NEW)
   "If user clearly asks for the booking link or says they are ready to buy, send the booking link immediately.",
@@ -1129,6 +1197,34 @@ const strategyRules =
         "Be helpful and supportive.",
         "Do not push booking.",
       ]
+      : turnStrategy?.type === "answer_start_process_after_cta"
+      ? [
+          "TURN STRATEGY: answer_start_process_after_cta",
+          "The booking link has already been sent.",
+          "Do not resend the booking link unless the user explicitly asks for it again.",
+          "Answer how getting started works in plain English.",
+          "Explain the process step by step briefly.",
+          "Typical flow: book through the link, choose a time, attend the call, then onboarding / next steps.",
+          "Sound clear, calm and human.",
+        ]
+      : turnStrategy?.type === "answer_who_its_for_after_cta"
+      ? [
+          "TURN STRATEGY: answer_who_its_for_after_cta",
+          "The booking link has already been sent.",
+          "Do not resend the booking link.",
+          "Answer who the offer is for directly.",
+          "Use offer_description if available.",
+          "Do not dodge the question.",
+        ]
+      : turnStrategy?.type === "answer_what_you_sell_after_cta"
+      ? [
+          "TURN STRATEGY: answer_what_you_sell_after_cta",
+          "The booking link has already been sent.",
+          "Do not resend the booking link.",
+          "Answer what the coach actually sells in plain English.",
+          "Use offer_description if available.",
+          "Do not default back to generic booking language.",
+        ]
     : [];
 const parsedExamples = parseExampleMessages(cfg?.example_messages);
 const examplesToUse =
@@ -2937,7 +3033,13 @@ const turnStrategy = decideTurnStrategy({
         });
 
 if (turnStrategy?.type === "send_booking_link_now" && cfg?.booking_url) {
-  reply = `${cfg.booking_url}\n\nbook in here and we’ll get you sorted`;
+  const ctaOptions = [
+    `${cfg.booking_url}\n\nbook in here and we’ll get you sorted`,
+    `${cfg.booking_url}\n\nuse this and pick a time that works for you`,
+    `${cfg.booking_url}\n\nbook through here and we’ll take it from there`,
+  ];
+
+  reply = ctaOptions[Math.floor(Math.random() * ctaOptions.length)];
 }
 
         if (!reply) return;

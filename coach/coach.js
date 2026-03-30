@@ -344,7 +344,10 @@ function wireGeneratePromptButton() {
   const vocabularyEl = qs("#vocabulary");
   const promptStatusEl = qs("#promptStatus");
 const promptLimitEl = qs("#promptLimitStatus");
-const offerEl = qs("#offer_description");
+const offerWhatEl = qs("#offer_what");
+const offerFeaturesEl = qs("#offer_features");
+const offerAudienceEl = qs("#offer_audience");
+const offerProcessEl = qs("#offer_process");
 const offerPriceEl = qs("#offer_price");
 
   if (!btn || btn.__wired) return;
@@ -364,6 +367,15 @@ const offerPriceEl = qs("#offer_price");
         setErr("Enter your Instagram handle first.");
         return;
       }
+const offer_what = offerWhatEl ? String(offerWhatEl.value || "").trim() : "";
+const offer_features = offerFeaturesEl ? String(offerFeaturesEl.value || "").trim() : "";
+const offer_audience = offerAudienceEl ? String(offerAudienceEl.value || "").trim() : "";
+const offer_process = offerProcessEl ? String(offerProcessEl.value || "").trim() : "";
+
+if (!offer_what || !offer_features || !offer_audience || !offer_process) {
+  setErr("Fill in all offer sections before generating a prompt.");
+  return;
+}
 
       btn.disabled = true;
       btn.style.opacity = "0.75";
@@ -380,12 +392,22 @@ const data = await apiFetch(`${API}/generate-prompt`, {
     example_messages: exampleEl
       ? String(exampleEl.value || "").trim()
       : "",
-    offer_description: offerEl
-      ? String(offerEl.value || "").trim()
-      : "",
-    offer_price: offerPriceEl
-      ? String(offerPriceEl.value || "").trim()
-      : "",
+offer_description: `
+What you do:
+${offerWhatEl ? String(offerWhatEl.value || "").trim() : ""}
+
+What they get:
+${offerFeaturesEl ? String(offerFeaturesEl.value || "").trim() : ""}
+
+Who it's for:
+${offerAudienceEl ? String(offerAudienceEl.value || "").trim() : ""}
+
+How it works:
+${offerProcessEl ? String(offerProcessEl.value || "").trim() : ""}
+`.trim(),
+offer_price: offerPriceEl
+  ? String(offerPriceEl.value || "").trim()
+  : "",
   }),
 });
       if (promptEl && data?.system_prompt) {
@@ -641,7 +663,10 @@ const promptEl = qs("#system_prompt");
 const saveBtn = qs("#saveBtn");
 const genBtn = qs("#generatePromptBtn");
 await loadPromptUsageStatus();
-const offerEl = qs("#offer_description");
+const offerWhatEl = qs("#offer_what");
+const offerFeaturesEl = qs("#offer_features");
+const offerAudienceEl = qs("#offer_audience");
+const offerProcessEl = qs("#offer_process");
 const offerPriceEl = qs("#offer_price");
 
     if (!promptEl && !saveBtn && !genBtn) return;
@@ -661,7 +686,29 @@ if (toneEl) toneEl.value = config.tone || "";
 if (styleEl) styleEl.value = config.style || "";
 if (vocabularyEl) vocabularyEl.value = config.vocabulary || "";
 if (promptEl) promptEl.value = config.system_prompt || "";
-if (offerEl) offerEl.value = config.offer_description || "";
+const savedOffer = String(config.offer_description || "");
+
+function extractSection(label, nextLabel) {
+  const regex = nextLabel
+    ? new RegExp(`${label}:\\s*([\\s\\S]*?)\\n\\n${nextLabel}:`, "i")
+    : new RegExp(`${label}:\\s*([\\s\\S]*)$`, "i");
+
+  const match = savedOffer.match(regex);
+  return match ? String(match[1] || "").trim() : "";
+}
+
+if (offerWhatEl) {
+  offerWhatEl.value = extractSection("What you do", "What they get");
+}
+if (offerFeaturesEl) {
+  offerFeaturesEl.value = extractSection("What they get", "Who it's for");
+}
+if (offerAudienceEl) {
+  offerAudienceEl.value = extractSection("Who it's for", "How it works");
+}
+if (offerProcessEl) {
+  offerProcessEl.value = extractSection("How it works", null);
+}
 if (offerPriceEl) offerPriceEl.value = config.offer_price || "";
 
 const exampleEl = qs("#example_messages");
@@ -696,8 +743,25 @@ const style = styleEl ? String(styleEl.value || "").trim() : "";
 const vocabulary = vocabularyEl ? String(vocabularyEl.value || "").trim() : "";
 const system_prompt = promptEl ? String(promptEl.value || "").trim() : "";
 const rawExamples = exampleEl ? String(exampleEl.value || "").trim() : "";
-const offer_description = offerEl ? String(offerEl.value || "").trim() : "";
+const offer_what = offerWhatEl ? String(offerWhatEl.value || "").trim() : "";
+const offer_features = offerFeaturesEl ? String(offerFeaturesEl.value || "").trim() : "";
+const offer_audience = offerAudienceEl ? String(offerAudienceEl.value || "").trim() : "";
+const offer_process = offerProcessEl ? String(offerProcessEl.value || "").trim() : "";
 const offer_price = offerPriceEl ? String(offerPriceEl.value || "").trim() : "";
+
+const offer_description = `
+What you do:
+${offer_what}
+
+What they get:
+${offer_features}
+
+Who it's for:
+${offer_audience}
+
+How it works:
+${offer_process}
+`.trim();
 
 const parsedExamples = parseExampleMessages(rawExamples);
 
@@ -730,6 +794,30 @@ for (const block of blocks) {
     setErr("Replies are too short — write how you’d actually respond.");
     return;
   }
+}
+if (!offer_what || !offer_features || !offer_audience || !offer_process) {
+  setErr("Fill in all offer sections: What you do, What they get, Who it's for, and How it works.");
+  return;
+}
+
+if (offer_what.length < 12) {
+  setErr("“What you do” is too vague.");
+  return;
+}
+
+if (offer_features.length < 12) {
+  setErr("“What they get” is too vague.");
+  return;
+}
+
+if (offer_audience.length < 12) {
+  setErr("“Who it's for” is too vague.");
+  return;
+}
+
+if (offer_process.length < 12) {
+  setErr("“How it works” is too vague.");
+  return;
 }
 
 const example_messages = parsedExamples.value;
