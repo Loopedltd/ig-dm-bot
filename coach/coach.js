@@ -345,6 +345,7 @@ function wireGeneratePromptButton() {
   const promptStatusEl = qs("#promptStatus");
 const promptLimitEl = qs("#promptLimitStatus");
 const offerEl = qs("#offer_description");
+const offerPriceEl = qs("#offer_price");
 
   if (!btn || btn.__wired) return;
   btn.__wired = true;
@@ -374,15 +375,18 @@ const offerEl = qs("#offer_description");
       }
 const data = await apiFetch(`${API}/generate-prompt`, {
   method: "POST",
-body: JSON.stringify({
-  instagram_handle,
-  example_messages: exampleEl
-    ? String(exampleEl.value || "").trim()
-    : "",
-  offer_description: offerEl
-    ? String(offerEl.value || "").trim()
-    : "",
-}),
+  body: JSON.stringify({
+    instagram_handle,
+    example_messages: exampleEl
+      ? String(exampleEl.value || "").trim()
+      : "",
+    offer_description: offerEl
+      ? String(offerEl.value || "").trim()
+      : "",
+    offer_price: offerPriceEl
+      ? String(offerPriceEl.value || "").trim()
+      : "",
+  }),
 });
       if (promptEl && data?.system_prompt) {
         promptEl.value = data.system_prompt;
@@ -638,6 +642,7 @@ const saveBtn = qs("#saveBtn");
 const genBtn = qs("#generatePromptBtn");
 await loadPromptUsageStatus();
 const offerEl = qs("#offer_description");
+const offerPriceEl = qs("#offer_price");
 
     if (!promptEl && !saveBtn && !genBtn) return;
 
@@ -657,6 +662,7 @@ if (styleEl) styleEl.value = config.style || "";
 if (vocabularyEl) vocabularyEl.value = config.vocabulary || "";
 if (promptEl) promptEl.value = config.system_prompt || "";
 if (offerEl) offerEl.value = config.offer_description || "";
+if (offerPriceEl) offerPriceEl.value = config.offer_price || "";
 
 const exampleEl = qs("#example_messages");
 if (exampleEl) {
@@ -691,6 +697,7 @@ const vocabulary = vocabularyEl ? String(vocabularyEl.value || "").trim() : "";
 const system_prompt = promptEl ? String(promptEl.value || "").trim() : "";
 const rawExamples = exampleEl ? String(exampleEl.value || "").trim() : "";
 const offer_description = offerEl ? String(offerEl.value || "").trim() : "";
+const offer_price = offerPriceEl ? String(offerPriceEl.value || "").trim() : "";
 
 const parsedExamples = parseExampleMessages(rawExamples);
 
@@ -744,7 +751,8 @@ const payload = {
   vocabulary: vocabulary || null,
   system_prompt,
   example_messages,
-offer_description: offer_description || null,
+  offer_description: offer_description || null,
+  offer_price: offer_price || null,
 };
           await apiFetch(`${API}/config`, {
             method: "POST",

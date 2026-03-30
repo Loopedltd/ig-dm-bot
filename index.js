@@ -594,6 +594,23 @@ function detectSoftIntent(text) {
     String(text || "")
   );
 }
+function detectExplicitBookingLinkRequest(text) {
+  return /send me the link|booking link|book me in|where do i book|send the booking link|can you send the link/i.test(
+    String(text || "")
+  );
+}
+
+function detectOfferQuestion(text) {
+  return /what is this|what's this|whats this|how does it work|what do you actually do|what do you help with|tell me more|how does this work/i.test(
+    String(text || "")
+  );
+}
+
+function detectQuestionAfterLink(text) {
+  return /what is this|what's this|whats this|how much|price|cost|how does it work|tell me more|what do you mean|what is included|what do i get/i.test(
+    String(text || "")
+  );
+}
 
 function detectObjectionType(text) {
   const t = String(text || "").toLowerCase();
@@ -677,30 +694,74 @@ function decideTurnStrategy({
   leadMemory,
   text,
   bookingUrl,
+  cfg,
 }) {
   const currentText = String(text || "").trim();
   const objectionType = detectObjectionType(currentText);
   const asksPrice = detectPriceQuestion(currentText);
+  const asksOfferQuestion = detectOfferQuestion(currentText);
+  const explicitLinkRequest = detectExplicitBookingLinkRequest(currentText);
+  const questionAfterLink = detectQuestionAfterLink(currentText);
   const intentScore = inferIntentScore(currentText, leadMemory);
   const qualificationPresent = hasUsefulQualification(leadMemory);
+
+  const bookingRecentlySent =
+    !!lead?.booking_sent ||
+    !!leadMemory?.last_cta_at ||
+    (leadMemory?.booking_link_sent_count || 0) > 0;
 
   if (lead?.call_completed) {
     return {
       type: "post_call_support",
       asksPrice,
+      asksOfferQuestion,
       objectionType,
       intentScore,
       shouldSendBookingLink: false,
     };
   }
 
-  if (bookingUrl && intentScore >= 4) {
+  if (explicitLinkRequest && bookingUrl) {
     return {
       type: "send_booking_link_now",
       asksPrice,
+      asksOfferQuestion,
       objectionType,
       intentScore,
       shouldSendBookingLink: true,
+    };
+  }
+
+  if (bookingRecentlySent && asksPrice) {
+    return {
+      type: "answer_price_after_cta",
+      asksPrice,
+      asksOfferQuestion,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (bookingRecentlySent && asksOfferQuestion) {
+    return {
+      type: "answer_offer_question_after_cta",
+      asksPrice,
+      asksOfferQuestion,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (bookingRecentlySent && questionAfterLink) {
+    return {
+      type: "answer_question_after_cta",
+      asksPrice,
+      asksOfferQuestion,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: false,
     };
   }
 
@@ -708,19 +769,10 @@ function decideTurnStrategy({
     return {
       type: "handle_think_about_it",
       asksPrice,
+      asksOfferQuestion,
       objectionType,
       intentScore,
       shouldSendBookingLink: false,
-    };
-  }
-
-  if (objectionType === "price" && bookingUrl) {
-    return {
-      type: "handle_price_then_cta",
-      asksPrice,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: true,
     };
   }
 
@@ -728,16 +780,29 @@ function decideTurnStrategy({
     return {
       type: "handle_price_then_cta",
       asksPrice,
+      asksOfferQuestion,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (bookingUrl && intentScore >= 4 && !bookingRecentlySent) {
+    return {
+      type: "send_booking_link_now",
+      asksPrice,
+      asksOfferQuestion,
       objectionType,
       intentScore,
       shouldSendBookingLink: true,
     };
   }
 
-  if (qualificationPresent && bookingUrl && intentScore >= 2) {
+  if (qualificationPresent && bookingUrl && intentScore >= 2 && !bookingRecentlySent) {
     return {
       type: "soft_close_to_booking",
       asksPrice,
+      asksOfferQuestion,
       objectionType,
       intentScore,
       shouldSendBookingLink: true,
@@ -748,6 +813,7 @@ function decideTurnStrategy({
     return {
       type: "ask_qualifying_question",
       asksPrice,
+      asksOfferQuestion,
       objectionType,
       intentScore,
       shouldSendBookingLink: false,
@@ -757,6 +823,7 @@ function decideTurnStrategy({
   return {
     type: "nudge_forward",
     asksPrice,
+    asksOfferQuestion,
     objectionType,
     intentScore,
     shouldSendBookingLink: false,
@@ -768,6 +835,32 @@ function deriveLeadStage({
   leadMemory,
 }) {
   if (lead?.call_completed) return "post_call";
+      : turnStrategy?.type === "answer_price_after_cta"
+      ? [
+          "TURN STRATEGY: answer_price_after_cta",
+          "The booking link has already been sent before.",
+          "Do not resend the booking link.",
+          "Answer the user's price question directly.",
+          "If offer_price exists in context, use it plainly.",
+          "After answering, you may add a light nudge, but do not push hard.",
+        ]
+      : turnStrategy?.type === "answer_offer_question_after_cta"
+      ? [
+          "TURN STRATEGY: answer_offer_question_after_cta",
+          "The booking link has already been sent before.",
+          "Do not resend the booking link.",
+          "Answer what the offer is in plain English.",
+          "If offer_description exists in context, use it naturally.",
+          "Do not dodge the question.",
+        ]
+      : turnStrategy?.type === "answer_question_after_cta"
+      ? [
+          "TURN STRATEGY: answer_question_after_cta",
+          "The booking link has already been sent before.",
+          "Do not resend the booking link.",
+          "Answer the user's question first.",
+          "Sound calm and human, not pushy.",
+        ]
 
   if (turnStrategy?.type === "send_booking_link_now") return "booking_pushed";
   if (turnStrategy?.type === "soft_close_to_booking") return "booking_pushed";
@@ -957,14 +1050,15 @@ const guardrails = [
   "Do not give motivational speeches.",
 
   // 🔥 SALES RULES (NEW)
-  "If user shows buying intent (ready, want to join, how do I start, etc) → STOP asking questions and send the booking link immediately.",
-  "If booking link is available → prioritise sending it over continuing conversation.",
-  "Do not delay the sale with unnecessary questions.",
-  "If user is warm → guide them to booking.",
-  "If user is cold → ask 1 simple question.",
+  "If user clearly asks for the booking link or says they are ready to buy, send the booking link immediately.",
+  "Do not resend the booking link if it was already sent unless the user explicitly asks for it again.",
+  "If the user asks a real follow-up question after the link was sent, answer the question first.",
+  "If user is warm, guide them toward booking without sounding repetitive.",
+  "If user is cold, ask 1 simple question.",
   "Never stay stuck in qualification loop.",
-
-  "Do not invent prices. If asked about price, give direction then move toward booking.",
+  "If asked about price and offer_price exists in context, say it clearly and naturally.",
+  "If asked what the offer is and offer_description exists in context, explain it clearly in plain English.",
+  "Do not invent prices. If price is unknown, be honest and keep the reply natural.",
   `Tone: ${getEffectiveTone(cfg)}.`,
   `Style: ${getEffectiveStyle(cfg)}.`,
   `Vocabulary: ${getEffectiveVocabulary(cfg)}.`,
@@ -1051,7 +1145,9 @@ const exampleMessages = examplesToUse.flatMap((ex) => [
     call_completed: lead?.call_completed ?? false,
     booking_sent: lead?.booking_sent ?? false,
     booking_url_present: !!bookingUrl,
-    user_asked_price: asksPrice,
+    offer_description: cfg?.offer_description || null,
+    offer_price: cfg?.offer_price || null,   
+ user_asked_price: asksPrice,
     user_high_intent: highIntent,
     think_about_it_objection: !!thinkAboutIt,
     manual_override: !!lead?.manual_override,
@@ -1471,13 +1567,16 @@ app.post("/admin/api/clients/create", requireAdmin, async (req, res) => {
 const { data: config, error: configErr } = await supabase
   .from("client_configs")
   .insert({
-    client_id: client.id,
-    stripe_subscription_status: null,
-system_prompt: null,
-tone: "direct",
-style: "short, punchy",
-vocabulary: "casual UK coach",
-  })
+{
+  client_id: client.id,
+  stripe_subscription_status: null,
+  system_prompt: null,
+  tone: "direct",
+  style: "short, punchy",
+  vocabulary: "casual UK coach",
+  offer_description: null,
+  offer_price: null,
+}
   .select()
   .single();
 
@@ -1542,6 +1641,12 @@ if (
   patch.offer_description === null
 ) {
   allowed.offer_description = patch.offer_description;
+}
+if (
+  typeof patch.offer_price === "string" ||
+  patch.offer_price === null
+) {
+  allowed.offer_price = patch.offer_price;
 }
 
     if (typeof patch.bot_paused === "boolean")
@@ -1959,6 +2064,12 @@ if (typeof patch.vocabulary === "string" || patch.vocabulary === null) {
     ) {
       allowed.offer_description = patch.offer_description;
     }
+if (
+  typeof patch.offer_price === "string" ||
+  patch.offer_price === null
+) {
+  allowed.offer_price = patch.offer_price;
+}
 
     const { data, error } = await supabase
       .from("client_configs")
@@ -2084,7 +2195,7 @@ if (used >= MAX_PROMPTS_PER_DAY) {
   });
 }
   try {
-const { instagram_handle, example_messages, offer_description } = req.body || {};
+const { instagram_handle, example_messages, offer_description, offer_price } = req.body || {};
     const handleRaw = String(instagram_handle || "").trim();
 
     if (!handleRaw) {
@@ -2105,6 +2216,8 @@ const exampleMessages =
   String(example_messages || cfg?.example_messages || "").trim();
 const offerDescription =
   String(offer_description || cfg?.offer_description || "").trim();
+const offerPrice =
+  String(offer_price || cfg?.offer_price || "").trim();
     if (!openai) {
       const stub = [
         "You are the coach's Instagram DM assistant.",
@@ -2195,6 +2308,9 @@ IMPORTANT SALES BEHAVIOUR:
 
 WHAT THE COACH SELLS:
 ${offerDescription || "(not provided)"}
+
+PRICE:
+${offerPrice || "(not provided)"}
 
 REAL MESSAGE EXAMPLES FROM THE COACH:
 ${exampleMessages || "(none provided)"}
@@ -2797,12 +2913,13 @@ app.post("/webhook", async (req, res) => {
         const thinkAboutIt = detectThinkAboutIt(text);
         const asksPrice = detectPriceQuestion(text);
         const highIntent = detectHighIntent(text);
-        const turnStrategy = decideTurnStrategy({
-          lead,
-          leadMemory,
-          text,
-          bookingUrl: cfg?.booking_url || null,
-        });
+const turnStrategy = decideTurnStrategy({
+  lead,
+  leadMemory,
+  text,
+  bookingUrl: cfg?.booking_url || null,
+  cfg,
+});
 
         lead.last_message = text;
 
@@ -2819,9 +2936,9 @@ app.post("/webhook", async (req, res) => {
           thinkAboutIt,
         });
 
-        if (turnStrategy?.type === "send_booking_link_now" && cfg?.booking_url) {
-          reply = `${cfg.booking_url}\n\nlet’s get you set up`;
-        }
+if (turnStrategy?.type === "send_booking_link_now" && cfg?.booking_url) {
+  reply = `${cfg.booking_url}\n\nbook in here and we’ll get you sorted`;
+}
 
         if (!reply) return;
 
