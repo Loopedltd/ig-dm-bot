@@ -372,20 +372,18 @@ const offerEl = qs("#offer_description");
         promptStatusEl.textContent =
           "Generating coach voice from your settings...";
       }
-
-      const data = await apiFetch(`${API}/generate-prompt`, {
-        method: "POST",
+const data = await apiFetch(`${API}/generate-prompt`, {
+  method: "POST",
 body: JSON.stringify({
   instagram_handle,
   example_messages: exampleEl
     ? String(exampleEl.value || "").trim()
     : "",
-  tone: toneEl ? String(toneEl.value || "").trim() : "",
-  style: styleEl ? String(styleEl.value || "").trim() : "",
-  vocabulary: vocabularyEl ? String(vocabularyEl.value || "").trim() : "",
+  offer_description: offerEl
+    ? String(offerEl.value || "").trim()
+    : "",
 }),
-      });
-
+});
       if (promptEl && data?.system_prompt) {
         promptEl.value = data.system_prompt;
       }
@@ -423,6 +421,7 @@ body: JSON.stringify({
 async function loadPromptUsageStatus() {
 const el = qs("#promptLimitStatus");
   if (!el) return;
+console.log("TOKEN:", localStorage.getItem("coach_token"));
 
   try {
     const data = await apiFetch(`${API}/prompt-usage`, {
@@ -554,9 +553,7 @@ async function loadManualTakeovers() {
 
 list.innerHTML = overridden
   .map((lead) => {
-    const name = lead.ig_username
-      ? `@${lead.ig_username}`
-      : `Lead ${String(lead.ig_psid || "").slice(-4)}`;
+const name = `Lead ${String(lead.ig_psid || "").slice(-4)}`;
 
     return `
       <div class="takeoverRow">
@@ -669,10 +666,12 @@ wireInstagramConnectButton();
 wireGeneratePromptButton();
 wireGlobalPauseButton();
 wireManualTakeoversRefreshButton();
-await loadInstagramConnectionStatus();
-await loadPromptUsageStatus();
-await loadGlobalPauseStatus();
-await loadManualTakeovers();
+await Promise.allSettled([
+  loadInstagramConnectionStatus(),
+  loadPromptUsageStatus(),
+  loadGlobalPauseStatus(),
+  loadManualTakeovers(),
+]);
 
     if (saveBtn && !saveBtn.__wired) {
       saveBtn.__wired = true;
