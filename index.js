@@ -284,6 +284,16 @@ function stripWeakPhrases(text) {
 
   return out;
 }
+function stripOverusedFillers(text) {
+  let out = String(text || "").trim();
+
+  out = out.replace(/\bjust\s+and\b/gi, "and");
+  out = out.replace(/\bjust\s*!/gi, "");
+  out = out.replace(/\bjust\s*$/gi, "");
+  out = out.replace(/\s{2,}/g, " ").trim();
+
+  return out;
+}
 
 function humaniseText(text) {
   let t = String(text || "").trim();
@@ -357,40 +367,36 @@ function parseExampleMessages(raw) {
 function getDefaultFallbackExamples() {
   return [
     {
-      user: "i'm not sure what skill to focus on",
-      assistant: "fair, what are you actually leaning toward right now?",
-    },
-    {
-      user: "i want to make more money online",
-      assistant: "yeah makes sense, what have you tried already?",
-    },
-    {
-      user: "how does it work",
-      assistant: "pretty simple, i’ll explain it properly but first where are you at right now?",
+      user: "what do you actually help with",
+      assistant: "i help people get a proper result with structure, support and a plan that actually fits them",
     },
     {
       user: "how much is it?",
-      assistant: "i’ll run you through it properly, easiest thing is to get you booked in here",
+      assistant: "it’s £200 setup and £90 a month after that",
+    },
+    {
+      user: "how does it work",
+      assistant: "you book in, we go through where you’re at, then we get everything set up properly from there",
     },
     {
       user: "i want it",
-      assistant: "perfect, use this and get yourself booked in",
+      assistant: "good, book in here and we’ll get you sorted",
     },
     {
       user: "send me the link",
-      assistant: "here you go, get booked in and we’ll take it from there",
+      assistant: "here you go, pick a slot that works for you",
     },
     {
       user: "i’ll think about it",
-      assistant: "yeah that’s fine, what do you need to see to make a decision?",
+      assistant: "fair, what do you need to see before you can decide properly?",
     },
     {
       user: "not sure if it’s for me",
-      assistant: "fair, what’s making you unsure?",
+      assistant: "what’s making you unsure?",
     },
     {
       user: "sounds good",
-      assistant: "good, then let’s stop dragging it out and get you booked in",
+      assistant: "then let’s stop dragging it out and get you booked in",
     },
   ];
 }
@@ -953,6 +959,29 @@ function isReplyTooSimilar(newReply, previousAssistantMessages = []) {
     return ratio >= 0.72;
   });
 }
+function looksIncompleteReply(text) {
+  const t = String(text || "").trim().toLowerCase();
+  if (!t) return true;
+
+  const badEndings = [
+    "just",
+    "and",
+    "or",
+    "if",
+    "but",
+    "so",
+    "because",
+    "you can",
+    "get started, just",
+    "book through the link i sent earlier just",
+  ];
+
+  if (badEndings.some((x) => t.endsWith(x))) return true;
+
+  if (t.length < 12) return true;
+
+  return false;
+}
 
 function getFallbackReply({ turnStrategy, cfg, leadMemory }) {
   const bookingUrl = cfg?.booking_url || "";
@@ -963,18 +992,21 @@ function getFallbackReply({ turnStrategy, cfg, leadMemory }) {
         ? `it’s ${cfg.offer_price} - want me to explain how it works as well?`
         : `i can break the pricing down properly for you - want the quick version?`,
     ],
-    answer_offer_question_after_cta: [
-      `it’s basically ${String(cfg?.offer_description || "a tailored offer").split("\n")[0].replace("What you do:", "").trim()}`,
-      `pretty much this is for people who want a clear result without guessing their next move`,
-    ],
-    answer_start_process_after_cta: [
-      `you book a time through the link, we go through your situation, and if it makes sense we get you onboarded from there`,
-      `basically you pick a slot, we speak properly, then if it’s a fit we get things moving straight after`,
-    ],
-    answer_who_its_for_after_cta: [
-      `it’s for people who want proper structure and support, not people just half trying it`,
-      `mainly for people who actually want a result and need the right setup around them`,
-    ],
+answer_offer_question_after_cta: [
+  cfg?.offer_description
+    ? String(cfg.offer_description).trim()
+    : `it’s a tailored service built to help you get a proper result without guessing`,
+],
+answer_start_process_after_cta: [
+  cfg?.how_it_works
+    ? String(cfg.how_it_works).trim()
+    : `you book in, we go through where you're at, then we get everything set up properly from there`,
+],
+answer_who_its_for_after_cta: [
+  cfg?.who_its_for
+    ? String(cfg.who_its_for).trim()
+    : `it’s for people who want proper help and structure, not people just winging it`,
+],
     handle_think_about_it: [
       `fair - what do you need to see before you can decide properly?`,
       `no stress - what’s the main thing you’re unsure about?`,
@@ -1006,6 +1038,50 @@ function getFallbackReply({ turnStrategy, cfg, leadMemory }) {
   ];
 
   return options[Math.floor(Math.random() * options.length)];
+}
+function buildDeterministicReply({ turnStrategy, cfg }) {
+  const offerDescription = String(cfg?.offer_description || "").trim();
+  const offerPrice = String(cfg?.offer_price || "").trim();
+
+  if (
+    turnStrategy?.type === "answer_price_after_cta" ||
+    turnStrategy?.type === "handle_price_then_cta"
+  ) {
+    if (offerPrice) {
+      return `it’s ${offerPrice}`;
+    }
+  }
+
+if (
+  turnStrategy?.type === "answer_offer_question_after_cta" ||
+  turnStrategy?.type === "answer_what_you_sell_after_cta"
+) {
+  if (offerDescription) {
+    return offerDescription;
+  }
+}
+
+  if (turnStrategy?.type === "answer_start_process_after_cta") {
+    if (cfg?.how_it_works) {
+      return String(cfg.how_it_works).trim();
+    }
+
+    if (offerDescription) {
+      return `you book in, we go through where you're at, then we get everything set up properly from there`;
+    }
+  }
+
+  if (turnStrategy?.type === "answer_who_its_for_after_cta") {
+    if (cfg?.who_its_for) {
+      return String(cfg.who_its_for).trim();
+    }
+
+    if (offerDescription) {
+      return `it’s for people who want proper help and structure, not people just winging it`;
+    }
+  }
+
+  return null;
 }
 function deriveConversationState({ lead, leadMemory, userIntent }) {
   if (lead?.call_completed) return "post_call";
@@ -1507,63 +1583,29 @@ async function generateAiReply({
 }) {
   if (!openai) return null;
 
-const systemBase =
-  shouldUseCustomSystemPrompt(cfg)
-    ? cfg.system_prompt
-    : `
+const baseCloserPrompt = `
 You are a high-converting Instagram DM setter and closer.
 
-You talk like a real person in Instagram DMs, not a sales rep, not support, and not a chatbot.
+Your job is to move the conversation toward the next step fast and naturally.
 
-PRIMARY JOB:
-Move the conversation toward a booked call or clear next step as fast as naturally possible.
-
-CORE BEHAVIOUR:
-- Be direct, calm, confident, and conversational
-- Sound like someone who does this all day
-- Keep replies short
-- Do not over-explain
-- Do not act needy
-- Do not try to impress the lead with long answers
-- Lead the conversation instead of reacting passively
-- If the lead is warm, stop over-qualifying and move forward
-- If the lead is high intent, close immediately
-- If the lead hesitates, stay composed and pull out the real objection
-
-HOW YOU SHOULD SOUND:
-- casual
-- slightly blunt
-- socially aware
-- confident without sounding try-hard
-- relaxed, not stiff
-- not overly enthusiastic
-- not corporate
-- imperfect grammar is fine if natural
-
-WHAT TO AVOID:
-- long paragraphs
-- corporate phrasing
-- “happy to help”
-- “let me know”
-- “I’d love to”
-- over-validation
-- fake excitement
-- multiple questions at once
-- repeating the same question in different words
-
-CLOSING RULE:
-If the lead is ready, interested, asks how it works, asks price, asks how to start, or asks for the link, your default bias should be to move them toward booking instead of stretching the conversation.
-
-QUESTION RULE:
-Only ask a question when it genuinely helps move the sale forward.
-
-MESSAGE LENGTH:
-Usually 1 sentence.
-Max 2 short sentences.
-
-GOAL:
-Make the lead feel like they’re speaking to a sharp human closer who knows where the conversation is going.
+RULES:
+- sound like a real person in DMs
+- short replies only
+- answer direct questions directly
+- do not dodge price, offer, process, or who-it's-for questions
+- if intent is high, move to booking immediately
+- do not repeat the same meaning again
+- do not sound like support
+- do not sound needy
+- do not over-explain
+- do not stay stuck in endless qualification
 `;
+
+const coachOverlay = cleanMemoryField(cfg?.system_prompt)
+  ? `\n\nCOACH PREFERENCES:\n${cfg.system_prompt}`
+  : "";
+
+const systemBase = `${baseCloserPrompt}${coachOverlay}`;
 const guardrails = [
   "Keep replies short (1-2 sentences).",
   "Ask ONE clear question OR move to a clear next step.",
@@ -1823,13 +1865,13 @@ content: [
       model: process.env.OPENAI_MODEL || "gpt-4o-mini",
       messages,
 temperature: 0.45,
-      max_tokens: 160,
+max_tokens: 260,
     });
 
     const text = resp?.choices?.[0]?.message?.content?.trim();
     if (!text) return null;
 
-return sanitizeReply(stripWeakPhrases(text));
+return sanitizeReply(stripOverusedFillers(stripWeakPhrases(text)));
   } catch (e) {
     console.warn("⚠️ OpenAI error, falling back:", e?.message || e);
     return null;
@@ -2191,6 +2233,8 @@ const { data: config, error: configErr } = await supabase
     vocabulary: "casual UK coach",
     offer_description: null,
     offer_price: null,
+    how_it_works: null,
+    who_its_for: null,
   })
   .select()
   .single();
@@ -2262,6 +2306,19 @@ if (
   patch.offer_price === null
 ) {
   allowed.offer_price = patch.offer_price;
+}
+if (
+  typeof patch.how_it_works === "string" ||
+  patch.how_it_works === null
+) {
+  allowed.how_it_works = patch.how_it_works;
+}
+
+if (
+  typeof patch.who_its_for === "string" ||
+  patch.who_its_for === null
+) {
+  allowed.who_its_for = patch.who_its_for;
 }
 
     if (typeof patch.bot_paused === "boolean")
@@ -2685,6 +2742,19 @@ if (
 ) {
   allowed.offer_price = patch.offer_price;
 }
+if (
+  typeof patch.how_it_works === "string" ||
+  patch.how_it_works === null
+) {
+  allowed.how_it_works = patch.how_it_works;
+}
+
+if (
+  typeof patch.who_its_for === "string" ||
+  patch.who_its_for === null
+) {
+  allowed.who_its_for = patch.who_its_for;
+}
 
     const { data, error } = await supabase
       .from("client_configs")
@@ -2810,8 +2880,16 @@ if (used >= MAX_PROMPTS_PER_DAY) {
   });
 }
   try {
-const { instagram_handle, example_messages, offer_description, offer_price } = req.body || {};
-    const handleRaw = String(instagram_handle || "").trim();
+const {
+  instagram_handle,
+  example_messages,
+  offer_description,
+  offer_price,
+  how_it_works,
+  who_its_for,
+} = req.body || {};
+
+const handleRaw = String(instagram_handle || "").trim();
 
     if (!handleRaw) {
       return safeJson(res, 400, { error: "instagram_handle is required" });
@@ -2833,7 +2911,12 @@ const offerDescription =
   String(offer_description || cfg?.offer_description || "").trim();
 const offerPrice =
   String(offer_price || cfg?.offer_price || "").trim();
-    if (!openai) {
+const howItWorks =
+  String(how_it_works || cfg?.how_it_works || "").trim();
+
+const whoItsFor =
+  String(who_its_for || cfg?.who_its_for || "").trim();    
+if (!openai) {
       const stub = [
         "You are the coach's Instagram DM assistant.",
         "Tone: friendly, confident, concise, UK vibe.",
@@ -2926,6 +3009,12 @@ ${offerDescription || "(not provided)"}
 
 PRICE:
 ${offerPrice || "(not provided)"}
+
+WHO IT'S FOR:
+${whoItsFor || "(not provided)"}
+
+HOW IT WORKS:
+${howItWorks || "(not provided)"}
 
 REAL MESSAGE EXAMPLES FROM THE COACH:
 ${exampleMessages || "(none provided)"}
@@ -3559,18 +3648,27 @@ turnStrategy = preventRepeatedReplyType(turnStrategy, leadMemory);
 
         lead.last_message = text;
 
-        let reply = await generateAiReply({
-          cfg,
-          lead,
-          historyMessages,
-          leadMemory,
-          turnStrategy,
-          postCallMode: lead.call_completed,
-          asksPrice,
-          highIntent,
-          bookingUrl: cfg?.booking_url || null,
-          thinkAboutIt,
-        });
+let reply = buildDeterministicReply({
+  turnStrategy,
+  cfg,
+});
+
+const usedDeterministicReply = !!reply;
+
+if (!reply) {
+  reply = await generateAiReply({
+    cfg,
+    lead,
+    historyMessages,
+    leadMemory,
+    turnStrategy,
+    postCallMode: lead.call_completed,
+    asksPrice,
+    highIntent,
+    bookingUrl: cfg?.booking_url || null,
+    thinkAboutIt,
+  });
+}
 
 if (turnStrategy?.type === "send_booking_link_now" && cfg?.booking_url) {
   const ctaOptions = [
@@ -3582,25 +3680,43 @@ if (turnStrategy?.type === "send_booking_link_now" && cfg?.booking_url) {
   reply = ctaOptions[Math.floor(Math.random() * ctaOptions.length)];
 }
 
-        if (!reply) return;
+if (!reply || looksIncompleteReply(reply)) {
+  reply = getFallbackReply({
+    turnStrategy,
+    cfg,
+    leadMemory,
+  });
+}
 
-        reply = humaniseText(reply);
+if (!reply) return;
 
-        const recentAssistantHistory = (historyMessages || [])
-          .filter((m) => m?.role === "assistant")
-          .slice(-5);
+if (!usedDeterministicReply) {
+  reply = humaniseText(reply);
+}
 
-        if (isReplyTooSimilar(reply, recentAssistantHistory)) {
-          const fallback = getFallbackReply({
-            turnStrategy,
-            cfg,
-            leadMemory,
-          });
+const recentAssistantHistory = (historyMessages || [])
+  .filter((m) => m?.role === "assistant")
+  .slice(-5);
 
-          if (fallback) {
-            reply = humaniseText(fallback);
-          }
-        }
+if (isReplyTooSimilar(reply, recentAssistantHistory) || looksIncompleteReply(reply)) {
+  const fallback = getFallbackReply({
+    turnStrategy,
+    cfg,
+    leadMemory,
+  });
+
+  if (fallback) {
+    const fallbackIsStructured =
+      turnStrategy?.type === "answer_price_after_cta" ||
+      turnStrategy?.type === "handle_price_then_cta" ||
+      turnStrategy?.type === "answer_offer_question_after_cta" ||
+      turnStrategy?.type === "answer_start_process_after_cta" ||
+      turnStrategy?.type === "answer_who_its_for_after_cta" ||
+      turnStrategy?.type === "answer_what_you_sell_after_cta";
+
+    reply = fallbackIsStructured ? fallback : humaniseText(fallback);
+  }
+}
 
         try {
           const nextStage = deriveLeadStage({

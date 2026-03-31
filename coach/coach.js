@@ -392,7 +392,7 @@ const data = await apiFetch(`${API}/generate-prompt`, {
     example_messages: exampleEl
       ? String(exampleEl.value || "").trim()
       : "",
-offer_description: `
+    offer_description: `
 What you do:
 ${offerWhatEl ? String(offerWhatEl.value || "").trim() : ""}
 
@@ -405,11 +405,18 @@ ${offerAudienceEl ? String(offerAudienceEl.value || "").trim() : ""}
 How it works:
 ${offerProcessEl ? String(offerProcessEl.value || "").trim() : ""}
 `.trim(),
-offer_price: offerPriceEl
-  ? String(offerPriceEl.value || "").trim()
-  : "",
+    offer_price: offerPriceEl
+      ? String(offerPriceEl.value || "").trim()
+      : "",
+    who_its_for: offerAudienceEl
+      ? String(offerAudienceEl.value || "").trim()
+      : "",
+    how_it_works: offerProcessEl
+      ? String(offerProcessEl.value || "").trim()
+      : "",
   }),
 });
+
       if (promptEl && data?.system_prompt) {
         promptEl.value = data.system_prompt;
       }
@@ -704,10 +711,13 @@ if (offerFeaturesEl) {
   offerFeaturesEl.value = extractSection("What they get", "Who it's for");
 }
 if (offerAudienceEl) {
-  offerAudienceEl.value = extractSection("Who it's for", "How it works");
+  offerAudienceEl.value =
+    config.who_its_for || extractSection("Who it's for", "How it works");
 }
+
 if (offerProcessEl) {
-  offerProcessEl.value = extractSection("How it works", null);
+  offerProcessEl.value =
+    config.how_it_works || extractSection("How it works", null);
 }
 if (offerPriceEl) offerPriceEl.value = config.offer_price || "";
 
@@ -841,6 +851,8 @@ const payload = {
   example_messages,
   offer_description: offer_description || null,
   offer_price: offer_price || null,
+  who_its_for: offer_audience || null,
+  how_it_works: offer_process || null,
 };
           await apiFetch(`${API}/config`, {
             method: "POST",
