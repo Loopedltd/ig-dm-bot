@@ -443,6 +443,10 @@ function normaliseIntentLevel(value) {
 }
 
 function mergeLeadMemory(existing, patch) {
+  const toNumber = (value, fallback = 0) => {
+    return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  };
+
   return {
     summary: cleanMemoryField(patch.summary) || existing?.summary || null,
     goal: cleanMemoryField(patch.goal) || existing?.goal || null,
@@ -465,13 +469,114 @@ function mergeLeadMemory(existing, patch) {
       cleanMemoryField(patch.last_question_asked) ||
       existing?.last_question_asked ||
       null,
+
     last_cta_type:
       cleanMemoryField(patch.last_cta_type) || existing?.last_cta_type || null,
     last_cta_at: patch.last_cta_at || existing?.last_cta_at || null,
+
     booking_link_sent_count:
       typeof patch.booking_link_sent_count === "number"
         ? patch.booking_link_sent_count
         : existing?.booking_link_sent_count || 0,
+
+    last_user_intent:
+      cleanMemoryField(patch.last_user_intent) ||
+      existing?.last_user_intent ||
+      null,
+
+    last_bot_reply_type:
+      cleanMemoryField(patch.last_bot_reply_type) ||
+      existing?.last_bot_reply_type ||
+      null,
+
+    conversation_state:
+      cleanMemoryField(patch.conversation_state) ||
+      existing?.conversation_state ||
+      null,
+
+    answered_price_count:
+      typeof patch.answered_price_count === "number"
+        ? patch.answered_price_count
+        : toNumber(existing?.answered_price_count, 0),
+
+    answered_offer_count:
+      typeof patch.answered_offer_count === "number"
+        ? patch.answered_offer_count
+        : toNumber(existing?.answered_offer_count, 0),
+
+    answered_process_count:
+      typeof patch.answered_process_count === "number"
+        ? patch.answered_process_count
+        : toNumber(existing?.answered_process_count, 0),
+
+    answered_who_its_for_count:
+      typeof patch.answered_who_its_for_count === "number"
+        ? patch.answered_who_its_for_count
+        : toNumber(existing?.answered_who_its_for_count, 0),
+  };
+}
+
+  return {
+    summary: cleanMemoryField(patch.summary) || existing?.summary || null,
+    goal: cleanMemoryField(patch.goal) || existing?.goal || null,
+    current_situation:
+      cleanMemoryField(patch.current_situation) ||
+      existing?.current_situation ||
+      null,
+    pain_points:
+      cleanMemoryField(patch.pain_points) || existing?.pain_points || null,
+    desired_outcome:
+      cleanMemoryField(patch.desired_outcome) ||
+      existing?.desired_outcome ||
+      null,
+    objection: cleanMemoryField(patch.objection) || existing?.objection || null,
+    intent_level:
+      normaliseIntentLevel(patch.intent_level) ||
+      existing?.intent_level ||
+      null,
+    last_question_asked:
+      cleanMemoryField(patch.last_question_asked) ||
+      existing?.last_question_asked ||
+      null,
+
+    last_cta_type:
+      cleanMemoryField(patch.last_cta_type) || existing?.last_cta_type || null,
+    last_cta_at: patch.last_cta_at || existing?.last_cta_at || null,
+
+    booking_link_sent_count:
+      typeof patch.booking_link_sent_count === "number"
+        ? patch.booking_link_sent_count
+        : existing?.booking_link_sent_count || 0,
+
+    last_user_intent:
+      cleanMemoryField(patch.last_user_intent) ||
+      existing?.last_user_intent ||
+      null,
+
+    last_bot_reply_type:
+      cleanMemoryField(patch.last_bot_reply_type) ||
+      existing?.last_bot_reply_type ||
+      null,
+
+    answered_price_count:
+      typeof patch.answered_price_count === "number"
+        ? patch.answered_price_count
+        : toNumber(existing?.answered_price_count, 0),
+
+    answered_offer_count:
+      typeof patch.answered_offer_count === "number"
+        ? patch.answered_offer_count
+        : toNumber(existing?.answered_offer_count, 0),
+
+    answered_process_count:
+      typeof patch.answered_process_count === "number"
+        ? patch.answered_process_count
+        : toNumber(existing?.answered_process_count, 0),
+
+    answered_who_its_for_count:
+      typeof patch.answered_who_its_for_count === "number"
+        ? patch.answered_who_its_for_count
+        : toNumber(existing?.answered_who_its_for_count, 0),
   };
 }
 
@@ -601,7 +706,7 @@ function detectPriceQuestion(text) {
 }
 
 function detectHighIntent(text) {
-  return /ready|start|sign up|book|buy|join|i want it|let's do it|lets do it|how do i start|send me the link|where do i sign up|how do i join/i.test(
+  return /ready to buy|i want it|send me the link|book me in|where do i sign up|how do i join|let's do it|lets do it|i'm ready|im ready|sign me up|i want to join|i want to book/i.test(
     String(text || "")
   );
 }
@@ -705,6 +810,432 @@ function hasUsefulQualification(leadMemory) {
     leadMemory?.desired_outcome
   );
 }
+function detectUserIntent(text) {
+  const t = String(text || "").trim().toLowerCase();
+
+  if (!t) return "unknown";
+  if (detectExplicitBookingLinkRequest(t)) return "booking_link_request";
+  if (detectStartProcessQuestion(t)) return "start_process_question";
+  if (detectWhoItsForQuestion(t)) return "who_its_for_question";
+  if (detectWhatYouSellQuestion(t) || detectOfferQuestion(t)) return "offer_question";
+  if (detectPriceQuestion(t)) return "price_question";
+  if (detectThinkAboutIt(t)) return "think_about_it";
+  if (detectHighIntent(t)) return "high_intent";
+  if (detectSoftIntent(t)) return "soft_intent";
+
+  return "general";
+}
+
+function getReplyTypeFromTurnStrategy(turnStrategy) {
+  const type = String(turnStrategy?.type || "");
+
+  if (
+    type === "send_booking_link_now" ||
+    type === "soft_close_to_booking"
+  ) {
+    return "booking_cta";
+  }
+
+  if (
+    type === "answer_price_after_cta" ||
+    type === "handle_price_then_cta"
+  ) {
+    return "price_answer";
+  }
+
+  if (
+    type === "answer_offer_question_after_cta" ||
+    type === "answer_what_you_sell_after_cta"
+  ) {
+    return "offer_answer";
+  }
+
+  if (type === "answer_start_process_after_cta") {
+    return "process_answer";
+  }
+
+  if (type === "answer_who_its_for_after_cta") {
+    return "who_its_for_answer";
+  }
+
+  if (type === "handle_think_about_it") {
+    return "objection_probe";
+  }
+
+  if (type === "ask_qualifying_question") {
+    return "qualification_question";
+  }
+
+  if (
+    type === "answer_question_after_cta" ||
+    type === "post_call_support" ||
+    type === "nudge_forward"
+  ) {
+    return "general_answer";
+  }
+
+  return "general_answer";
+}
+
+function preventRepeatedReplyType(turnStrategy, leadMemory) {
+  const nextReplyType = getReplyTypeFromTurnStrategy(turnStrategy);
+  const lastReplyType = String(leadMemory?.last_bot_reply_type || "");
+
+  if (!lastReplyType || nextReplyType !== lastReplyType) {
+    return turnStrategy;
+  }
+
+  if (nextReplyType === "booking_cta") {
+    return {
+      ...turnStrategy,
+      type: "answer_question_after_cta",
+      shouldSendBookingLink: false,
+      forcedVariation: true,
+    };
+  }
+
+  if (nextReplyType === "qualification_question") {
+    return {
+      ...turnStrategy,
+      type: "nudge_forward",
+      shouldSendBookingLink: false,
+      forcedVariation: true,
+    };
+  }
+
+  if (nextReplyType === "objection_probe") {
+    return {
+      ...turnStrategy,
+      type: "nudge_forward",
+      shouldSendBookingLink: false,
+      forcedVariation: true,
+    };
+  }
+
+  if (nextReplyType === "price_answer") {
+    return {
+      ...turnStrategy,
+      type: "answer_question_after_cta",
+      shouldSendBookingLink: false,
+      forcedVariation: true,
+    };
+  }
+
+  if (nextReplyType === "offer_answer") {
+    return {
+      ...turnStrategy,
+      type: "answer_question_after_cta",
+      shouldSendBookingLink: false,
+      forcedVariation: true,
+    };
+  }
+
+  if (nextReplyType === "process_answer") {
+    return {
+      ...turnStrategy,
+      type: "answer_question_after_cta",
+      shouldSendBookingLink: false,
+      forcedVariation: true,
+    };
+  }
+
+  if (nextReplyType === "who_its_for_answer") {
+    return {
+      ...turnStrategy,
+      type: "answer_question_after_cta",
+      shouldSendBookingLink: false,
+      forcedVariation: true,
+    };
+  }
+
+  return turnStrategy;
+}
+
+function buildReplyTrackingPatch(existingMemory, turnStrategy) {
+  const replyType = getReplyTypeFromTurnStrategy(turnStrategy);
+
+  return {
+    last_bot_reply_type: replyType,
+    answered_price_count:
+      replyType === "price_answer"
+        ? (existingMemory?.answered_price_count || 0) + 1
+        : existingMemory?.answered_price_count || 0,
+
+    answered_offer_count:
+      replyType === "offer_answer"
+        ? (existingMemory?.answered_offer_count || 0) + 1
+        : existingMemory?.answered_offer_count || 0,
+
+    answered_process_count:
+      replyType === "process_answer"
+        ? (existingMemory?.answered_process_count || 0) + 1
+        : existingMemory?.answered_process_count || 0,
+
+    answered_who_its_for_count:
+      replyType === "who_its_for_answer"
+        ? (existingMemory?.answered_who_its_for_count || 0) + 1
+        : existingMemory?.answered_who_its_for_count || 0,
+  };
+}
+function normaliseForSimilarity(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getTokenSet(text) {
+  return new Set(normaliseForSimilarity(text).split(" ").filter(Boolean));
+}
+
+function getOverlapRatio(a, b) {
+  const setA = getTokenSet(a);
+  const setB = getTokenSet(b);
+
+  if (!setA.size || !setB.size) return 0;
+
+  let overlap = 0;
+  for (const token of setA) {
+    if (setB.has(token)) overlap++;
+  }
+
+  return overlap / Math.max(setA.size, setB.size);
+}
+
+function isReplyTooSimilar(newReply, previousAssistantMessages = []) {
+  const recentAssistantMessages = previousAssistantMessages
+    .filter((m) => m?.role === "assistant")
+    .slice(-3)
+    .map((m) => String(m.content || "").trim())
+    .filter(Boolean);
+
+  if (!newReply) return false;
+
+  return recentAssistantMessages.some((oldReply) => {
+    const ratio = getOverlapRatio(newReply, oldReply);
+    return ratio >= 0.72;
+  });
+}
+
+function getFallbackReply({ turnStrategy, cfg, leadMemory }) {
+  const bookingUrl = cfg?.booking_url || "";
+
+  const map = {
+    answer_price_after_cta: [
+      cfg?.offer_price
+        ? `it’s ${cfg.offer_price} - want me to explain how it works as well?`
+        : `i can break the pricing down properly for you - want the quick version?`,
+    ],
+    answer_offer_question_after_cta: [
+      `it’s basically ${String(cfg?.offer_description || "a tailored offer").split("\n")[0].replace("What you do:", "").trim()}`,
+      `pretty much this is for people who want a clear result without guessing their next move`,
+    ],
+    answer_start_process_after_cta: [
+      `you book a time through the link, we go through your situation, and if it makes sense we get you onboarded from there`,
+      `basically you pick a slot, we speak properly, then if it’s a fit we get things moving straight after`,
+    ],
+    answer_who_its_for_after_cta: [
+      `it’s for people who want proper structure and support, not people just half trying it`,
+      `mainly for people who actually want a result and need the right setup around them`,
+    ],
+    handle_think_about_it: [
+      `fair - what do you need to see before you can decide properly?`,
+      `no stress - what’s the main thing you’re unsure about?`,
+    ],
+    ask_qualifying_question: [
+      `what are you trying to sort out right now?`,
+      `what’s the main result you want at the minute?`,
+    ],
+    nudge_forward: [
+      `got you - what’s the main thing stopping you from moving on it now?`,
+      `fair - are you just looking around or do you actually want help with it?`,
+    ],
+    soft_close_to_booking: bookingUrl
+      ? [
+          `makes sense - use this and grab a slot that works for you ${bookingUrl}`,
+          `best next step is just book in here and we’ll go through it properly ${bookingUrl}`,
+        ]
+      : [`makes sense - best next step is we go through it properly`],
+    send_booking_link_now: bookingUrl
+      ? [
+          `${bookingUrl}\n\nuse this and pick a time that works for you`,
+          `${bookingUrl}\n\nbook in here and we’ll take it from there`,
+        ]
+      : [`best thing is get booked in and we’ll go through it properly`],
+  };
+
+  const options = map[turnStrategy?.type] || [
+    `got you - tell me the main thing you want help with`,
+  ];
+
+  return options[Math.floor(Math.random() * options.length)];
+}
+function deriveConversationState({ lead, leadMemory, userIntent }) {
+  if (lead?.call_completed) return "post_call";
+
+  const bookingSent =
+    !!lead?.booking_sent ||
+    !!leadMemory?.last_cta_at ||
+    (leadMemory?.booking_link_sent_count || 0) > 0;
+
+  const hasQualification = hasUsefulQualification(leadMemory);
+  const objection = String(leadMemory?.objection || "").toLowerCase();
+
+  if (bookingSent) {
+    if (
+      userIntent === "price_question" ||
+      userIntent === "offer_question" ||
+      userIntent === "start_process_question" ||
+      userIntent === "who_its_for_question"
+    ) {
+      return "post_cta_followup";
+    }
+
+    return "booking_cta_sent";
+  }
+
+  if (objection) return "objection_handling";
+
+  if (hasQualification && leadMemory?.intent_level === "hot") {
+    return "ready_to_close";
+  }
+
+  if (hasQualification && leadMemory?.intent_level === "warm") {
+    return "warm_qualified";
+  }
+
+  if (hasQualification) {
+    return "qualified";
+  }
+
+  return "new_lead";
+}
+
+function decideTurnStrategyFromIntent({
+  userIntent,
+  conversationState,
+  lead,
+  leadMemory,
+  text,
+  bookingUrl,
+}) {
+  const intentScore = inferIntentScore(text, leadMemory);
+  const bookingRecentlySent =
+    !!lead?.booking_sent ||
+    !!leadMemory?.last_cta_at ||
+    (leadMemory?.booking_link_sent_count || 0) > 0;
+
+  if (conversationState === "post_call") {
+    return {
+      type: "post_call_support",
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (userIntent === "booking_link_request" && bookingUrl) {
+    return {
+      type: "send_booking_link_now",
+      intentScore,
+      shouldSendBookingLink: true,
+    };
+  }
+
+  if (conversationState === "post_cta_followup") {
+    if (userIntent === "price_question") {
+      return {
+        type: "answer_price_after_cta",
+        intentScore,
+        shouldSendBookingLink: false,
+      };
+    }
+
+    if (userIntent === "offer_question") {
+      return {
+        type: "answer_offer_question_after_cta",
+        intentScore,
+        shouldSendBookingLink: false,
+      };
+    }
+
+    if (userIntent === "start_process_question") {
+      return {
+        type: "answer_start_process_after_cta",
+        intentScore,
+        shouldSendBookingLink: false,
+      };
+    }
+
+    if (userIntent === "who_its_for_question") {
+      return {
+        type: "answer_who_its_for_after_cta",
+        intentScore,
+        shouldSendBookingLink: false,
+      };
+    }
+
+    return {
+      type: "answer_question_after_cta",
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (userIntent === "think_about_it") {
+    return {
+      type: "handle_think_about_it",
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (userIntent === "price_question" && bookingUrl && !bookingRecentlySent) {
+    return {
+      type: "handle_price_then_cta",
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (
+    (conversationState === "ready_to_close" || intentScore >= 4) &&
+    bookingUrl &&
+    !bookingRecentlySent
+  ) {
+    return {
+      type: "send_booking_link_now",
+      intentScore,
+      shouldSendBookingLink: true,
+    };
+  }
+
+  if (
+    (conversationState === "warm_qualified" || intentScore >= 2) &&
+    bookingUrl &&
+    !bookingRecentlySent
+  ) {
+    return {
+      type: "soft_close_to_booking",
+      intentScore,
+      shouldSendBookingLink: true,
+    };
+  }
+
+  if (conversationState === "new_lead") {
+    return {
+      type: "ask_qualifying_question",
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  return {
+    type: "nudge_forward",
+    intentScore,
+    shouldSendBookingLink: false,
+  };
+}
 
 function decideTurnStrategy({
   lead,
@@ -713,17 +1244,50 @@ function decideTurnStrategy({
   bookingUrl,
   cfg,
 }) {
-const currentText = String(text || "").trim();
-const objectionType = detectObjectionType(currentText);
-const asksPrice = detectPriceQuestion(currentText);
-const asksOfferQuestion = detectOfferQuestion(currentText);
-const asksStartProcess = detectStartProcessQuestion(currentText);
-const asksWhoItsFor = detectWhoItsForQuestion(currentText);
-const asksWhatYouSell = detectWhatYouSellQuestion(currentText);
-const explicitLinkRequest = detectExplicitBookingLinkRequest(currentText);
-const questionAfterLink = detectQuestionAfterLink(currentText);
-const intentScore = inferIntentScore(currentText, leadMemory);
-const qualificationPresent = hasUsefulQualification(leadMemory);
+  const currentText = String(text || "").trim();
+  const objectionType = detectObjectionType(currentText);
+  const asksPrice = detectPriceQuestion(currentText);
+  const asksOfferQuestion = detectOfferQuestion(currentText);
+  const asksStartProcess = detectStartProcessQuestion(currentText);
+  const asksWhoItsFor = detectWhoItsForQuestion(currentText);
+  const asksWhatYouSell = detectWhatYouSellQuestion(currentText);
+  const explicitLinkRequest = detectExplicitBookingLinkRequest(currentText);
+  const questionAfterLink = detectQuestionAfterLink(currentText);
+  const intentScore = inferIntentScore(currentText, leadMemory);
+  const qualificationPresent = hasUsefulQualification(leadMemory);
+
+  const bookingRecentlySent =
+    !!lead?.booking_sent ||
+    !!leadMemory?.last_cta_at ||
+    (leadMemory?.booking_link_sent_count || 0) > 0;
+
+  if (lead?.call_completed) {
+    return {
+      type: "post_call_support",
+      asksPrice,
+      asksOfferQuestion,
+      asksStartProcess,
+      asksWhoItsFor,
+      asksWhatYouSell,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (explicitLinkRequest && bookingUrl) {
+    return {
+      type: "send_booking_link_now",
+      asksPrice,
+      asksOfferQuestion,
+      asksStartProcess,
+      asksWhoItsFor,
+      asksWhatYouSell,
+      objectionType,
+      intentScore,
+      shouldSendBookingLink: true,
+    };
+  }
 
   if (bookingRecentlySent && asksStartProcess) {
     return {
@@ -767,38 +1331,14 @@ const qualificationPresent = hasUsefulQualification(leadMemory);
     };
   }
 
-  const bookingRecentlySent =
-    !!lead?.booking_sent ||
-    !!leadMemory?.last_cta_at ||
-    (leadMemory?.booking_link_sent_count || 0) > 0;
-
-  if (lead?.call_completed) {
-    return {
-      type: "post_call_support",
-      asksPrice,
-      asksOfferQuestion,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: false,
-    };
-  }
-
-  if (explicitLinkRequest && bookingUrl) {
-    return {
-      type: "send_booking_link_now",
-      asksPrice,
-      asksOfferQuestion,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: true,
-    };
-  }
-
   if (bookingRecentlySent && asksPrice) {
     return {
       type: "answer_price_after_cta",
       asksPrice,
       asksOfferQuestion,
+      asksStartProcess,
+      asksWhoItsFor,
+      asksWhatYouSell,
       objectionType,
       intentScore,
       shouldSendBookingLink: false,
@@ -810,6 +1350,9 @@ const qualificationPresent = hasUsefulQualification(leadMemory);
       type: "answer_offer_question_after_cta",
       asksPrice,
       asksOfferQuestion,
+      asksStartProcess,
+      asksWhoItsFor,
+      asksWhatYouSell,
       objectionType,
       intentScore,
       shouldSendBookingLink: false,
@@ -821,6 +1364,9 @@ const qualificationPresent = hasUsefulQualification(leadMemory);
       type: "answer_question_after_cta",
       asksPrice,
       asksOfferQuestion,
+      asksStartProcess,
+      asksWhoItsFor,
+      asksWhatYouSell,
       objectionType,
       intentScore,
       shouldSendBookingLink: false,
@@ -832,6 +1378,9 @@ const qualificationPresent = hasUsefulQualification(leadMemory);
       type: "handle_think_about_it",
       asksPrice,
       asksOfferQuestion,
+      asksStartProcess,
+      asksWhoItsFor,
+      asksWhatYouSell,
       objectionType,
       intentScore,
       shouldSendBookingLink: false,
@@ -843,6 +1392,9 @@ const qualificationPresent = hasUsefulQualification(leadMemory);
       type: "handle_price_then_cta",
       asksPrice,
       asksOfferQuestion,
+      asksStartProcess,
+      asksWhoItsFor,
+      asksWhatYouSell,
       objectionType,
       intentScore,
       shouldSendBookingLink: false,
@@ -854,6 +1406,9 @@ const qualificationPresent = hasUsefulQualification(leadMemory);
       type: "send_booking_link_now",
       asksPrice,
       asksOfferQuestion,
+      asksStartProcess,
+      asksWhoItsFor,
+      asksWhatYouSell,
       objectionType,
       intentScore,
       shouldSendBookingLink: true,
@@ -865,6 +1420,9 @@ const qualificationPresent = hasUsefulQualification(leadMemory);
       type: "soft_close_to_booking",
       asksPrice,
       asksOfferQuestion,
+      asksStartProcess,
+      asksWhoItsFor,
+      asksWhatYouSell,
       objectionType,
       intentScore,
       shouldSendBookingLink: true,
@@ -876,6 +1434,9 @@ const qualificationPresent = hasUsefulQualification(leadMemory);
       type: "ask_qualifying_question",
       asksPrice,
       asksOfferQuestion,
+      asksStartProcess,
+      asksWhoItsFor,
+      asksWhatYouSell,
       objectionType,
       intentScore,
       shouldSendBookingLink: false,
@@ -886,6 +1447,9 @@ const qualificationPresent = hasUsefulQualification(leadMemory);
     type: "nudge_forward",
     asksPrice,
     asksOfferQuestion,
+    asksStartProcess,
+    asksWhoItsFor,
+    asksWhatYouSell,
     objectionType,
     intentScore,
     shouldSendBookingLink: false,
@@ -1090,6 +1654,17 @@ const guardrails = [
   "Only reuse booking language when it genuinely helps the conversation move forward.",
   "If the user asks how to get started, explain the process clearly instead of repeating that they can book.",
   "Vary your wording. Do not repeat the same sentence structure across replies.",
+  "If you already answered the same category in the previous assistant reply, do not repeat it in the same way again.",
+  "Use lead_memory.last_bot_reply_type to avoid repeating the same move twice in a row.",
+  "If answered_price_count is already 1 or more, do not keep re-answering price the same way.",
+  "If answered_offer_count is already 1 or more, do not repeat the offer explanation word-for-word.",
+  "If answered_process_count is already 1 or more, do not repeat the onboarding explanation in the same wording.",
+  "If answered_who_its_for_count is already 1 or more, avoid repeating the same audience explanation again.",
+  "Use conversation_state to understand where the conversation is, not just the latest message.",
+  "User intent and reply strategy are different. Respond to the user's intent, not just the last CTA state.",
+  "If the user asks a follow-up after a CTA, answer the follow-up fully before pushing again.",
+  "If your draft reply is basically the same as the last assistant reply, change approach.",
+  "Do not repeat the same meaning with slightly different wording.",
 
   // 🔥 SALES RULES (NEW)
   "If user clearly asks for the booking link or says they are ready to buy, send the booking link immediately.",
@@ -1261,8 +1836,16 @@ const exampleMessages = examplesToUse.flatMap((ex) => [
           last_question_asked: leadMemory.last_question_asked || null,
           last_cta_type: leadMemory.last_cta_type || null,
           booking_link_sent_count: leadMemory.booking_link_sent_count || 0,
+          last_user_intent: leadMemory.last_user_intent || null,
+          last_bot_reply_type: leadMemory.last_bot_reply_type || null,
+          conversation_state: leadMemory.conversation_state || null,         
+ answered_price_count: leadMemory.answered_price_count || 0,
+          answered_offer_count: leadMemory.answered_offer_count || 0,
+          answered_process_count: leadMemory.answered_process_count || 0,
+          answered_who_its_for_count: leadMemory.answered_who_its_for_count || 0,
         }
       : null,
+
     turn_strategy: turnStrategy
       ? {
           type: turnStrategy.type,
@@ -2979,14 +3562,24 @@ app.post("/webhook", async (req, res) => {
             currentMessage: text,
           });
 
-          if (extractedMemory) {
-            leadMemory = await upsertLeadMemory({
-              leadId: lead.id,
-              clientId: lead.client_id,
-              patch: extractedMemory,
-              existing: leadMemory,
-            });
-          }
+          const detectedUserIntent = detectUserIntent(text);
+
+          const derivedState = deriveConversationState({
+            lead,
+            leadMemory: extractedMemory || leadMemory,
+            userIntent: detectedUserIntent,
+          });
+
+          leadMemory = await upsertLeadMemory({
+            leadId: lead.id,
+            clientId: lead.client_id,
+            patch: {
+              ...(extractedMemory || {}),
+              last_user_intent: detectedUserIntent,
+              conversation_state: derivedState,
+            },
+            existing: leadMemory,
+          });
         } catch (e) {
           console.warn("lead memory update failed:", e?.message || e);
         }
@@ -3009,13 +3602,24 @@ app.post("/webhook", async (req, res) => {
         const thinkAboutIt = detectThinkAboutIt(text);
         const asksPrice = detectPriceQuestion(text);
         const highIntent = detectHighIntent(text);
-const turnStrategy = decideTurnStrategy({
+const userIntent = detectUserIntent(text);
+
+const conversationState = deriveConversationState({
+  lead,
+  leadMemory,
+  userIntent,
+});
+
+let turnStrategy = decideTurnStrategyFromIntent({
+  userIntent,
+  conversationState,
   lead,
   leadMemory,
   text,
   bookingUrl: cfg?.booking_url || null,
-  cfg,
 });
+
+turnStrategy = preventRepeatedReplyType(turnStrategy, leadMemory);
 
         lead.last_message = text;
 
@@ -3045,6 +3649,22 @@ if (turnStrategy?.type === "send_booking_link_now" && cfg?.booking_url) {
         if (!reply) return;
 
         reply = humaniseText(reply);
+
+        const recentAssistantHistory = (historyMessages || [])
+          .filter((m) => m?.role === "assistant")
+          .slice(-5);
+
+        if (isReplyTooSimilar(reply, recentAssistantHistory)) {
+          const fallback = getFallbackReply({
+            turnStrategy,
+            cfg,
+            leadMemory,
+          });
+
+          if (fallback) {
+            reply = humaniseText(fallback);
+          }
+        }
 
         try {
           const nextStage = deriveLeadStage({
@@ -3138,19 +3758,30 @@ if (turnStrategy?.type === "send_booking_link_now" && cfg?.booking_url) {
               stage: sentBookingLink ? "booking_pushed" : lead.stage,
             });
 
-            if (sentBookingLink) {
-              leadMemory = await upsertLeadMemory({
-                leadId: lead.id,
-                clientId: lead.client_id,
-                existing: leadMemory,
-                patch: {
-                  last_cta_type: "booking_link",
-                  last_cta_at: nowIso(),
-                  booking_link_sent_count:
-                    (leadMemory?.booking_link_sent_count || 0) + 1,
-                },
-              });
-            }
+            const replyTrackingPatch = buildReplyTrackingPatch(
+              leadMemory,
+              turnStrategy
+            );
+
+            leadMemory = await upsertLeadMemory({
+              leadId: lead.id,
+              clientId: lead.client_id,
+              existing: leadMemory,
+              patch: {
+                ...replyTrackingPatch,
+                conversation_state: sentBookingLink
+                  ? "booking_cta_sent"
+                  : leadMemory?.conversation_state || null,
+                ...(sentBookingLink
+                  ? {
+                      last_cta_type: "booking_link",
+                      last_cta_at: nowIso(),
+                      booking_link_sent_count:
+                        (leadMemory?.booking_link_sent_count || 0) + 1,
+                    }
+                  : {}),
+              },
+            });
           } catch (e) {
             console.warn("lead outbound tracking failed:", e?.message || e);
           }
