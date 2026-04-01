@@ -335,15 +335,11 @@ function wireInstagramConnectButton() {
   });
 }
 function wireGeneratePromptButton() {
-  const btn = qs("#generatePromptBtn");
-  const igEl = qs("#instagram_handle");
-  const promptEl = qs("#system_prompt");
-  const exampleEl = qs("#example_messages");
-  const toneEl = qs("#tone");
-  const styleEl = qs("#style");
-  const vocabularyEl = qs("#vocabulary");
-  const promptStatusEl = qs("#promptStatus");
-const promptLimitEl = qs("#promptLimitStatus");
+const btn = qs("#generatePromptBtn");
+const igEl = qs("#instagram_handle");
+const promptEl = qs("#system_prompt");
+const exampleEl = qs("#example_messages");
+const promptStatusEl = qs("#promptStatus");
 const offerWhatEl = qs("#offer_what");
 const offerFeaturesEl = qs("#offer_features");
 const offerAudienceEl = qs("#offer_audience");
@@ -408,6 +404,12 @@ ${offerProcessEl ? String(offerProcessEl.value || "").trim() : ""}
     offer_price: offerPriceEl
       ? String(offerPriceEl.value || "").trim()
       : "",
+    what_you_do: offerWhatEl
+      ? String(offerWhatEl.value || "").trim()
+      : "",
+    what_they_get: offerFeaturesEl
+      ? String(offerFeaturesEl.value || "").trim()
+      : "",
     who_its_for: offerAudienceEl
       ? String(offerAudienceEl.value || "").trim()
       : "",
@@ -444,17 +446,14 @@ ${offerProcessEl ? String(offerProcessEl.value || "").trim() : ""}
       }
 
       await loadPromptUsageStatus();
-    } finally {
-      btn.disabled = false;
-      btn.style.opacity = "1";
-      btn.textContent = "Generate Prompt";
-    }
+} finally {
+  await loadPromptUsageStatus();
+}
   });
 }
 async function loadPromptUsageStatus() {
 const el = qs("#promptLimitStatus");
   if (!el) return;
-console.log("TOKEN:", localStorage.getItem("coach_token"));
 
   try {
     const data = await apiFetch(`${API}/prompt-usage`, {
@@ -668,20 +667,19 @@ const styleEl = qs("#style");
 const vocabularyEl = qs("#vocabulary");
 const promptEl = qs("#system_prompt");
 const saveBtn = qs("#saveBtn");
-const genBtn = qs("#generatePromptBtn");
-await loadPromptUsageStatus();
 const offerWhatEl = qs("#offer_what");
 const offerFeaturesEl = qs("#offer_features");
 const offerAudienceEl = qs("#offer_audience");
 const offerProcessEl = qs("#offer_process");
 const offerPriceEl = qs("#offer_price");
 
-    if (!promptEl && !saveBtn && !genBtn) return;
+if (!promptEl && !saveBtn) return;
 
     if (!getToken()) {
       window.location.href = "/coach/login.html";
       return;
     }
+await loadPromptUsageStatus();
 
     const cfg = await apiFetch(`${API}/config`, { method: "GET" });
     const config = cfg?.config || {};
@@ -705,11 +703,15 @@ function extractSection(label, nextLabel) {
 }
 
 if (offerWhatEl) {
-  offerWhatEl.value = extractSection("What you do", "What they get");
+  offerWhatEl.value =
+    config.what_you_do || extractSection("What you do", "What they get");
 }
+
 if (offerFeaturesEl) {
-  offerFeaturesEl.value = extractSection("What they get", "Who it's for");
+  offerFeaturesEl.value =
+    config.what_they_get || extractSection("What they get", "Who it's for");
 }
+
 if (offerAudienceEl) {
   offerAudienceEl.value =
     config.who_its_for || extractSection("Who it's for", "How it works");
@@ -851,6 +853,8 @@ const payload = {
   example_messages,
   offer_description: offer_description || null,
   offer_price: offer_price || null,
+  what_you_do: offer_what || null,
+  what_they_get: offer_features || null,
   who_its_for: offer_audience || null,
   how_it_works: offer_process || null,
 };

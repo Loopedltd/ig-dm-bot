@@ -269,6 +269,11 @@ function detectWhatYouSellQuestion(text) {
     String(text || "")
   );
 }
+function detectWhatDoIGetQuestion(text) {
+  return /what do i get|what do i actually get|what do i get if i join|what's included|whats included|what do i receive|what comes with it|what do i get with this/i.test(
+    String(text || "")
+  );
+}
 function stripWeakPhrases(text) {
   let out = String(text || "").trim();
 
@@ -363,6 +368,46 @@ function parseExampleMessages(raw) {
   }
 
   return parsed;
+}
+
+function extractOfferSection(raw, label, nextLabel = null) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedNext = nextLabel
+    ? nextLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    : null;
+
+  const regex = escapedNext
+    ? new RegExp(`${escapedLabel}:\\s*([\\s\\S]*?)\\n\\n${escapedNext}:`, "i")
+    : new RegExp(`${escapedLabel}:\\s*([\\s\\S]*)$`, "i");
+
+  const match = text.match(regex);
+  return match ? String(match[1] || "").trim() : "";
+}
+
+function getStructuredOfferContext(cfg) {
+  const raw = String(cfg?.offer_description || "").trim();
+
+  return {
+    what_you_do:
+      String(cfg?.what_you_do || "").trim() ||
+      extractOfferSection(raw, "What you do", "What they get") ||
+      "",
+    what_they_get:
+      String(cfg?.what_they_get || "").trim() ||
+      extractOfferSection(raw, "What they get", "Who it's for") ||
+      "",
+    who_its_for:
+      String(cfg?.who_its_for || "").trim() ||
+      extractOfferSection(raw, "Who it's for", "How it works") ||
+      "",
+    how_it_works:
+      String(cfg?.how_it_works || "").trim() ||
+      extractOfferSection(raw, "How it works") ||
+      "",
+  };
 }
 function getDefaultFallbackExamples() {
   return [
@@ -665,13 +710,13 @@ function detectExplicitBookingLinkRequest(text) {
 }
 
 function detectOfferQuestion(text) {
-  return /what is this|what's this|whats this|how does it work|what do you actually do|what do you help with|tell me more|how does this work/i.test(
+  return /what is this|what's this|whats this|what do you actually do|what do you help with|tell me more|how does this work|what is included|what do i get|what do i actually get|what do i get if i join|what comes with it/i.test(
     String(text || "")
   );
 }
 
 function detectQuestionAfterLink(text) {
-  return /what is this|what's this|whats this|how much|price|cost|how does it work|tell me more|what do you mean|what is included|what do i get/i.test(
+  return /what is this|what's this|whats this|how much|price|cost|how does it work|tell me more|what do you mean|what is included|what do i get|what do i actually get|what happens after i book|who is this for/i.test(
     String(text || "")
   );
 }
@@ -759,6 +804,7 @@ function detectUserIntent(text) {
   if (detectExplicitBookingLinkRequest(t)) return "booking_link_request";
   if (detectStartProcessQuestion(t)) return "start_process_question";
   if (detectWhoItsForQuestion(t)) return "who_its_for_question";
+  if (detectWhatDoIGetQuestion(t)) return "what_do_i_get_question";
   if (detectWhatYouSellQuestion(t) || detectOfferQuestion(t)) return "offer_question";
   if (detectPriceQuestion(t)) return "price_question";
   if (detectThinkAboutIt(t)) return "think_about_it";
@@ -787,7 +833,8 @@ function getReplyTypeFromTurnStrategy(turnStrategy) {
 
   if (
     type === "answer_offer_question_after_cta" ||
-    type === "answer_what_you_sell_after_cta"
+    type === "answer_what_you_sell_after_cta" ||
+    type === "answer_what_do_i_get_after_cta"
   ) {
     return "offer_answer";
   }
@@ -985,28 +1032,29 @@ function looksIncompleteReply(text) {
 
 function getFallbackReply({ turnStrategy, cfg, leadMemory }) {
   const bookingUrl = cfg?.booking_url || "";
+  const structured = getStructuredOfferContext(cfg);
 
   const map = {
     answer_price_after_cta: [
       cfg?.offer_price
-        ? `it’s ${cfg.offer_price} - want me to explain how it works as well?`
-        : `i can break the pricing down properly for you - want the quick version?`,
+        ? `it’s ${cfg.offer_price}`
+        : `i can break the pricing down properly for you`,
     ],
-answer_offer_question_after_cta: [
-  cfg?.offer_description
-    ? String(cfg.offer_description).trim()
-    : `it’s a tailored service built to help you get a proper result without guessing`,
-],
-answer_start_process_after_cta: [
-  cfg?.how_it_works
-    ? String(cfg.how_it_works).trim()
-    : `you book in, we go through where you're at, then we get everything set up properly from there`,
-],
-answer_who_its_for_after_cta: [
-  cfg?.who_its_for
-    ? String(cfg.who_its_for).trim()
-    : `it’s for people who want proper help and structure, not people just winging it`,
-],
+    answer_offer_question_after_cta: structured.what_you_do
+      ? [structured.what_you_do]
+      : [],
+    answer_what_you_sell_after_cta: structured.what_you_do
+      ? [structured.what_you_do]
+      : [],
+    answer_what_do_i_get_after_cta: structured.what_they_get
+      ? [structured.what_they_get]
+      : [],
+    answer_start_process_after_cta: structured.how_it_works
+      ? [structured.how_it_works]
+      : [`you book in, we go through where you're at, then we get everything set up properly from there`],
+    answer_who_its_for_after_cta: structured.who_its_for
+      ? [structured.who_its_for]
+      : [`it’s for people who want proper help and structure, not people just winging it`],
     handle_think_about_it: [
       `fair - what do you need to see before you can decide properly?`,
       `no stress - what’s the main thing you’re unsure about?`,
@@ -1033,15 +1081,20 @@ answer_who_its_for_after_cta: [
       : [`best thing is get booked in and we’ll go through it properly`],
   };
 
-  const options = map[turnStrategy?.type] || [
-    `got you - tell me the main thing you want help with`,
-  ];
+  const options = map[turnStrategy?.type] || [];
+
+  if (!options.length) return null;
 
   return options[Math.floor(Math.random() * options.length)];
 }
 function buildDeterministicReply({ turnStrategy, cfg }) {
   const offerDescription = String(cfg?.offer_description || "").trim();
   const offerPrice = String(cfg?.offer_price || "").trim();
+  const structured = getStructuredOfferContext(cfg);
+  const whatYouDo = structured.what_you_do;
+  const whatTheyGet = structured.what_they_get;
+  const whoItsFor = structured.who_its_for;
+  const howItWorks = structured.how_it_works;
 
   if (
     turnStrategy?.type === "answer_price_after_cta" ||
@@ -1056,14 +1109,28 @@ if (
   turnStrategy?.type === "answer_offer_question_after_cta" ||
   turnStrategy?.type === "answer_what_you_sell_after_cta"
 ) {
+  if (whatYouDo) {
+    return whatYouDo;
+  }
+
   if (offerDescription) {
-    return offerDescription;
+    return `it’s a tailored service to help you get a proper result with structure and support`;
+  }
+}
+
+if (turnStrategy?.type === "answer_what_do_i_get_after_cta") {
+  if (whatTheyGet) {
+    return whatTheyGet;
+  }
+
+  if (offerDescription) {
+    return `you get the support, structure and guidance needed to do this properly`;
   }
 }
 
   if (turnStrategy?.type === "answer_start_process_after_cta") {
-    if (cfg?.how_it_works) {
-      return String(cfg.how_it_works).trim();
+    if (howItWorks) {
+      return howItWorks;
     }
 
     if (offerDescription) {
@@ -1072,8 +1139,8 @@ if (
   }
 
   if (turnStrategy?.type === "answer_who_its_for_after_cta") {
-    if (cfg?.who_its_for) {
-      return String(cfg.who_its_for).trim();
+    if (whoItsFor) {
+      return whoItsFor;
     }
 
     if (offerDescription) {
@@ -1098,6 +1165,7 @@ function deriveConversationState({ lead, leadMemory, userIntent }) {
     if (
       userIntent === "price_question" ||
       userIntent === "offer_question" ||
+      userIntent === "what_do_i_get_question" ||
       userIntent === "start_process_question" ||
       userIntent === "who_its_for_question"
     ) {
@@ -1166,6 +1234,13 @@ function decideTurnStrategyFromIntent({
     if (userIntent === "offer_question") {
       return {
         type: "answer_offer_question_after_cta",
+        intentScore,
+        shouldSendBookingLink: false,
+      };
+    }
+    if (userIntent === "what_do_i_get_question") {
+      return {
+        type: "answer_what_do_i_get_after_cta",
         intentScore,
         shouldSendBookingLink: false,
       };
@@ -1643,6 +1718,12 @@ const guardrails = [
   "If the user asks a follow-up after a CTA, answer the follow-up fully before pushing again.",
   "If your draft reply is basically the same as the last assistant reply, change approach.",
   "Do not repeat the same meaning with slightly different wording.",
+  "Never output internal labels like 'What you do:', 'What they get:', 'Who it's for:' or 'How it works:'.",
+  "Answer naturally in DM style, not like a form or questionnaire.",
+  "If the user asks what they get, answer from what_they_get.",
+  "If the user asks what the coach does, answer from what_you_do.",
+  "If the user asks who it is for, answer from who_its_for.",
+  "If the user asks how it works or what happens after booking, answer from how_it_works.",
 
   // 🔥 SALES RULES (NEW)
   "If user clearly asks for the booking link or says they are ready to buy, send the booking link immediately.",
@@ -1709,6 +1790,15 @@ const strategyRules =
         "Answer what the offer is in plain English.",
         "If offer_description exists in context, use it naturally.",
         "Do not dodge the question.",
+      ]
+    : turnStrategy?.type === "answer_what_do_i_get_after_cta"
+    ? [
+        "TURN STRATEGY: answer_what_do_i_get_after_cta",
+        "The booking link has already been sent before.",
+        "Do not resend the booking link.",
+        "Answer what the user gets if they join.",
+        "Use what_they_get from context if available.",
+        "Answer plainly and naturally.",
       ]
     : turnStrategy?.type === "answer_question_after_cta"
     ? [
@@ -1789,14 +1879,18 @@ const exampleMessages = examplesToUse.flatMap((ex) => [
   { role: "user", content: ex.user },
   { role: "assistant", content: ex.assistant },
 ]);
-
+const structuredOffer = getStructuredOfferContext(cfg);
   const context = {
     lead_stage: lead?.stage ?? null,
     call_completed: lead?.call_completed ?? false,
     booking_sent: lead?.booking_sent ?? false,
     booking_url_present: !!bookingUrl,
     offer_description: cfg?.offer_description || null,
-    offer_price: cfg?.offer_price || null,   
+    what_you_do: structuredOffer.what_you_do || null,
+    what_they_get: structuredOffer.what_they_get || null,
+    who_its_for: structuredOffer.who_its_for || null,
+    how_it_works: structuredOffer.how_it_works || null,
+    offer_price: cfg?.offer_price || null,
  user_asked_price: asksPrice,
     user_high_intent: highIntent,
     think_about_it_objection: !!thinkAboutIt,
@@ -2233,12 +2327,13 @@ const { data: config, error: configErr } = await supabase
     vocabulary: "casual UK coach",
     offer_description: null,
     offer_price: null,
+    what_you_do: null,
+    what_they_get: null,
     how_it_works: null,
     who_its_for: null,
   })
   .select()
   .single();
-
     if (configErr) {
       return safeJson(res, 500, { error: String(configErr.message || configErr) });
     }
@@ -2312,6 +2407,19 @@ if (
   patch.how_it_works === null
 ) {
   allowed.how_it_works = patch.how_it_works;
+}
+if (
+  typeof patch.what_you_do === "string" ||
+  patch.what_you_do === null
+) {
+  allowed.what_you_do = patch.what_you_do;
+}
+
+if (
+  typeof patch.what_they_get === "string" ||
+  patch.what_they_get === null
+) {
+  allowed.what_they_get = patch.what_they_get;
 }
 
 if (
@@ -2748,6 +2856,19 @@ if (
 ) {
   allowed.how_it_works = patch.how_it_works;
 }
+if (
+  typeof patch.what_you_do === "string" ||
+  patch.what_you_do === null
+) {
+  allowed.what_you_do = patch.what_you_do;
+}
+
+if (
+  typeof patch.what_they_get === "string" ||
+  patch.what_they_get === null
+) {
+  allowed.what_they_get = patch.what_they_get;
+}
 
 if (
   typeof patch.who_its_for === "string" ||
@@ -2885,6 +3006,8 @@ const {
   example_messages,
   offer_description,
   offer_price,
+  what_you_do,
+  what_they_get,
   how_it_works,
   who_its_for,
 } = req.body || {};
@@ -2900,22 +3023,31 @@ const handleRaw = String(instagram_handle || "").trim();
       return safeJson(res, 400, { error: "invalid instagram handle format" });
     }
 
-    const { data: cfg } = await supabase
+const { data: cfg, error: cfgError } = await supabase
   .from("client_configs")
-      .select("*")
-      .eq("client_id", req.coach.client_id)
-      .single();
+  .select("*")
+  .eq("client_id", req.coach.client_id)
+  .single();
+
+if (cfgError) {
+  return safeJson(res, 500, {
+    error: String(cfgError.message || cfgError),
+  });
+}
 const exampleMessages =
   String(example_messages || cfg?.example_messages || "").trim();
 const offerDescription =
   String(offer_description || cfg?.offer_description || "").trim();
 const offerPrice =
   String(offer_price || cfg?.offer_price || "").trim();
+const whatYouDo =
+  String(what_you_do || cfg?.what_you_do || "").trim();
+const whatTheyGet =
+  String(what_they_get || cfg?.what_they_get || "").trim();
 const howItWorks =
   String(how_it_works || cfg?.how_it_works || "").trim();
-
 const whoItsFor =
-  String(who_its_for || cfg?.who_its_for || "").trim();    
+  String(who_its_for || cfg?.who_its_for || "").trim();
 if (!openai) {
       const stub = [
         "You are the coach's Instagram DM assistant.",
@@ -3004,7 +3136,13 @@ IMPORTANT SALES BEHAVIOUR:
 - The assistant should not stay stuck in endless conversation mode
 - The assistant should qualify briefly, then guide decisively
 
-WHAT THE COACH SELLS:
+WHAT THE COACH DOES:
+${whatYouDo || "(not provided)"}
+
+WHAT THE LEAD GETS:
+${whatTheyGet || "(not provided)"}
+
+FULL OFFER DESCRIPTION:
 ${offerDescription || "(not provided)"}
 
 PRICE:
@@ -3690,7 +3828,19 @@ if (!reply || looksIncompleteReply(reply)) {
 
 if (!reply) return;
 
-if (!usedDeterministicReply) {
+const shouldHumanise =
+  !usedDeterministicReply &&
+  ![
+    "answer_price_after_cta",
+    "handle_price_then_cta",
+    "answer_offer_question_after_cta",
+    "answer_what_you_sell_after_cta",
+    "answer_what_do_i_get_after_cta",
+    "answer_start_process_after_cta",
+    "answer_who_its_for_after_cta",
+  ].includes(String(turnStrategy?.type || ""));
+
+if (shouldHumanise) {
   reply = humaniseText(reply);
 }
 
@@ -3710,6 +3860,7 @@ if (isReplyTooSimilar(reply, recentAssistantHistory) || looksIncompleteReply(rep
       turnStrategy?.type === "answer_price_after_cta" ||
       turnStrategy?.type === "handle_price_then_cta" ||
       turnStrategy?.type === "answer_offer_question_after_cta" ||
+      turnStrategy?.type === "answer_what_do_i_get_after_cta" ||
       turnStrategy?.type === "answer_start_process_after_cta" ||
       turnStrategy?.type === "answer_who_its_for_after_cta" ||
       turnStrategy?.type === "answer_what_you_sell_after_cta";
