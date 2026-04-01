@@ -3835,12 +3835,12 @@ if (
 
         const messagesToSend = splitIntoMessages(reply);
 
-        const igAccount = await getIgAccountByClientId(lead.client_id);
+const activeIgAccount = await getIgAccountByClientId(lead.client_id);
 
-        if (!igAccount?.page_access_token) {
-          console.error("Missing Instagram access token for client:", lead.client_id);
-          return;
-        }
+if (!activeIgAccount?.page_access_token) {
+  console.error("Missing Instagram access token for client:", lead.client_id);
+  return;
+}
 
         for (let i = 0; i < messagesToSend.length; i++) {
           const msg = messagesToSend[i];
@@ -3865,7 +3865,7 @@ if (
 const { sendResp, sendData } = await sendWithRetry(async () => {
   const sendResp = await fetch(
     `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(
-      igAccount.page_access_token
+activeIgAccount.page_access_token
     )}`,
     {
       method: "POST",
