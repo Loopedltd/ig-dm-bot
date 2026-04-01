@@ -333,6 +333,19 @@ function stripOverusedFillers(text) {
 
   return out;
 }
+function cleanObjectionReply(text) {
+  let out = String(text || "").trim();
+  if (!out) return out;
+
+  out = out.replace(/^super simple[!.]?\s*/i, "");
+  out = out.replace(/^totally get that[!.]?\s*/i, "");
+  out = out.replace(/^i get that[!.]?\s*/i, "");
+  out = out.replace(/^makes sense[!.]?\s*/i, "");
+  out = out.replace(/^fair enough[!.]?\s*/i, "");
+
+  out = out.replace(/\s{2,}/g, " ").trim();
+  return out;
+}
 
 function humaniseText(text) {
   let t = String(text || "").trim();
@@ -1679,6 +1692,7 @@ If the user hesitates, says it is expensive, says they are not sure, or says the
 - do NOT comfort them with weak validation
 - do NOT jump straight to the booking link
 - first ask a sharp, simple question to find the real issue
+- do not start objection replies with filler like "super simple", "totally get that", "makes sense", or "i get that"
 - examples:
   - "fair, what’s the main thing holding you back?"
   - "what part are you unsure about?"
@@ -1792,7 +1806,13 @@ if (!parsed || typeof parsed.reply !== "string") {
     let reply = String(parsed?.reply || "").trim();
     if (!reply) return null;
 
-    reply = sanitizeReply(stripOverusedFillers(stripWeakPhrases(reply)));
+reply = sanitizeReply(
+  cleanObjectionReply(
+    stripOverusedFillers(
+      stripWeakPhrases(reply)
+    )
+  )
+);
 
     if (looksIncompleteReply(reply)) return null;
 
@@ -3700,7 +3720,13 @@ const aiResult = await generateAiReply({
   userText: text,
 });
 
-let reply = aiResult?.reply || null;
+let reply = null;
+
+if (turnStrategy?.type === "handle_think_about_it") {
+  reply = getObjectionFollowUpReply(text, leadMemory, cfg);
+} else {
+  reply = aiResult?.reply || null;
+}
 
 const explicitLinkRequest = detectExplicitBookingLinkRequest(text);
 const bookingAlreadySent =
@@ -3755,6 +3781,7 @@ const shouldHumanise =
     "answer_what_do_i_get_after_cta",
     "answer_start_process_after_cta",
     "answer_who_its_for_after_cta",
+    "handle_think_about_it",
   ].includes(String(turnStrategy?.type || ""));
 
 if (shouldHumanise) {
