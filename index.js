@@ -340,9 +340,9 @@ function humaniseText(text) {
     t = t.charAt(0).toLowerCase() + t.slice(1);
   }
 
-  if (Math.random() < 0.5) {
-    t = t.replace(/[.!]/g, "");
-  }
+if (Math.random() < 0.3) {
+  t = t.replace(/[.!]/g, "");
+}
 
   t = t
     .replace(/\bgoing to\b/gi, "gonna")
@@ -445,40 +445,54 @@ function getDefaultFallbackExamples() {
   return [
     {
       user: "what do you actually help with",
-      assistant: "i help people get a proper result with structure, support and a plan that actually fits them",
+      assistant:
+        "I help people get a clear result without all the guesswork - proper support, a clear plan, and accountability so they actually follow through. What are you trying to sort out right now?",
     },
     {
       user: "how much is it?",
-      assistant: "it’s £200 setup and £90 a month after that",
+      assistant:
+        "I can break the price down properly for you. Want me to send the details?",
     },
     {
       user: "how does it work",
-      assistant: "you book in, we go through where you’re at, then we get everything set up properly from there",
+      assistant:
+        "You get booked in, we look at where you're at, what needs fixing, then everything gets set up properly from there. Want me to send the link?",
     },
     {
       user: "i want it",
-      assistant: "good, book in here and we’ll get you sorted",
+      assistant:
+        "Good. I’ll send the link and you can get started.",
     },
     {
       user: "send me the link",
-      assistant: "here you go, pick a slot that works for you",
+      assistant:
+        "Here you go - pick what works for you and we’ll get moving.",
     },
-{
-  user: "i’ll think about it",
-  assistant: "fair, what’s the main thing holding you back?",
-},
-{
-  user: "not sure if it’s for me",
-  assistant: "what part are you unsure about?",
-},
-{
-  user: "£200 is a bit much",
-  assistant: "fair, what were you expecting to pay?",
-},
-{
-  user: "sounds good",
-  assistant: "calm, wanna get started properly?",
-},
+    {
+      user: "i’ll think about it",
+      assistant:
+        "Fair. What’s the main thing stopping you right now?",
+    },
+    {
+      user: "not sure if it’s for me",
+      assistant:
+        "What part are you unsure about - the price, the process, or whether it fits what you need?",
+    },
+    {
+      user: "that’s a bit much",
+      assistant:
+        "Fair. What were you expecting to pay if someone was actually gonna help you do this properly?",
+    },
+    {
+      user: "sounds good",
+      assistant:
+        "Calm. Want me to send the link so you can get started properly?",
+    },
+    {
+      user: "what do i get",
+      assistant:
+        "You get proper support, a clear plan, and accountability so you actually stay on track. Want me to send the link?",
+    },
   ];
 }
 
@@ -786,10 +800,10 @@ function detectObjectionType(text) {
 
   if (
     t.includes("too expensive") ||
+    t.includes("bit much") ||
+    t.includes("out of budget") ||
     t.includes("cant afford") ||
-    t.includes("can't afford") ||
-    t.includes("price") ||
-    t.includes("cost")
+    t.includes("can't afford")
   ) {
     return "price";
   }
@@ -814,7 +828,6 @@ function detectObjectionType(text) {
 
   return null;
 }
-
 function inferIntentScore(text, leadMemory) {
   const t = String(text || "").toLowerCase();
   let score = 0;
@@ -1103,12 +1116,13 @@ function getFallbackReply({ turnStrategy, cfg, leadMemory }) {
         ? `it’s ${cfg.offer_price}`
         : `i can break the pricing down properly for you`,
     ],
-    answer_offer_question_after_cta: structured.what_you_do
-      ? [structured.what_you_do]
-      : [],
-    answer_what_you_sell_after_cta: structured.what_you_do
-      ? [structured.what_you_do]
-      : [],
+answer_offer_question_after_cta: [
+  `${getEffectiveWhatYouDo(cfg)} What are you trying to fix right now?`,
+],
+
+answer_what_you_sell_after_cta: [
+  `${getEffectiveWhatYouDo(cfg)} What are you trying to fix right now?`,
+],
     answer_what_do_i_get_after_cta: structured.what_they_get
       ? [structured.what_they_get]
       : [],
@@ -1149,7 +1163,7 @@ function buildDeterministicReply({ turnStrategy, cfg }) {
   const offerDescription = String(cfg?.offer_description || "").trim();
   const offerPrice = String(cfg?.offer_price || "").trim();
   const structured = getStructuredOfferContext(cfg);
-  const whatYouDo = structured.what_you_do;
+const whatYouDo = getEffectiveWhatYouDo(cfg);
   const whatTheyGet = structured.what_they_get;
   const whoItsFor = structured.who_its_for;
   const howItWorks = structured.how_it_works;
@@ -1171,9 +1185,7 @@ if (
     return whatYouDo;
   }
 
-  if (offerDescription) {
-    return `it’s a tailored service to help you get a proper result with structure and support`;
-  }
+  return `I help people get the result they want without all the guesswork - clear plan, proper support, and accountability so they actually stick to it. What are you trying to fix right now?`;
 }
 
 if (turnStrategy?.type === "answer_what_do_i_get_after_cta") {
@@ -1259,10 +1271,14 @@ function decideTurnStrategyFromIntent({
   bookingUrl,
 }) {
   const intentScore = inferIntentScore(text, leadMemory);
+
   const bookingRecentlySent =
     !!lead?.booking_sent ||
     !!leadMemory?.last_cta_at ||
     (leadMemory?.booking_link_sent_count || 0) > 0;
+
+  const hasBookingUrl = !!bookingUrl;
+  const hasQualification = hasUsefulQualification(leadMemory);
 
   if (conversationState === "post_call") {
     return {
@@ -1272,80 +1288,12 @@ function decideTurnStrategyFromIntent({
     };
   }
 
-  if (userIntent === "booking_link_request" && bookingUrl) {
-    return {
-      type: "send_booking_link_now",
-      intentScore,
-      shouldSendBookingLink: true,
-    };
-  }
-
-  if (conversationState === "post_cta_followup") {
-    if (userIntent === "price_question") {
-      return {
-        type: "answer_price_after_cta",
-        intentScore,
-        shouldSendBookingLink: false,
-      };
-    }
-
-    if (userIntent === "offer_question") {
-      return {
-        type: "answer_offer_question_after_cta",
-        intentScore,
-        shouldSendBookingLink: false,
-      };
-    }
-    if (userIntent === "what_do_i_get_question") {
-      return {
-        type: "answer_what_do_i_get_after_cta",
-        intentScore,
-        shouldSendBookingLink: false,
-      };
-    }
-
-    if (userIntent === "start_process_question") {
-      return {
-        type: "answer_start_process_after_cta",
-        intentScore,
-        shouldSendBookingLink: false,
-      };
-    }
-
-    if (userIntent === "who_its_for_question") {
-      return {
-        type: "answer_who_its_for_after_cta",
-        intentScore,
-        shouldSendBookingLink: false,
-      };
-    }
-
-    return {
-      type: "answer_question_after_cta",
-      intentScore,
-      shouldSendBookingLink: false,
-    };
-  }
-
-  if (userIntent === "think_about_it") {
-    return {
-      type: "handle_think_about_it",
-      intentScore,
-      shouldSendBookingLink: false,
-    };
-  }
-
-  if (userIntent === "price_question" && bookingUrl && !bookingRecentlySent) {
-    return {
-      type: "handle_price_then_cta",
-      intentScore,
-      shouldSendBookingLink: false,
-    };
-  }
-
+  // 1. HIGH INTENT -> CLOSE
   if (
-    (conversationState === "ready_to_close" || intentScore >= 4) &&
-    bookingUrl &&
+    (userIntent === "booking_link_request" ||
+      userIntent === "high_intent" ||
+      intentScore >= 4) &&
+    hasBookingUrl &&
     !bookingRecentlySent
   ) {
     return {
@@ -1355,9 +1303,67 @@ function decideTurnStrategyFromIntent({
     };
   }
 
+  // 2. OBJECTION -> PROBE
   if (
-    (conversationState === "warm_qualified" || intentScore >= 2) &&
-    bookingUrl &&
+    userIntent === "think_about_it" ||
+    detectObjectionType(text)
+  ) {
+    return {
+      type: "handle_think_about_it",
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  // 3. QUESTION -> ANSWER
+  if (userIntent === "price_question") {
+    return {
+      type: bookingRecentlySent
+        ? "answer_price_after_cta"
+        : "handle_price_then_cta",
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (userIntent === "offer_question") {
+    return {
+      type: bookingRecentlySent
+        ? "answer_offer_question_after_cta"
+        : "answer_what_you_sell_after_cta",
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (userIntent === "what_do_i_get_question") {
+    return {
+      type: "answer_what_do_i_get_after_cta",
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (userIntent === "start_process_question") {
+    return {
+      type: "answer_start_process_after_cta",
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  if (userIntent === "who_its_for_question") {
+    return {
+      type: "answer_who_its_for_after_cta",
+      intentScore,
+      shouldSendBookingLink: false,
+    };
+  }
+
+  // warm but not fully explicit yet
+  if (
+    (userIntent === "soft_intent" || intentScore >= 2 || conversationState === "warm_qualified") &&
+    hasBookingUrl &&
     !bookingRecentlySent
   ) {
     return {
@@ -1367,7 +1373,8 @@ function decideTurnStrategyFromIntent({
     };
   }
 
-  if (conversationState === "new_lead") {
+  // 4. EARLY -> QUALIFY
+  if (!hasQualification || conversationState === "new_lead") {
     return {
       type: "ask_qualifying_question",
       intentScore,
@@ -1484,55 +1491,6 @@ function shouldUseCustomSystemPrompt(cfg) {
   const prompt = String(cfg?.system_prompt || "").trim();
   return prompt.length >= 120;
 }
-function detectSemanticIntent(text) {
-  const t = String(text || "").trim().toLowerCase();
-
-  if (!t) return "general";
-
-  if (
-    /send me the link|booking link|book me in|where do i book|can you send the link|sign me up|i want it|i'm ready|im ready|let's do it|lets do it/.test(t)
-  ) {
-    return "booking";
-  }
-
-  if (
-    /how much|price|cost|pricing|what do you charge/.test(t)
-  ) {
-    return "price";
-  }
-
-  if (
-    /what is it|what's it|whats it|what is this|what's this|whats this|what do you do|what do you actually do|what do you help with|tell me more/.test(t)
-  ) {
-    return "offer";
-  }
-
-  if (
-    /what do i get|what's included|whats included|what comes with it|what do i receive/.test(t)
-  ) {
-    return "deliverables";
-  }
-
-  if (
-    /how does it work|how does this work|how do i start|how do i get started|what happens next|what happens after i book|how does onboarding work/.test(t)
-  ) {
-    return "process";
-  }
-
-  if (
-    /who is this for|who do you help|is this for me|is this suitable for|what kind of people is this for/.test(t)
-  ) {
-    return "fit";
-  }
-
-  if (
-    /i'll think about it|ill think about it|let me think|i'll get back to you|ill get back to you|not sure|unsure|maybe later/.test(t)
-  ) {
-    return "objection";
-  }
-
-  return "general";
-}
 
 function getEscalatedBookingReply(bookingUrl, leadMemory, mode = "normal") {
   if (!bookingUrl) return null;
@@ -1624,7 +1582,7 @@ async function generateAiReply({
 
   global.aiCalls.push(now);
   const structuredOffer = getStructuredOfferContext(cfg);
-  const semanticIntent = detectSemanticIntent(userText);
+const semanticIntent = detectUserIntent(userText);
   const recentAssistantReplies = getLastAssistantMessages(historyMessages, 4);
 
   const examplesToUse = hasStrongCustomExamples(cfg?.example_messages)
@@ -1659,24 +1617,43 @@ NON-NEGOTIABLE RULES:
 - do not use em dashes
 - do not use emojis by default
 - do not repeat the same meaning as recent assistant replies
-- do not ask a question if a direct answer is more useful
-- if the user is clearly ready, move to booking
-- if the booking link was already sent, do not resend it unless the user explicitly asks for it
-- if the user asks a follow-up after the link, answer the follow-up first
-- never output incomplete fragments
-- never output placeholders or internal labels
-- keep replies concise and message-like
-- for direct answers, use 1-2 short sentences
-- for explaining price, process, or what they get, you can use 2-3 short text-style lines
-- never write a long paragraph
-- use casual UK DM phrasing naturally
-- occasional words like "bro", "fair", "got you", "calm", "makes sense" are good when they fit
-- do not force slang into every message
-- use lead_memory naturally when it helps
-- do not ask for information already present in lead_memory
-- if lead_memory contains a goal, pain point, desired outcome, or objection, use it to make replies feel specific
-- if cta_attempts is higher, be more decisive and less tentative
-- if last_cta_response shows hesitation, address that hesitation directly instead of repeating the same close
+QUESTION RULE (IMPORTANT):
+
+Only ask a question if it moves the conversation forward.
+
+DO NOT ask a question when:
+- the user asked for something specific (price, explanation, link)
+- the user already has high intent and is ready
+- a direct answer is clearly enough
+
+DO ask a question when:
+- you need to uncover hesitation or objection
+- the user is vague or early in the conversation
+- you are trying to move them toward booking
+
+When you DO ask a question:
+- ask only ONE
+- keep it short
+- it must move toward a decision, booking, or real objection
+
+Examples of good questions:
+- "want me to send the link?"
+- "what’s the main thing stopping you?"
+- "is it price, timing, or not fully sold yet?"
+
+Avoid:
+- "what do you think?"
+- "how are you feeling about it?"
+- anything vague or passive
+- good follow-up questions are things like:
+  - "want me to send the link?"
+  - "do you want to get started properly?"
+  - "what’s the main thing stopping you?"
+  - "is it the price, timing, or just not fully sold yet?"
+- bad follow-up questions are vague ones like:
+  - "tell me more"
+  - "how are you feeling about it"
+  - "what are your thoughts"
 
 IMPORTANT:
 The user may phrase questions badly.
@@ -1726,7 +1703,7 @@ Return ONLY valid JSON in this exact shape:
     booking_url: bookingUrl || null,
     offer_price: cfg?.offer_price || null,
     offer_description: cfg?.offer_description || null,
-    what_you_do: structuredOffer.what_you_do || null,
+what_you_do: getEffectiveWhatYouDo(cfg),
     what_they_get: structuredOffer.what_they_get || null,
     who_its_for: structuredOffer.who_its_for || null,
     how_it_works: structuredOffer.how_it_works || null,
@@ -1839,6 +1816,30 @@ async function setLeadManualOverride({ leadId, clientId, enabled, reason, actor 
   const { data, error } = await q.select("*").single();
   if (error) throw error;
   return data;
+}
+
+function getEffectiveWhatYouDo(cfg) {
+  const raw = String(cfg?.what_you_do || "").trim();
+
+  if (!raw) {
+    return "I help people get a clear result without all the guesswork - proper support, a clear plan, and accountability so they actually follow through.";
+  }
+
+  const weakPhrases = [
+    "tailored service",
+    "help people get results",
+    "support and guidance",
+    "journey",
+  ];
+
+  const lower = raw.toLowerCase();
+  const weakHit = weakPhrases.some((p) => lower.includes(p));
+
+  if (raw.length < 35 || weakHit) {
+    return "I help people get a clear result without all the guesswork - proper support, a clear plan, and accountability so they actually follow through.";
+  }
+
+  return raw;
 }
 
 async function setClientBotPaused({ clientId, enabled, reason, actor }) {
@@ -3297,26 +3298,6 @@ const session = await stripe.checkout.sessions.create({
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
 });
-function mapSemanticIntentToUserIntent(semanticIntent) {
-  switch (semanticIntent) {
-    case "booking":
-      return "booking_link_request";
-    case "price":
-      return "price_question";
-    case "offer":
-      return "offer_question";
-    case "deliverables":
-      return "what_do_i_get_question";
-    case "process":
-      return "start_process_question";
-    case "fit":
-      return "who_its_for_question";
-    case "objection":
-      return "think_about_it";
-    default:
-      return "general";
-  }
-}
 /**
  * ===========================
  * STRIPE WEBHOOK
@@ -3642,8 +3623,7 @@ if (igLookupError || !igAccount?.client_id) {
         const thinkAboutIt = detectThinkAboutIt(text);
         const asksPrice = detectPriceQuestion(text);
         const highIntent = detectHighIntent(text);
-const semanticIntent = detectSemanticIntent(text);
-const userIntent = mapSemanticIntentToUserIntent(semanticIntent);
+const userIntent = detectUserIntent(text);
 const bookingAlreadySentBeforeReply =
   !!lead?.booking_sent ||
   !!leadMemory?.last_cta_at ||
