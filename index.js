@@ -142,6 +142,8 @@ const STRIPE_PRICE_MONTHLY =
   process.env.STRIPE_PRICE_MONTHLY || "price_1T7bCICS3UXrJEm9s9f7UnEF";
 
 const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
+const APP_PUBLIC_URL = process.env.APP_PUBLIC_URL || APP_BASE_URL;
+const PAY_PUBLIC_URL = process.env.PAY_PUBLIC_URL || APP_BASE_URL;
 
 const stripe =
   STRIPE_SECRET_KEY && typeof STRIPE_SECRET_KEY === "string"
@@ -1117,11 +1119,11 @@ function getFallbackReply({ turnStrategy, cfg, leadMemory }) {
         : `i can break the pricing down properly for you`,
     ],
 answer_offer_question_after_cta: [
-  `${getEffectiveWhatYouDo(cfg)} What are you trying to fix right now?`,
+  `${getEffectiveWhatYouDo(cfg)}`,
 ],
 
 answer_what_you_sell_after_cta: [
-  `${getEffectiveWhatYouDo(cfg)} What are you trying to fix right now?`,
+  `${getEffectiveWhatYouDo(cfg)}`,
 ],
     answer_what_do_i_get_after_cta: structured.what_they_get
       ? [structured.what_they_get]
@@ -1185,7 +1187,7 @@ if (
     return whatYouDo;
   }
 
-  return `I help people get the result they want without all the guesswork - clear plan, proper support, and accountability so they actually stick to it. What are you trying to fix right now?`;
+return `I help people get a proper result without all the guesswork - clear plan, proper support, and accountability so they actually follow through.`;
 }
 
 if (turnStrategy?.type === "answer_what_do_i_get_after_cta") {
@@ -1524,8 +1526,8 @@ function getObjectionFollowUpReply(objectionText, leadMemory, cfg) {
   const attempts = Number(leadMemory?.cta_attempts || 0);
 
   if (t.includes("price") || t.includes("expensive") || t.includes("cost")) {
-    if (attempts >= 2) return "fair bro, but what were you actually expecting to pay for this?";
-    return "fair bro, what were you expecting to pay?";
+    if (attempts >= 2) return "fair, but what were you actually expecting to pay for this?";
+    return "fair, what were you expecting to pay?";
   }
 
   if (t.includes("not sure") || t.includes("unsure")) {
@@ -1535,7 +1537,7 @@ function getObjectionFollowUpReply(objectionText, leadMemory, cfg) {
 
   if (t.includes("think")) {
     if (attempts >= 2) return "fair, but what actually needs clearing up before you move on it?";
-    return "all good bro, what’s the main thing you need to be clear on first?";
+    return "all good, what’s the main thing you need to be clear on first?";
   }
 
   if (t.includes("timing") || t.includes("busy") || t.includes("later")) {
@@ -1544,10 +1546,10 @@ function getObjectionFollowUpReply(objectionText, leadMemory, cfg) {
   }
 
   if (attempts >= 2) {
-    return "fair bro, what’s actually stopping you from moving on it?";
+    return "fair, what’s actually stopping you from moving on it?";
   }
 
-  return "fair bro, what’s the main thing holding you back?";
+  return "fair, what’s the main thing holding you back?";
 }
 
 function getLastAssistantMessages(historyMessages = [], n = 4) {
@@ -1617,6 +1619,11 @@ NON-NEGOTIABLE RULES:
 - do not use em dashes
 - do not use emojis by default
 - do not repeat the same meaning as recent assistant replies
+- you are replying on behalf of one specific business
+- use only the offer, tone, examples, price, process, and fit information provided in context
+- never assume this is fitness unless the provided context clearly says so
+- never assume this is money coaching unless the provided context clearly says so
+- do not invent services, outcomes, pricing, deliverables, or niche details
 QUESTION RULE (IMPORTANT):
 
 Only ask a question if it moves the conversation forward.
@@ -1820,26 +1827,29 @@ async function setLeadManualOverride({ leadId, clientId, enabled, reason, actor 
 
 function getEffectiveWhatYouDo(cfg) {
   const raw = String(cfg?.what_you_do || "").trim();
+  const offerDescription = String(cfg?.offer_description || "").trim();
 
-  if (!raw) {
-    return "I help people get a clear result without all the guesswork - proper support, a clear plan, and accountability so they actually follow through.";
+  if (raw) {
+    const weakPhrases = [
+      "tailored service",
+      "help people get results",
+      "support and guidance",
+      "journey",
+    ];
+
+    const lower = raw.toLowerCase();
+    const weakHit = weakPhrases.some((p) => lower.includes(p));
+
+    if (raw.length >= 35 && !weakHit) {
+      return raw;
+    }
   }
 
-  const weakPhrases = [
-    "tailored service",
-    "help people get results",
-    "support and guidance",
-    "journey",
-  ];
-
-  const lower = raw.toLowerCase();
-  const weakHit = weakPhrases.some((p) => lower.includes(p));
-
-  if (raw.length < 35 || weakHit) {
-    return "I help people get a clear result without all the guesswork - proper support, a clear plan, and accountability so they actually follow through.";
+  if (offerDescription) {
+    return "I help people get a proper result with a clear plan, the right support, and a process that actually helps them follow through.";
   }
 
-  return raw;
+  return "I help people get a proper result with a clear plan, the right support, and a process that actually helps them follow through.";
 }
 
 async function setClientBotPaused({ clientId, enabled, reason, actor }) {
@@ -2362,7 +2372,7 @@ app.post("/admin/api/create-payment-link/:clientId", requireAdmin, async (req, r
       return safeJson(res, 500, error);
     }
 
-const url = `${APP_BASE_URL}/checkout?token=${token}`;
+const url = `${PAY_PUBLIC_URL}/checkout?token=${token}`;
 
     return safeJson(res, 200, {
       ok: true,
@@ -3179,7 +3189,7 @@ app.post("/coach/api/billing-portal", requireCoach, async (req, res) => {
 
     const portal = await stripe.billingPortal.sessions.create({
       customer: String(customerId),
-return_url: `${APP_BASE_URL}/dashboard`,
+return_url: `${APP_PUBLIC_URL}/dashboard`,
     });
 
     return safeJson(res, 200, {
@@ -3286,8 +3296,8 @@ const session = await stripe.checkout.sessions.create({
     payment_token: token ? String(token) : "",
   },
 
-  success_url: `${APP_BASE_URL}/success?paid=1&session_id={CHECKOUT_SESSION_ID}`,
-  cancel_url: `${APP_BASE_URL}/cancel?cancelled=1`,
+success_url: `${PAY_PUBLIC_URL}/success?paid=1&session_id={CHECKOUT_SESSION_ID}`,
+cancel_url: `${PAY_PUBLIC_URL}/cancel?cancelled=1`,
 });
 
     return safeJson(res, 200, {
@@ -3473,42 +3483,53 @@ log("ig_webhook_received", {
 
     res.sendStatus(200);
 
-    void (async () => {
-      try {
-        let { data: lead } = await supabase
-          .from("leads")
-          .select("*")
-          .eq("ig_psid", senderId)
-          .single();
+void (async () => {
+  try {
+    const { data: igAccount, error: igLookupError } = await supabase
+      .from("ig_accounts")
+      .select("client_id, ig_user_id, page_id")
+      .eq("is_active", true)
+      .or(`page_id.eq.${recipientId},ig_user_id.eq.${recipientId}`)
+      .maybeSingle();
 
-        if (!lead) {
-const { data: igAccount, error: igLookupError } = await supabase
-  .from("ig_accounts")
-  .select("client_id, ig_user_id, page_id")
-  .eq("is_active", true)
-  .or(`page_id.eq.${recipientId},ig_user_id.eq.${recipientId}`)
-  .maybeSingle();
+    if (igLookupError || !igAccount?.client_id) {
+      console.error("No active Instagram account/client mapping found", {
+        recipientId,
+        igLookupError: igLookupError?.message || null,
+      });
+      return;
+    }
 
-if (igLookupError || !igAccount?.client_id) {
-  console.error("No active Instagram account/client mapping found", {
-    recipientId,
-    igLookupError: igLookupError?.message || null,
-  });
-  return;
-}
+    let { data: lead, error: leadLookupError } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("client_id", igAccount.client_id)
+      .eq("ig_psid", senderId)
+      .maybeSingle();
 
-          const { data: newLead } = await supabase
-            .from("leads")
-            .insert({
-              client_id: igAccount.client_id,
-              ig_psid: senderId,
-              stage: "new",
-            })
-            .select()
-            .single();
+    if (leadLookupError) {
+      console.error("lead lookup failed:", leadLookupError);
+      return;
+    }
 
-          lead = newLead;
-        }
+    if (!lead) {
+      const { data: newLead, error: newLeadError } = await supabase
+        .from("leads")
+        .insert({
+          client_id: igAccount.client_id,
+          ig_psid: senderId,
+          stage: "new",
+        })
+        .select()
+        .single();
+
+      if (newLeadError) {
+        console.error("lead create failed:", newLeadError);
+        return;
+      }
+
+      lead = newLead;
+    }
 
         const { error: insertIncomingError } = await supabase.from("messages").insert({
           lead_id: lead.id,
