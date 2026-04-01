@@ -157,7 +157,30 @@ function assertStripeConfigured() {
 const MAX_PROMPTS_PER_DAY = 10;
 // ---- SMALL HELPERS ----
 const nowIso = () => new Date().toISOString();
+const MAX_AI_CALLS_PER_MIN = 30;
 
+global.aiCalls = global.aiCalls || [];
+
+async function withTimeout(promise, ms = 8000) {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("timeout")), ms)
+  );
+  return Promise.race([promise, timeout]);
+}
+async function sendWithRetry(fn, retries = 3) {
+  let lastError;
+
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastError = e;
+      await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+    }
+  }
+
+  throw lastError;
+}
 function safeJson(res, status, payload) {
   try {
     return res.status(status).json(payload);
@@ -168,6 +191,15 @@ function safeJson(res, status, payload) {
       return res.end();
     }
   }
+}
+function log(event, data = {}) {
+  console.log(
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      event,
+      ...data,
+    })
+  );
 }
 
 function msSince(iso) {
@@ -431,18 +463,22 @@ function getDefaultFallbackExamples() {
       user: "send me the link",
       assistant: "here you go, pick a slot that works for you",
     },
-    {
-      user: "i’ll think about it",
-      assistant: "fair, what do you need to see before you can decide properly?",
-    },
-    {
-      user: "not sure if it’s for me",
-      assistant: "what’s making you unsure?",
-    },
-    {
-      user: "sounds good",
-      assistant: "then let’s stop dragging it out and get you booked in",
-    },
+{
+  user: "i’ll think about it",
+  assistant: "fair, what’s the main thing holding you back?",
+},
+{
+  user: "not sure if it’s for me",
+  assistant: "what part are you unsure about?",
+},
+{
+  user: "£200 is a bit much",
+  assistant: "fair, what were you expecting to pay?",
+},
+{
+  user: "sounds good",
+  assistant: "calm, wanna get started properly?",
+},
   ];
 }
 
@@ -544,6 +580,18 @@ function mergeLeadMemory(existing, patch) {
       cleanMemoryField(patch.conversation_state) ||
       existing?.conversation_state ||
       null,
+
+cta_attempts:
+  typeof patch.cta_attempts === "number"
+    ? patch.cta_attempts
+    : typeof existing?.cta_attempts === "number"
+    ? existing.cta_attempts
+    : 0,
+
+last_cta_response:
+  cleanMemoryField(patch.last_cta_response) ||
+  existing?.last_cta_response ||
+  null,
 
     answered_price_count:
       typeof patch.answered_price_count === "number"
@@ -658,13 +706,16 @@ Return exactly this shape:
   ];
 
   try {
-    const resp = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      messages,
-      temperature: 0,
-      max_tokens: 220,
-      response_format: { type: "json_object" },
-    });
+const resp = await withTimeout(
+  openai.chat.completions.create({
+    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+    messages,
+    temperature: 0,
+    max_tokens: 220,
+    response_format: { type: "json_object" },
+  }),
+  8000
+);
 
     const text = resp?.choices?.[0]?.message?.content?.trim();
     if (!text) return existingMemory || null;
@@ -992,7 +1043,7 @@ function getOverlapRatio(a, b) {
   return overlap / Math.max(setA.size, setB.size);
 }
 
-function isReplyTooSimilar(newReply, previousAssistantMessages = []) {
+function isReplyTooSimilar(newReply, previousAssistantMessages = [], turnStrategyType = "") {
   const recentAssistantMessages = previousAssistantMessages
     .filter((m) => m?.role === "assistant")
     .slice(-3)
@@ -1001,9 +1052,21 @@ function isReplyTooSimilar(newReply, previousAssistantMessages = []) {
 
   if (!newReply) return false;
 
+  const strictTypes = [
+    "answer_price_after_cta",
+    "handle_price_then_cta",
+    "answer_offer_question_after_cta",
+    "answer_what_you_sell_after_cta",
+    "answer_what_do_i_get_after_cta",
+    "answer_start_process_after_cta",
+    "answer_who_its_for_after_cta",
+  ];
+
+  const threshold = strictTypes.includes(String(turnStrategyType || "")) ? 0.84 : 0.76;
+
   return recentAssistantMessages.some((oldReply) => {
     const ratio = getOverlapRatio(newReply, oldReply);
-    return ratio >= 0.72;
+    return ratio >= threshold;
   });
 }
 function looksIncompleteReply(text) {
@@ -1068,18 +1131,12 @@ handle_think_about_it: [
       `got you - what’s the main thing stopping you from moving on it now?`,
       `fair - are you just looking around or do you actually want help with it?`,
     ],
-    soft_close_to_booking: bookingUrl
-      ? [
-          `makes sense - use this and grab a slot that works for you ${bookingUrl}`,
-          `best next step is just book in here and we’ll go through it properly ${bookingUrl}`,
-        ]
-      : [`makes sense - best next step is we go through it properly`],
-    send_booking_link_now: bookingUrl
-      ? [
-          `${bookingUrl}\n\nuse this and pick a time that works for you`,
-          `${bookingUrl}\n\nbook in here and we’ll take it from there`,
-        ]
-      : [`best thing is get booked in and we’ll go through it properly`],
+soft_close_to_booking: bookingUrl
+  ? [getEscalatedBookingReply(bookingUrl, leadMemory, "soft")]
+  : [`makes sense - best next step is we go through it properly`],
+send_booking_link_now: bookingUrl
+  ? [getEscalatedBookingReply(bookingUrl, leadMemory, "normal")]
+  : [`best thing is get booked in and we’ll go through it properly`],
   };
 
   const options = map[turnStrategy?.type] || [];
@@ -1325,224 +1382,6 @@ function decideTurnStrategyFromIntent({
   };
 }
 
-function decideTurnStrategy({
-  lead,
-  leadMemory,
-  text,
-  bookingUrl,
-  cfg,
-}) {
-  const currentText = String(text || "").trim();
-  const objectionType = detectObjectionType(currentText);
-  const asksPrice = detectPriceQuestion(currentText);
-  const asksOfferQuestion = detectOfferQuestion(currentText);
-  const asksStartProcess = detectStartProcessQuestion(currentText);
-  const asksWhoItsFor = detectWhoItsForQuestion(currentText);
-  const asksWhatYouSell = detectWhatYouSellQuestion(currentText);
-  const explicitLinkRequest = detectExplicitBookingLinkRequest(currentText);
-  const questionAfterLink = detectQuestionAfterLink(currentText);
-  const intentScore = inferIntentScore(currentText, leadMemory);
-  const qualificationPresent = hasUsefulQualification(leadMemory);
-
-  const bookingRecentlySent =
-    !!lead?.booking_sent ||
-    !!leadMemory?.last_cta_at ||
-    (leadMemory?.booking_link_sent_count || 0) > 0;
-
-  if (lead?.call_completed) {
-    return {
-      type: "post_call_support",
-      asksPrice,
-      asksOfferQuestion,
-      asksStartProcess,
-      asksWhoItsFor,
-      asksWhatYouSell,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: false,
-    };
-  }
-
-  if (explicitLinkRequest && bookingUrl) {
-    return {
-      type: "send_booking_link_now",
-      asksPrice,
-      asksOfferQuestion,
-      asksStartProcess,
-      asksWhoItsFor,
-      asksWhatYouSell,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: true,
-    };
-  }
-
-  if (bookingRecentlySent && asksStartProcess) {
-    return {
-      type: "answer_start_process_after_cta",
-      asksPrice,
-      asksOfferQuestion,
-      asksStartProcess,
-      asksWhoItsFor,
-      asksWhatYouSell,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: false,
-    };
-  }
-
-  if (bookingRecentlySent && asksWhoItsFor) {
-    return {
-      type: "answer_who_its_for_after_cta",
-      asksPrice,
-      asksOfferQuestion,
-      asksStartProcess,
-      asksWhoItsFor,
-      asksWhatYouSell,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: false,
-    };
-  }
-
-  if (bookingRecentlySent && asksWhatYouSell) {
-    return {
-      type: "answer_what_you_sell_after_cta",
-      asksPrice,
-      asksOfferQuestion,
-      asksStartProcess,
-      asksWhoItsFor,
-      asksWhatYouSell,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: false,
-    };
-  }
-
-  if (bookingRecentlySent && asksPrice) {
-    return {
-      type: "answer_price_after_cta",
-      asksPrice,
-      asksOfferQuestion,
-      asksStartProcess,
-      asksWhoItsFor,
-      asksWhatYouSell,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: false,
-    };
-  }
-
-  if (bookingRecentlySent && asksOfferQuestion) {
-    return {
-      type: "answer_offer_question_after_cta",
-      asksPrice,
-      asksOfferQuestion,
-      asksStartProcess,
-      asksWhoItsFor,
-      asksWhatYouSell,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: false,
-    };
-  }
-
-  if (bookingRecentlySent && questionAfterLink) {
-    return {
-      type: "answer_question_after_cta",
-      asksPrice,
-      asksOfferQuestion,
-      asksStartProcess,
-      asksWhoItsFor,
-      asksWhatYouSell,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: false,
-    };
-  }
-
-  if (objectionType === "think_about_it") {
-    return {
-      type: "handle_think_about_it",
-      asksPrice,
-      asksOfferQuestion,
-      asksStartProcess,
-      asksWhoItsFor,
-      asksWhatYouSell,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: false,
-    };
-  }
-
-  if (asksPrice && bookingUrl) {
-    return {
-      type: "handle_price_then_cta",
-      asksPrice,
-      asksOfferQuestion,
-      asksStartProcess,
-      asksWhoItsFor,
-      asksWhatYouSell,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: false,
-    };
-  }
-
-  if (bookingUrl && intentScore >= 4 && !bookingRecentlySent) {
-    return {
-      type: "send_booking_link_now",
-      asksPrice,
-      asksOfferQuestion,
-      asksStartProcess,
-      asksWhoItsFor,
-      asksWhatYouSell,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: true,
-    };
-  }
-
-  if (qualificationPresent && bookingUrl && intentScore >= 2 && !bookingRecentlySent) {
-    return {
-      type: "soft_close_to_booking",
-      asksPrice,
-      asksOfferQuestion,
-      asksStartProcess,
-      asksWhoItsFor,
-      asksWhatYouSell,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: true,
-    };
-  }
-
-  if (!qualificationPresent) {
-    return {
-      type: "ask_qualifying_question",
-      asksPrice,
-      asksOfferQuestion,
-      asksStartProcess,
-      asksWhoItsFor,
-      asksWhatYouSell,
-      objectionType,
-      intentScore,
-      shouldSendBookingLink: false,
-    };
-  }
-
-  return {
-    type: "nudge_forward",
-    asksPrice,
-    asksOfferQuestion,
-    asksStartProcess,
-    asksWhoItsFor,
-    asksWhatYouSell,
-    objectionType,
-    intentScore,
-    shouldSendBookingLink: false,
-  };
-}
 function deriveLeadStage({
   lead,
   turnStrategy,
@@ -1695,16 +1534,62 @@ function detectSemanticIntent(text) {
   return "general";
 }
 
-function forceBookingReply(bookingUrl) {
+function getEscalatedBookingReply(bookingUrl, leadMemory, mode = "normal") {
   if (!bookingUrl) return null;
 
-  const options = [
-    `${bookingUrl}\n\nbook in here and we’ll get you sorted`,
-    `${bookingUrl}\n\nuse this and pick a time that works for you`,
-    `${bookingUrl}\n\nbook through here and we’ll take it from there`,
-  ];
+  const attempts = Number(leadMemory?.cta_attempts || 0);
 
-  return options[Math.floor(Math.random() * options.length)];
+  if (mode === "soft") {
+    if (attempts <= 0) {
+      return `makes sense - use this and grab a slot that works for you ${bookingUrl}`;
+    }
+
+    if (attempts === 1) {
+      return `best next step is just get booked in here and we’ll go through it properly ${bookingUrl}`;
+    }
+
+    return `${bookingUrl}\n\nif you want to do it properly, book in and we’ll get it moving`;
+  }
+
+  if (attempts <= 0) {
+    return `${bookingUrl}\n\nuse this and pick a time that works for you`;
+  }
+
+  if (attempts === 1) {
+    return `${bookingUrl}\n\nbook in here and we’ll get you sorted properly`;
+  }
+
+  return `${bookingUrl}\n\nif you’re serious about sorting it, book in and let’s get moving`;
+}
+function getObjectionFollowUpReply(objectionText, leadMemory, cfg) {
+  const t = String(objectionText || "").toLowerCase();
+  const attempts = Number(leadMemory?.cta_attempts || 0);
+
+  if (t.includes("price") || t.includes("expensive") || t.includes("cost")) {
+    if (attempts >= 2) return "fair bro, but what were you actually expecting to pay for this?";
+    return "fair bro, what were you expecting to pay?";
+  }
+
+  if (t.includes("not sure") || t.includes("unsure")) {
+    if (attempts >= 2) return "what part are you still not sold on?";
+    return "what part are you unsure about?";
+  }
+
+  if (t.includes("think")) {
+    if (attempts >= 2) return "fair, but what actually needs clearing up before you move on it?";
+    return "all good bro, what’s the main thing you need to be clear on first?";
+  }
+
+  if (t.includes("timing") || t.includes("busy") || t.includes("later")) {
+    if (attempts >= 2) return "fair - is it genuinely bad timing or are you still not fully sold?";
+    return "fair, is it bad timing right now or are you not fully sold yet?";
+  }
+
+  if (attempts >= 2) {
+    return "fair bro, what’s actually stopping you from moving on it?";
+  }
+
+  return "fair bro, what’s the main thing holding you back?";
 }
 
 function getLastAssistantMessages(historyMessages = [], n = 4) {
@@ -1714,6 +1599,7 @@ function getLastAssistantMessages(historyMessages = [], n = 4) {
     .map((m) => String(m.content || "").trim())
     .filter(Boolean);
 }
+
 async function generateAiReply({
   cfg,
   lead,
@@ -1728,7 +1614,15 @@ async function generateAiReply({
   userText,
 }) {
   if (!openai) return null;
+  const now = Date.now();
+  global.aiCalls = global.aiCalls.filter((t) => now - t < 60000);
 
+  if (global.aiCalls.length >= MAX_AI_CALLS_PER_MIN) {
+    console.warn("AI rate limit hit");
+    return null;
+  }
+
+  global.aiCalls.push(now);
   const structuredOffer = getStructuredOfferContext(cfg);
   const semanticIntent = detectSemanticIntent(userText);
   const recentAssistantReplies = getLastAssistantMessages(historyMessages, 4);
@@ -1747,9 +1641,17 @@ You are a high-converting Instagram DM closer.
 
 Your job is to reply like a real person in DMs and move the conversation forward naturally.
 
+VOICE PRIORITY:
+1. match the example messages first
+2. then follow the coach tone/style/vocabulary
+3. if they conflict, example messages win
+
 NON-NEGOTIABLE RULES:
 - sound human, casual, direct
-- reply in 1-2 short sentences max
+- keep replies concise
+- for simple answers, use 1-2 short sentences
+- for objections or process explanations, you can use 2-4 short message-like lines
+- sound like texting, not an essay
 - answer the user's actual question directly
 - do not dodge questions with vague filler
 - do not sound like support
@@ -1763,6 +1665,18 @@ NON-NEGOTIABLE RULES:
 - if the user asks a follow-up after the link, answer the follow-up first
 - never output incomplete fragments
 - never output placeholders or internal labels
+- keep replies concise and message-like
+- for direct answers, use 1-2 short sentences
+- for explaining price, process, or what they get, you can use 2-3 short text-style lines
+- never write a long paragraph
+- use casual UK DM phrasing naturally
+- occasional words like "bro", "fair", "got you", "calm", "makes sense" are good when they fit
+- do not force slang into every message
+- use lead_memory naturally when it helps
+- do not ask for information already present in lead_memory
+- if lead_memory contains a goal, pain point, desired outcome, or objection, use it to make replies feel specific
+- if cta_attempts is higher, be more decisive and less tentative
+- if last_cta_response shows hesitation, address that hesitation directly instead of repeating the same close
 
 IMPORTANT:
 The user may phrase questions badly.
@@ -1775,6 +1689,24 @@ If the user message is basically asking:
 - who is it for -> explain fit plainly
 - how much -> answer price plainly
 - I'll think about it -> handle objection calmly and ask what they need to decide
+
+OBJECTION RULE:
+If the user hesitates, says it is expensive, says they are not sure, or says they will think about it:
+- do NOT comfort them with weak validation
+- do NOT jump straight to the booking link
+- first ask a sharp, simple question to find the real issue
+- examples:
+  - "fair, what’s the main thing holding you back?"
+  - "what part are you unsure about?"
+  - "compared to what?"
+  - "what were you expecting to pay?"
+
+CTA ESCALATION RULE:
+- if cta_attempts is 0, keep closes light and easy
+- if cta_attempts is 1, be a bit firmer and clearer
+- if cta_attempts is 2 or more, be more direct and decisive
+- do not repeat the exact same CTA wording
+- if last_cta_response shows hesitation, address that first before closing again
 
 Return ONLY valid JSON in this exact shape:
 {
@@ -1805,24 +1737,28 @@ Return ONLY valid JSON in this exact shape:
     asks_price: !!asksPrice,
     high_intent: !!highIntent,
     think_about_it: !!thinkAboutIt,
-    recent_assistant_replies: recentAssistantReplies,
-    lead_memory: leadMemory
-      ? {
-          summary: leadMemory.summary || null,
-          goal: leadMemory.goal || null,
-          current_situation: leadMemory.current_situation || null,
-          pain_points: leadMemory.pain_points || null,
-          desired_outcome: leadMemory.desired_outcome || null,
-          objection: leadMemory.objection || null,
-          intent_level: leadMemory.intent_level || null,
-          last_question_asked: leadMemory.last_question_asked || null,
-          last_cta_type: leadMemory.last_cta_type || null,
-          booking_link_sent_count: leadMemory.booking_link_sent_count || 0,
-          last_user_intent: leadMemory.last_user_intent || null,
-          last_bot_reply_type: leadMemory.last_bot_reply_type || null,
-          conversation_state: leadMemory.conversation_state || null,
-        }
-      : null,
+example_messages_present: examplesToUse.length,    
+recent_assistant_replies: recentAssistantReplies,
+lead_memory: leadMemory
+  ? {
+      summary: leadMemory.summary || null,
+      goal: leadMemory.goal || null,
+      current_situation: leadMemory.current_situation || null,
+      pain_points: leadMemory.pain_points || null,
+      desired_outcome: leadMemory.desired_outcome || null,
+      objection: leadMemory.objection || null,
+      intent_level: leadMemory.intent_level || null,
+      last_question_asked: leadMemory.last_question_asked || null,
+      last_cta_type: leadMemory.last_cta_type || null,
+      booking_link_sent_count: leadMemory.booking_link_sent_count || 0,
+      last_user_intent: leadMemory.last_user_intent || null,
+      last_bot_reply_type: leadMemory.last_bot_reply_type || null,
+      conversation_state: leadMemory.conversation_state || null,
+      cta_attempts: leadMemory.cta_attempts || 0,
+      last_cta_response: leadMemory.last_cta_response || null,
+    }
+  : null,
+
     turn_strategy: turnStrategy
       ? {
           type: turnStrategy.type,
@@ -1846,24 +1782,29 @@ Return ONLY valid JSON in this exact shape:
   ];
 
   try {
-    const resp = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      messages,
-      temperature: 0.55,
-      max_tokens: 220,
-      response_format: { type: "json_object" },
-    });
+const resp = await withTimeout(
+  openai.chat.completions.create({
+    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+    messages,
+    temperature: 0.55,
+    max_tokens: 220,
+    response_format: { type: "json_object" },
+  }),
+  8000
+);
 
     const raw = resp?.choices?.[0]?.message?.content?.trim();
     if (!raw) return null;
 
     let parsed;
     try {
-      parsed = JSON.parse(raw);
-    } catch {
+      parsed = JSON.parse(raw);   
+ } catch {
       return null;
     }
-
+if (!parsed || typeof parsed.reply !== "string") {
+  return null;
+}
     let reply = String(parsed?.reply || "").trim();
     if (!reply) return null;
 
@@ -3356,7 +3297,26 @@ const session = await stripe.checkout.sessions.create({
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
 });
-
+function mapSemanticIntentToUserIntent(semanticIntent) {
+  switch (semanticIntent) {
+    case "booking":
+      return "booking_link_request";
+    case "price":
+      return "price_question";
+    case "offer":
+      return "offer_question";
+    case "deliverables":
+      return "what_do_i_get_question";
+    case "process":
+      return "start_process_question";
+    case "fit":
+      return "who_its_for_question";
+    case "objection":
+      return "think_about_it";
+    default:
+      return "general";
+  }
+}
 /**
  * ===========================
  * STRIPE WEBHOOK
@@ -3521,9 +3481,12 @@ app.post("/webhook", async (req, res) => {
     const text = extractIgText(messaging);
     const isEcho = isIgEcho(messaging);
 
-    console.log("IG WEBHOOK messaging:", JSON.stringify(messaging, null, 2));
-    console.log("senderId:", senderId);
-    console.log("recipientId:", recipientId);
+log("ig_webhook_received", {
+  senderId,
+  recipientId,
+  hasText: !!text,
+  isEcho,
+});
 
     if (!senderId || !text) return res.sendStatus(200);
 
@@ -3538,16 +3501,20 @@ app.post("/webhook", async (req, res) => {
           .single();
 
         if (!lead) {
-          const { data: igAccount } = await supabase
-            .from("ig_accounts")
-            .select("client_id, ig_user_id, page_id")
-            .eq("is_active", true)
-            .single();
+const { data: igAccount, error: igLookupError } = await supabase
+  .from("ig_accounts")
+  .select("client_id, ig_user_id, page_id")
+  .eq("is_active", true)
+  .or(`page_id.eq.${recipientId},ig_user_id.eq.${recipientId}`)
+  .maybeSingle();
 
-          if (!igAccount?.client_id) {
-            console.error("No active Instagram account/client mapping found");
-            return;
-          }
+if (igLookupError || !igAccount?.client_id) {
+  console.error("No active Instagram account/client mapping found", {
+    recipientId,
+    igLookupError: igLookupError?.message || null,
+  });
+  return;
+}
 
           const { data: newLead } = await supabase
             .from("leads")
@@ -3675,8 +3642,30 @@ app.post("/webhook", async (req, res) => {
         const thinkAboutIt = detectThinkAboutIt(text);
         const asksPrice = detectPriceQuestion(text);
         const highIntent = detectHighIntent(text);
-const userIntent = detectUserIntent(text);
+const semanticIntent = detectSemanticIntent(text);
+const userIntent = mapSemanticIntentToUserIntent(semanticIntent);
+const bookingAlreadySentBeforeReply =
+  !!lead?.booking_sent ||
+  !!leadMemory?.last_cta_at ||
+  (leadMemory?.booking_link_sent_count || 0) > 0;
 
+if (
+  bookingAlreadySentBeforeReply &&
+  ["think_about_it", "price_question", "offer_question", "what_do_i_get_question", "start_process_question", "who_its_for_question"].includes(userIntent)
+) {
+  try {
+    leadMemory = await upsertLeadMemory({
+      leadId: lead.id,
+      clientId: lead.client_id,
+      existing: leadMemory,
+      patch: {
+        last_cta_response: userIntent,
+      },
+    });
+  } catch (e) {
+    console.warn("last_cta_response update failed:", e?.message || e);
+  }
+}
 const conversationState = deriveConversationState({
   lead,
   leadMemory,
@@ -3718,21 +3707,40 @@ const bookingAlreadySent =
   !!leadMemory?.last_cta_at ||
   (leadMemory?.booking_link_sent_count || 0) > 0;
 
-if ((explicitLinkRequest || highIntent) && cfg?.booking_url && !bookingAlreadySent) {
-  reply = forceBookingReply(cfg.booking_url);
+const canSendNewBookingPush = cfg?.booking_url && !bookingAlreadySent;
+const canResendBecauseAsked = cfg?.booking_url && explicitLinkRequest;
+
+// explicit ask always wins
+if (canResendBecauseAsked) {
+  reply = getEscalatedBookingReply(cfg.booking_url, leadMemory, "normal");
+}
+else if (aiResult?.should_send_booking_link && canSendNewBookingPush) {
+  const closeMode =
+    turnStrategy?.type === "soft_close_to_booking" ? "soft" : "normal";
+
+  reply = getEscalatedBookingReply(cfg.booking_url, leadMemory, closeMode);
+}
+else if (highIntent && canSendNewBookingPush) {
+  reply = getEscalatedBookingReply(cfg.booking_url, leadMemory, "normal");
 }
 
 if (!reply || looksIncompleteReply(reply)) {
-  reply =
-    buildDeterministicReply({
-      turnStrategy,
-      cfg,
-    }) ||
-    getFallbackReply({
-      turnStrategy,
-      cfg,
-      leadMemory,
-    });
+  if (turnStrategy?.type === "handle_think_about_it") {
+    reply = getObjectionFollowUpReply(text, leadMemory, cfg);
+  }
+
+  if (!reply) {
+    reply =
+      buildDeterministicReply({
+        turnStrategy,
+        cfg,
+      }) ||
+      getFallbackReply({
+        turnStrategy,
+        cfg,
+        leadMemory,
+      });
+  }
 }
 
 if (!reply) return;
@@ -3756,7 +3764,10 @@ const recentAssistantHistory = (historyMessages || [])
   .filter((m) => m?.role === "assistant")
   .slice(-5);
 
-if (isReplyTooSimilar(reply, recentAssistantHistory) || looksIncompleteReply(reply)) {
+if (
+  isReplyTooSimilar(reply, recentAssistantHistory, turnStrategy?.type) ||
+  looksIncompleteReply(reply)
+) {
   const retryAiResult = await generateAiReply({
     cfg,
     lead,
@@ -3850,30 +3861,36 @@ if (isReplyTooSimilar(reply, recentAssistantHistory) || looksIncompleteReply(rep
           const delay = typingDelay + extraDelay;
           await new Promise((res) => setTimeout(res, delay));
 
-          const sendResp = await fetch(
-            `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(
-              igAccount.page_access_token
-            )}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                recipient: { id: senderId },
-                message: { text: msg },
-              }),
-            }
-          );
+const { sendResp, sendData } = await sendWithRetry(async () => {
+  const sendResp = await fetch(
+    `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(
+      igAccount.page_access_token
+    )}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipient: { id: senderId },
+        message: { text: msg },
+      }),
+    }
+  );
 
-          const sendData = await sendResp.json().catch(() => null);
+  const sendData = await sendResp.json().catch(() => null);
 
-          console.log("SEND PART:", msg);
-          console.log("SEND OK:", sendResp.ok);
-          console.log("SEND DATA:", JSON.stringify(sendData, null, 2));
+  if (!sendResp.ok) {
+    throw new Error(`Failed to send IG message: ${JSON.stringify(sendData)}`);
+  }
 
-          if (!sendResp.ok) {
-            throw new Error(`Failed to send IG message: ${JSON.stringify(sendData)}`);
-          }
-
+  return { sendResp, sendData };
+});
+log("ig_message_sent", {
+  leadId: lead.id,
+  senderId,
+  messagePreview: String(msg).slice(0, 120),
+  sendOk: sendResp.ok,
+  sendData,
+});
           const { error: insertOutgoingError } = await supabase.from("messages").insert({
             lead_id: lead.id,
             direction: "out",
@@ -3908,20 +3925,30 @@ if (isReplyTooSimilar(reply, recentAssistantHistory) || looksIncompleteReply(rep
               leadId: lead.id,
               clientId: lead.client_id,
               existing: leadMemory,
-              patch: {
-                ...replyTrackingPatch,
-                conversation_state: sentBookingLink
-                  ? "booking_cta_sent"
-                  : leadMemory?.conversation_state || null,
-                ...(sentBookingLink
-                  ? {
-                      last_cta_type: "booking_link",
-                      last_cta_at: nowIso(),
-                      booking_link_sent_count:
-                        (leadMemory?.booking_link_sent_count || 0) + 1,
-                    }
-                  : {}),
-              },
+patch: {
+  ...replyTrackingPatch,
+  conversation_state: sentBookingLink
+    ? "booking_cta_sent"
+    : leadMemory?.conversation_state || null,
+
+  cta_attempts: sentBookingLink
+    ? (leadMemory?.cta_attempts || 0) + 1
+    : leadMemory?.cta_attempts || 0,
+
+  last_cta_response: sentBookingLink
+    ? "sent_booking_link"
+    : leadMemory?.last_cta_response || null,
+
+  ...(sentBookingLink
+    ? {
+        last_cta_type: "booking_link",
+        last_cta_at: nowIso(),
+        booking_link_sent_count:
+          (leadMemory?.booking_link_sent_count || 0) + 1,
+      }
+    : {}),
+},
+
             });
           } catch (e) {
             console.warn("lead outbound tracking failed:", e?.message || e);
@@ -3941,7 +3968,9 @@ if (isReplyTooSimilar(reply, recentAssistantHistory) || looksIncompleteReply(rep
 
         }
       } catch (err) {
-        console.error("Webhook async error:", err);
+log("webhook_async_error", {
+  error: err?.message || String(err),
+});
       }
     })();
   } catch (err) {
