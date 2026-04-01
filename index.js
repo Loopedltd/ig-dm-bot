@@ -253,7 +253,7 @@ function sanitizeReply(text) {
   return out;
 }
 function detectStartProcessQuestion(text) {
-  return /how do i get started|how do i start|what do i do next|what happens next|how does the process work|what happens after i book|how does onboarding work/i.test(
+  return /how do i get started|how do i start|what do i do next|what happens next|how does the process work|what happens after i book|how does onboarding work|how does it work|how does this work|hows it work|hows this work/i.test(
     String(text || "")
   );
 }
@@ -710,7 +710,7 @@ function detectExplicitBookingLinkRequest(text) {
 }
 
 function detectOfferQuestion(text) {
-  return /what is this|what's this|whats this|what do you actually do|what do you help with|tell me more|how does this work|what is included|what do i get|what do i actually get|what do i get if i join|what comes with it/i.test(
+  return /what is this|what's this|whats this|what is it|what's it|whats it|what do you actually do|what do you help with|tell me more|how does this work|what is included|what do i get|what do i actually get|what do i get if i join|what comes with it|so what is it then|what actually is it/i.test(
     String(text || "")
   );
 }
@@ -1055,10 +1055,11 @@ function getFallbackReply({ turnStrategy, cfg, leadMemory }) {
     answer_who_its_for_after_cta: structured.who_its_for
       ? [structured.who_its_for]
       : [`it’s for people who want proper help and structure, not people just winging it`],
-    handle_think_about_it: [
-      `fair - what do you need to see before you can decide properly?`,
-      `no stress - what’s the main thing you’re unsure about?`,
-    ],
+handle_think_about_it: [
+  `fair - what’s the main thing holding you back?`,
+  `all good - what do you need to see before you can decide properly?`,
+  `got you - is it price, timing or not being fully sure yet?`,
+],
     ask_qualifying_question: [
       `what are you trying to sort out right now?`,
       `what’s the main result you want at the minute?`,
@@ -1644,6 +1645,75 @@ function shouldUseCustomSystemPrompt(cfg) {
   const prompt = String(cfg?.system_prompt || "").trim();
   return prompt.length >= 120;
 }
+function detectSemanticIntent(text) {
+  const t = String(text || "").trim().toLowerCase();
+
+  if (!t) return "general";
+
+  if (
+    /send me the link|booking link|book me in|where do i book|can you send the link|sign me up|i want it|i'm ready|im ready|let's do it|lets do it/.test(t)
+  ) {
+    return "booking";
+  }
+
+  if (
+    /how much|price|cost|pricing|what do you charge/.test(t)
+  ) {
+    return "price";
+  }
+
+  if (
+    /what is it|what's it|whats it|what is this|what's this|whats this|what do you do|what do you actually do|what do you help with|tell me more/.test(t)
+  ) {
+    return "offer";
+  }
+
+  if (
+    /what do i get|what's included|whats included|what comes with it|what do i receive/.test(t)
+  ) {
+    return "deliverables";
+  }
+
+  if (
+    /how does it work|how does this work|how do i start|how do i get started|what happens next|what happens after i book|how does onboarding work/.test(t)
+  ) {
+    return "process";
+  }
+
+  if (
+    /who is this for|who do you help|is this for me|is this suitable for|what kind of people is this for/.test(t)
+  ) {
+    return "fit";
+  }
+
+  if (
+    /i'll think about it|ill think about it|let me think|i'll get back to you|ill get back to you|not sure|unsure|maybe later/.test(t)
+  ) {
+    return "objection";
+  }
+
+  return "general";
+}
+
+function forceBookingReply(bookingUrl) {
+  if (!bookingUrl) return null;
+
+  const options = [
+    `${bookingUrl}\n\nbook in here and we’ll get you sorted`,
+    `${bookingUrl}\n\nuse this and pick a time that works for you`,
+    `${bookingUrl}\n\nbook through here and we’ll take it from there`,
+  ];
+
+  return options[Math.floor(Math.random() * options.length)];
+}
+
+function getLastAssistantMessages(historyMessages = [], n = 4) {
+  return historyMessages
+    .filter((m) => m?.role === "assistant")
+    .slice(-n)
+    .map((m) => String(m.content || "").trim())
+    .filter(Boolean);
+}
 async function generateAiReply({
   cfg,
   lead,
@@ -1655,247 +1725,87 @@ async function generateAiReply({
   highIntent,
   bookingUrl,
   thinkAboutIt,
+  userText,
 }) {
   if (!openai) return null;
 
-const baseCloserPrompt = `
-You are a high-converting Instagram DM setter and closer.
+  const structuredOffer = getStructuredOfferContext(cfg);
+  const semanticIntent = detectSemanticIntent(userText);
+  const recentAssistantReplies = getLastAssistantMessages(historyMessages, 4);
 
-Your job is to move the conversation toward the next step fast and naturally.
-
-RULES:
-- sound like a real person in DMs
-- short replies only
-- answer direct questions directly
-- do not dodge price, offer, process, or who-it's-for questions
-- if intent is high, move to booking immediately
-- do not repeat the same meaning again
-- do not sound like support
-- do not sound needy
-- do not over-explain
-- do not stay stuck in endless qualification
-`;
-
-const coachOverlay = cleanMemoryField(cfg?.system_prompt)
-  ? `\n\nCOACH PREFERENCES:\n${cfg.system_prompt}`
-  : "";
-
-const systemBase = `${baseCloserPrompt}${coachOverlay}`;
-const guardrails = [
-  "Keep replies short (1-2 sentences).",
-  "Ask ONE clear question OR move to a clear next step.",
-  "Do not mention OpenAI or AI.",
-  "No emojis by default.",
-  "Do not use em dashes or double hyphens.",
-  "Do not repeat yourself or re-ask questions already answered.",
-  "Move the conversation forward toward a decision.",
-"Never ask the same type of question twice in a row.",
-"After 1–2 questions, move toward a decision or booking.",
-"If the conversation stalls, guide toward booking instead of asking more questions.",
-  "Use lead_memory to avoid asking for info the user has already given.",
-  "If lead_memory already contains the answer, do not ask for it again.",
-  "Do not sound overeager or overly friendly.",
-  "Do not use customer support language.",
-  "Do not write like a copywriter.",
-  "Prefer confident plain wording over polished wording.",
-  "If booking is the obvious next step, do not hide behind another question.",
-  "If the user is vague, ask the most useful direct question, not a broad one.",
-  "Do not give motivational speeches.",
-  "If the user asks what the offer is, what the coach helps with, who it is for, or how getting started works, answer directly.",
-  "Do not dodge real questions by repeating a booking instruction.",
-  "After the booking link has been sent once, your default should be to answer follow-up questions, not repeat the CTA.",
-  "Only reuse booking language when it genuinely helps the conversation move forward.",
-  "If the user asks how to get started, explain the process clearly instead of repeating that they can book.",
-  "Vary your wording. Do not repeat the same sentence structure across replies.",
-  "If you already answered the same category in the previous assistant reply, do not repeat it in the same way again.",
-  "Use lead_memory.last_bot_reply_type to avoid repeating the same move twice in a row.",
-  "If answered_price_count is already 1 or more, do not keep re-answering price the same way.",
-  "If answered_offer_count is already 1 or more, do not repeat the offer explanation word-for-word.",
-  "If answered_process_count is already 1 or more, do not repeat the onboarding explanation in the same wording.",
-  "If answered_who_its_for_count is already 1 or more, avoid repeating the same audience explanation again.",
-  "Use conversation_state to understand where the conversation is, not just the latest message.",
-  "User intent and reply strategy are different. Respond to the user's intent, not just the last CTA state.",
-  "If the user asks a follow-up after a CTA, answer the follow-up fully before pushing again.",
-  "If your draft reply is basically the same as the last assistant reply, change approach.",
-  "Do not repeat the same meaning with slightly different wording.",
-  "Never output internal labels like 'What you do:', 'What they get:', 'Who it's for:' or 'How it works:'.",
-  "Answer naturally in DM style, not like a form or questionnaire.",
-  "If the user asks what they get, answer from what_they_get.",
-  "If the user asks what the coach does, answer from what_you_do.",
-  "If the user asks who it is for, answer from who_its_for.",
-  "If the user asks how it works or what happens after booking, answer from how_it_works.",
-
-  // 🔥 SALES RULES (NEW)
-  "If user clearly asks for the booking link or says they are ready to buy, send the booking link immediately.",
-  "Do not resend the booking link if it was already sent unless the user explicitly asks for it again.",
-  "If the user asks a real follow-up question after the link was sent, answer the question first.",
-  "If user is warm, guide them toward booking without sounding repetitive.",
-  "If user is cold, ask 1 simple question.",
-  "Never stay stuck in qualification loop.",
-  "If asked about price and offer_price exists in context, say it clearly and naturally.",
-  "If asked what the offer is and offer_description exists in context, explain it clearly in plain English.",
-  "Do not invent prices. If price is unknown, be honest and keep the reply natural.",
-  `Tone: ${getEffectiveTone(cfg)}.`,
-  `Style: ${getEffectiveStyle(cfg)}.`,
-  `Vocabulary: ${getEffectiveVocabulary(cfg)}.`,
-];
-
-  const objectionRules = thinkAboutIt
-    ? [
-        "The user is giving a 'I'll think about it' objection.",
-        "Acknowledge calmly, reduce pressure, and ask what they need to decide.",
-      ]
-    : [];
-
-  const postCallRules = postCallMode
-    ? [
-        "This user has already completed a call.",
-        "Use a matey supportive UK tone.",
-        "Do NOT push booking links or ask them to book a call.",
-      ]
-    : [
-        "This user has not completed a call yet.",
-        "Qualify them: goal, timeline, current situation.",
-      ];
-const strategyRules =
-  turnStrategy?.type === "send_booking_link_now"
-    ? [
-        "TURN STRATEGY: send_booking_link_now",
-        "Do not ask a question first.",
-        "Send or direct the user to the booking link immediately.",
-        "Be confident and assume intent is real.",
-      ]
-    : turnStrategy?.type === "handle_price_then_cta"
-    ? [
-        "TURN STRATEGY: handle_price_then_cta",
-        "Answer the price question briefly and clearly.",
-        "If offer_price exists in context, use it directly.",
-        "Do not resend the booking link unless the user asks for it.",
-        "After answering, you can give a light next step.",
-      ]
-    : turnStrategy?.type === "answer_price_after_cta"
-    ? [
-        "TURN STRATEGY: answer_price_after_cta",
-        "The booking link has already been sent before.",
-        "Do not resend the booking link.",
-        "Answer the user's price question directly.",
-        "If offer_price exists in context, use it plainly.",
-        "After answering, you may add a light nudge, but do not push hard.",
-      ]
-    : turnStrategy?.type === "answer_offer_question_after_cta"
-    ? [
-        "TURN STRATEGY: answer_offer_question_after_cta",
-        "The booking link has already been sent before.",
-        "Do not resend the booking link.",
-        "Answer what the offer is in plain English.",
-        "If offer_description exists in context, use it naturally.",
-        "Do not dodge the question.",
-      ]
-    : turnStrategy?.type === "answer_what_do_i_get_after_cta"
-    ? [
-        "TURN STRATEGY: answer_what_do_i_get_after_cta",
-        "The booking link has already been sent before.",
-        "Do not resend the booking link.",
-        "Answer what the user gets if they join.",
-        "Use what_they_get from context if available.",
-        "Answer plainly and naturally.",
-      ]
-    : turnStrategy?.type === "answer_question_after_cta"
-    ? [
-        "TURN STRATEGY: answer_question_after_cta",
-        "The booking link has already been sent before.",
-        "Do not resend the booking link.",
-        "Answer the user's question first.",
-        "Sound calm and human, not pushy.",
-      ]
-    : turnStrategy?.type === "handle_think_about_it"
-    ? [
-        "TURN STRATEGY: handle_think_about_it",
-        "Do not accept the stall passively.",
-        "Acknowledge calmly and ask what they need to decide.",
-        "Keep pressure low but keep the conversation moving.",
-      ]
-    : turnStrategy?.type === "soft_close_to_booking"
-    ? [
-        "TURN STRATEGY: soft_close_to_booking",
-        "The user is warm enough to move forward.",
-        "Guide them toward booking instead of asking more qualifiers.",
-      ]
-    : turnStrategy?.type === "ask_qualifying_question"
-    ? [
-        "TURN STRATEGY: ask_qualifying_question",
-        "Ask one useful question only.",
-        "Ask for the most important missing sales context.",
-        "Do not ask something already stored in lead_memory.",
-      ]
-    : turnStrategy?.type === "nudge_forward"
-    ? [
-        "TURN STRATEGY: nudge_forward",
-        "Do not restart qualification from scratch.",
-        "Move the user toward a decision or next step.",
-      ]
-    : turnStrategy?.type === "post_call_support"
-    ? [
-        "TURN STRATEGY: post_call_support",
-        "Be helpful and supportive.",
-        "Do not push booking.",
-      ]
-      : turnStrategy?.type === "answer_start_process_after_cta"
-      ? [
-          "TURN STRATEGY: answer_start_process_after_cta",
-          "The booking link has already been sent.",
-          "Do not resend the booking link unless the user explicitly asks for it again.",
-          "Answer how getting started works in plain English.",
-          "Explain the process step by step briefly.",
-          "Typical flow: book through the link, choose a time, attend the call, then onboarding / next steps.",
-          "Sound clear, calm and human.",
-        ]
-      : turnStrategy?.type === "answer_who_its_for_after_cta"
-      ? [
-          "TURN STRATEGY: answer_who_its_for_after_cta",
-          "The booking link has already been sent.",
-          "Do not resend the booking link.",
-          "Answer who the offer is for directly.",
-          "Use offer_description if available.",
-          "Do not dodge the question.",
-        ]
-      : turnStrategy?.type === "answer_what_you_sell_after_cta"
-      ? [
-          "TURN STRATEGY: answer_what_you_sell_after_cta",
-          "The booking link has already been sent.",
-          "Do not resend the booking link.",
-          "Answer what the coach actually sells in plain English.",
-          "Use offer_description if available.",
-          "Do not default back to generic booking language.",
-        ]
-    : [];
-const parsedExamples = parseExampleMessages(cfg?.example_messages);
-const examplesToUse =
-  hasStrongCustomExamples(cfg?.example_messages)
-    ? parsedExamples
+  const examplesToUse = hasStrongCustomExamples(cfg?.example_messages)
+    ? parseExampleMessages(cfg?.example_messages)
     : getDefaultFallbackExamples();
 
-const exampleMessages = examplesToUse.flatMap((ex) => [
-  { role: "user", content: ex.user },
-  { role: "assistant", content: ex.assistant },
-]);
-const structuredOffer = getStructuredOfferContext(cfg);
+  const exampleMessages = examplesToUse.flatMap((ex) => [
+    { role: "user", content: ex.user },
+    { role: "assistant", content: ex.assistant },
+  ]);
+
+  const systemPrompt = `
+You are a high-converting Instagram DM closer.
+
+Your job is to reply like a real person in DMs and move the conversation forward naturally.
+
+NON-NEGOTIABLE RULES:
+- sound human, casual, direct
+- reply in 1-2 short sentences max
+- answer the user's actual question directly
+- do not dodge questions with vague filler
+- do not sound like support
+- do not sound corporate
+- do not use em dashes
+- do not use emojis by default
+- do not repeat the same meaning as recent assistant replies
+- do not ask a question if a direct answer is more useful
+- if the user is clearly ready, move to booking
+- if the booking link was already sent, do not resend it unless the user explicitly asks for it
+- if the user asks a follow-up after the link, answer the follow-up first
+- never output incomplete fragments
+- never output placeholders or internal labels
+
+IMPORTANT:
+The user may phrase questions badly.
+You must infer the meaning and answer the intent, not just exact wording.
+
+If the user message is basically asking:
+- what is it -> explain the offer plainly
+- what do I get -> explain deliverables plainly
+- how does it work -> explain the process plainly
+- who is it for -> explain fit plainly
+- how much -> answer price plainly
+- I'll think about it -> handle objection calmly and ask what they need to decide
+
+Return ONLY valid JSON in this exact shape:
+{
+  "reply": "string",
+  "reply_type": "answer|answer_then_nudge|question|close|objection",
+  "should_send_booking_link": false
+}
+  `.trim();
+
   const context = {
-    lead_stage: lead?.stage ?? null,
-    call_completed: lead?.call_completed ?? false,
-    booking_sent: lead?.booking_sent ?? false,
+    user_message: userText,
+    semantic_intent: semanticIntent,
+    lead_stage: lead?.stage || null,
+    call_completed: !!lead?.call_completed,
+    booking_sent: !!lead?.booking_sent,
     booking_url_present: !!bookingUrl,
+    booking_url: bookingUrl || null,
+    offer_price: cfg?.offer_price || null,
     offer_description: cfg?.offer_description || null,
     what_you_do: structuredOffer.what_you_do || null,
     what_they_get: structuredOffer.what_they_get || null,
     who_its_for: structuredOffer.who_its_for || null,
     how_it_works: structuredOffer.how_it_works || null,
-    offer_price: cfg?.offer_price || null,
- user_asked_price: asksPrice,
-    user_high_intent: highIntent,
-    think_about_it_objection: !!thinkAboutIt,
-    manual_override: !!lead?.manual_override,
-    bot_paused: !!cfg?.bot_paused,
+    tone: getEffectiveTone(cfg),
+    style: getEffectiveStyle(cfg),
+    vocabulary: getEffectiveVocabulary(cfg),
+    post_call_mode: !!postCallMode,
+    asks_price: !!asksPrice,
+    high_intent: !!highIntent,
+    think_about_it: !!thinkAboutIt,
+    recent_assistant_replies: recentAssistantReplies,
     lead_memory: leadMemory
       ? {
           summary: leadMemory.summary || null,
@@ -1910,64 +1820,64 @@ const structuredOffer = getStructuredOfferContext(cfg);
           booking_link_sent_count: leadMemory.booking_link_sent_count || 0,
           last_user_intent: leadMemory.last_user_intent || null,
           last_bot_reply_type: leadMemory.last_bot_reply_type || null,
-          conversation_state: leadMemory.conversation_state || null,         
- answered_price_count: leadMemory.answered_price_count || 0,
-          answered_offer_count: leadMemory.answered_offer_count || 0,
-          answered_process_count: leadMemory.answered_process_count || 0,
-          answered_who_its_for_count: leadMemory.answered_who_its_for_count || 0,
+          conversation_state: leadMemory.conversation_state || null,
         }
       : null,
-
     turn_strategy: turnStrategy
       ? {
           type: turnStrategy.type,
-          asksPrice: !!turnStrategy.asksPrice,
-          objectionType: turnStrategy.objectionType || null,
           intentScore: turnStrategy.intentScore ?? null,
           shouldSendBookingLink: !!turnStrategy.shouldSendBookingLink,
         }
-      : null, 
- };
+      : null,
+  };
 
-const messages = [
-  {
-    role: "system",
-content: [
-  systemBase,
-  "",
-  "RULES:",
-  ...guardrails.map((x) => `- ${x}`),
-  ...postCallRules.map((x) => `- ${x}`),
-  ...strategyRules.map((x) => `- ${x}`),
-  ...objectionRules.map((x) => `- ${x}`),
-  "",
-  "EXAMPLE USAGE RULES:",
-  "- Match the tone, wording, and sentence length of the examples.",
-  "- Do not copy examples word-for-word.",
-  "- Examples override generic style rules.",
-  "",
-  "CONTEXT:",
-  JSON.stringify(context, null, 2),
-].join("\n"),
-  },
-  ...exampleMessages,
-  ...(historyMessages || []),
-];
+  const messages = [
+    {
+      role: "system",
+      content: systemPrompt,
+    },
+    ...exampleMessages,
+    ...(historyMessages || []),
+    {
+      role: "user",
+      content: JSON.stringify(context, null, 2),
+    },
+  ];
 
   try {
     const resp = await openai.chat.completions.create({
       model: process.env.OPENAI_MODEL || "gpt-4o-mini",
       messages,
-temperature: 0.45,
-max_tokens: 260,
+      temperature: 0.55,
+      max_tokens: 220,
+      response_format: { type: "json_object" },
     });
 
-    const text = resp?.choices?.[0]?.message?.content?.trim();
-    if (!text) return null;
+    const raw = resp?.choices?.[0]?.message?.content?.trim();
+    if (!raw) return null;
 
-return sanitizeReply(stripOverusedFillers(stripWeakPhrases(text)));
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+
+    let reply = String(parsed?.reply || "").trim();
+    if (!reply) return null;
+
+    reply = sanitizeReply(stripOverusedFillers(stripWeakPhrases(reply)));
+
+    if (looksIncompleteReply(reply)) return null;
+
+    return {
+      reply,
+      reply_type: String(parsed?.reply_type || "answer"),
+      should_send_booking_link: !!parsed?.should_send_booking_link,
+    };
   } catch (e) {
-    console.warn("⚠️ OpenAI error, falling back:", e?.message || e);
+    console.warn("⚠️ OpenAI error:", e?.message || e);
     return null;
   }
 }
@@ -3786,50 +3696,48 @@ turnStrategy = preventRepeatedReplyType(turnStrategy, leadMemory);
 
         lead.last_message = text;
 
-let reply = buildDeterministicReply({
-  turnStrategy,
+const aiResult = await generateAiReply({
   cfg,
+  lead,
+  historyMessages,
+  leadMemory,
+  turnStrategy,
+  postCallMode: lead.call_completed,
+  asksPrice,
+  highIntent,
+  bookingUrl: cfg?.booking_url || null,
+  thinkAboutIt,
+  userText: text,
 });
 
-const usedDeterministicReply = !!reply;
+let reply = aiResult?.reply || null;
 
-if (!reply) {
-  reply = await generateAiReply({
-    cfg,
-    lead,
-    historyMessages,
-    leadMemory,
-    turnStrategy,
-    postCallMode: lead.call_completed,
-    asksPrice,
-    highIntent,
-    bookingUrl: cfg?.booking_url || null,
-    thinkAboutIt,
-  });
-}
+const explicitLinkRequest = detectExplicitBookingLinkRequest(text);
+const bookingAlreadySent =
+  !!lead?.booking_sent ||
+  !!leadMemory?.last_cta_at ||
+  (leadMemory?.booking_link_sent_count || 0) > 0;
 
-if (turnStrategy?.type === "send_booking_link_now" && cfg?.booking_url) {
-  const ctaOptions = [
-    `${cfg.booking_url}\n\nbook in here and we’ll get you sorted`,
-    `${cfg.booking_url}\n\nuse this and pick a time that works for you`,
-    `${cfg.booking_url}\n\nbook through here and we’ll take it from there`,
-  ];
-
-  reply = ctaOptions[Math.floor(Math.random() * ctaOptions.length)];
+if ((explicitLinkRequest || highIntent) && cfg?.booking_url && !bookingAlreadySent) {
+  reply = forceBookingReply(cfg.booking_url);
 }
 
 if (!reply || looksIncompleteReply(reply)) {
-  reply = getFallbackReply({
-    turnStrategy,
-    cfg,
-    leadMemory,
-  });
+  reply =
+    buildDeterministicReply({
+      turnStrategy,
+      cfg,
+    }) ||
+    getFallbackReply({
+      turnStrategy,
+      cfg,
+      leadMemory,
+    });
 }
 
 if (!reply) return;
 
 const shouldHumanise =
-  !usedDeterministicReply &&
   ![
     "answer_price_after_cta",
     "handle_price_then_cta",
@@ -3849,23 +3757,53 @@ const recentAssistantHistory = (historyMessages || [])
   .slice(-5);
 
 if (isReplyTooSimilar(reply, recentAssistantHistory) || looksIncompleteReply(reply)) {
-  const fallback = getFallbackReply({
-    turnStrategy,
+  const retryAiResult = await generateAiReply({
     cfg,
+    lead,
+    historyMessages: [
+      ...(historyMessages || []),
+      {
+        role: "system",
+        content:
+          "Your last draft was too repetitive or incomplete. Answer the user's meaning directly in a new way. Do not repeat recent assistant wording.",
+      },
+    ],
     leadMemory,
+    turnStrategy,
+    postCallMode: lead.call_completed,
+    asksPrice,
+    highIntent,
+    bookingUrl: cfg?.booking_url || null,
+    thinkAboutIt,
+    userText: text,
   });
 
-  if (fallback) {
-    const fallbackIsStructured =
-      turnStrategy?.type === "answer_price_after_cta" ||
-      turnStrategy?.type === "handle_price_then_cta" ||
-      turnStrategy?.type === "answer_offer_question_after_cta" ||
-      turnStrategy?.type === "answer_what_do_i_get_after_cta" ||
-      turnStrategy?.type === "answer_start_process_after_cta" ||
-      turnStrategy?.type === "answer_who_its_for_after_cta" ||
-      turnStrategy?.type === "answer_what_you_sell_after_cta";
+  if (retryAiResult?.reply && !looksIncompleteReply(retryAiResult.reply)) {
+    reply = retryAiResult.reply;
+  } else {
+    const fallback =
+      buildDeterministicReply({
+        turnStrategy,
+        cfg,
+      }) ||
+      getFallbackReply({
+        turnStrategy,
+        cfg,
+        leadMemory,
+      });
 
-    reply = fallbackIsStructured ? fallback : humaniseText(fallback);
+    if (fallback) {
+      const fallbackIsStructured =
+        turnStrategy?.type === "answer_price_after_cta" ||
+        turnStrategy?.type === "handle_price_then_cta" ||
+        turnStrategy?.type === "answer_offer_question_after_cta" ||
+        turnStrategy?.type === "answer_what_do_i_get_after_cta" ||
+        turnStrategy?.type === "answer_start_process_after_cta" ||
+        turnStrategy?.type === "answer_who_its_for_after_cta" ||
+        turnStrategy?.type === "answer_what_you_sell_after_cta";
+
+      reply = fallbackIsStructured ? fallback : humaniseText(fallback);
+    }
   }
 }
 

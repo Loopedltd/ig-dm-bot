@@ -162,16 +162,17 @@ function parseExampleMessages(raw) {
       return {
         ok: false,
         error:
-          "Invalid format.\n\nUse:\nuser: ...\nassistant: ...",
+          "Example messages format is invalid.\n\nUse:\nuser: ...\nassistant: ...",
       };
     }
+
     const user = String(match[1] || "").trim();
     const assistant = String(match[2] || "").trim();
 
     if (!user || !assistant) {
       return {
         ok: false,
-        error: "Each example must include both user and assistant.",
+        error: "Each example must include both a user line and an assistant line.",
       };
     }
 
@@ -185,19 +186,19 @@ function parseExampleMessages(raw) {
 }
 function getDefaultExampleMessages() {
   return `user: how much is it?
-assistant:
+assistant: it’s £200 setup and £90 a month after that
 
 user: what do you actually help with?
-assistant:
+assistant: i help people get a proper result with structure, support and a plan that actually fits them
 
 user: i’m not sure if it’s for me
-assistant:
+assistant: what’s making you unsure?
 
-user: how quickly will i see results?
-assistant:
+user: how does it work?
+assistant: you book in, we go through where you’re at, then we get everything set up properly from there
 
 user: i’ll think about it
-assistant:`;
+assistant: fair - what do you need to see before you can decide properly?`;
 }
   async function apiFetch(path, opts = {}) {
     const token = getToken();
@@ -367,11 +368,8 @@ const offer_what = offerWhatEl ? String(offerWhatEl.value || "").trim() : "";
 const offer_features = offerFeaturesEl ? String(offerFeaturesEl.value || "").trim() : "";
 const offer_audience = offerAudienceEl ? String(offerAudienceEl.value || "").trim() : "";
 const offer_process = offerProcessEl ? String(offerProcessEl.value || "").trim() : "";
-
-if (!offer_what || !offer_features || !offer_audience || !offer_process) {
-  setErr("Fill in all offer sections before generating a prompt.");
-  return;
-}
+const offer_price = offerPriceEl ? String(offerPriceEl.value || "").trim() : "";
+const example_messages = exampleEl ? String(exampleEl.value || "").trim() : "";
 
       btn.disabled = true;
       btn.style.opacity = "0.75";
@@ -761,19 +759,25 @@ const offer_audience = offerAudienceEl ? String(offerAudienceEl.value || "").tri
 const offer_process = offerProcessEl ? String(offerProcessEl.value || "").trim() : "";
 const offer_price = offerPriceEl ? String(offerPriceEl.value || "").trim() : "";
 
-const offer_description = `
-What you do:
-${offer_what}
+const offerSections = [];
 
-What they get:
-${offer_features}
+if (offer_what) {
+  offerSections.push(`What you do:\n${offer_what}`);
+}
 
-Who it's for:
-${offer_audience}
+if (offer_features) {
+  offerSections.push(`What they get:\n${offer_features}`);
+}
 
-How it works:
-${offer_process}
-`.trim();
+if (offer_audience) {
+  offerSections.push(`Who it's for:\n${offer_audience}`);
+}
+
+if (offer_process) {
+  offerSections.push(`How it works:\n${offer_process}`);
+}
+
+const offer_description = offerSections.join("\n\n");
 
 const parsedExamples = parseExampleMessages(rawExamples);
 
@@ -782,62 +786,12 @@ if (!parsedExamples.ok) {
   return;
 }
 
-// 🚨 NEW: enforce all 5 answers filled
-const blocks = rawExamples
-  .split(/\n\s*\n/)
-  .map(b => b.trim())
-  .filter(Boolean);
-
-if (blocks.length < 5) {
-  setErr("Please answer all 5 example questions.");
-  return;
-}
-
-for (const block of blocks) {
-  const match = block.match(/assistant:\s*([\s\S]*)/i);
-  const answer = match ? String(match[1]).trim() : "";
-
-  if (!answer) {
-    setErr("Fill in all assistant replies before saving.");
-    return;
-  }
-
-  if (answer.length < 5) {
-    setErr("Replies are too short — write how you’d actually respond.");
-    return;
-  }
-}
-if (!offer_what || !offer_features || !offer_audience || !offer_process) {
-  setErr("Fill in all offer sections: What you do, What they get, Who it's for, and How it works.");
-  return;
-}
-
-if (offer_what.length < 12) {
-  setErr("“What you do” is too vague.");
-  return;
-}
-
-if (offer_features.length < 12) {
-  setErr("“What they get” is too vague.");
-  return;
-}
-
-if (offer_audience.length < 12) {
-  setErr("“Who it's for” is too vague.");
-  return;
-}
-
-if (offer_process.length < 12) {
-  setErr("“How it works” is too vague.");
-  return;
-}
-
 const example_messages = parsedExamples.value;
 
-          if (!system_prompt) {
-            setErr("Please fill in “How your assistant should reply”.");
-            return;
-          }
+if (!system_prompt && !offer_description && !example_messages) {
+  setErr("Add at least some context — examples, offer details, or a prompt.");
+  return;
+}
 
           saveBtn.disabled = true;
           saveBtn.style.opacity = "0.75";
