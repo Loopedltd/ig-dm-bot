@@ -342,7 +342,7 @@ function cleanObjectionReply(text) {
   out = out.replace(/^i get that[!.]?\s*/i, "");
   out = out.replace(/^makes sense[!.]?\s*/i, "");
   out = out.replace(/^fair enough[!.]?\s*/i, "");
-
+out = out.replace(/^,\s*/, "");
   out = out.replace(/\s{2,}/g, " ").trim();
   return out;
 }
@@ -364,21 +364,44 @@ function humaniseText(text) {
 function splitIntoMessages(text) {
   if (!text) return [];
 
-  let parts = text
-    .split(/(?<=[.!?])\s+|\n+/)
-    .map((p) => p.trim())
-    .filter(Boolean);
+  const raw = String(text).trim();
+  if (!raw) return [];
 
-  if (parts.length === 1 && text.length > 80) {
-    const words = text.split(" ");
-    const mid = Math.floor(words.length / 2);
-    parts = [
-      words.slice(0, mid).join(" "),
-      words.slice(mid).join(" "),
-    ];
+  if (raw.includes("\n\n")) {
+    return raw
+      .split(/\n{2,}/)
+      .map((p) => p.trim())
+      .filter(Boolean);
   }
 
-  return parts;
+  if (raw.length <= 220) {
+    return [raw];
+  }
+
+  const sentences = raw.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [raw];
+  const parts = [];
+  let current = "";
+
+  for (const sentence of sentences) {
+    const s = sentence.trim();
+    if (!s) continue;
+
+    if (!current) {
+      current = s;
+      continue;
+    }
+
+    if ((current + " " + s).length <= 220) {
+      current += " " + s;
+    } else {
+      parts.push(current.trim());
+      current = s;
+    }
+  }
+
+  if (current) parts.push(current.trim());
+
+  return parts.length ? parts : [raw];
 }
 function parseExampleMessages(raw) {
   const text = String(raw || "").trim();
@@ -744,6 +767,13 @@ function mergeLeadMemory(existing, patch) {
       existing?.last_question_asked ||
       null,
 
+    timeline: cleanMemoryField(patch.timeline) || existing?.timeline || null,
+    event_name: cleanMemoryField(patch.event_name) || existing?.event_name || null,
+    motivation: cleanMemoryField(patch.motivation) || existing?.motivation || null,
+    budget: cleanMemoryField(patch.budget) || existing?.budget || null,
+    trust_barrier:
+      cleanMemoryField(patch.trust_barrier) || existing?.trust_barrier || null,
+
     last_cta_type:
       cleanMemoryField(patch.last_cta_type) || existing?.last_cta_type || null,
     last_cta_at: patch.last_cta_at || existing?.last_cta_at || null,
@@ -768,17 +798,17 @@ function mergeLeadMemory(existing, patch) {
       existing?.conversation_state ||
       null,
 
-cta_attempts:
-  typeof patch.cta_attempts === "number"
-    ? patch.cta_attempts
-    : typeof existing?.cta_attempts === "number"
-    ? existing.cta_attempts
-    : 0,
+    cta_attempts:
+      typeof patch.cta_attempts === "number"
+        ? patch.cta_attempts
+        : typeof existing?.cta_attempts === "number"
+        ? existing.cta_attempts
+        : 0,
 
-last_cta_response:
-  cleanMemoryField(patch.last_cta_response) ||
-  existing?.last_cta_response ||
-  null,
+    last_cta_response:
+      cleanMemoryField(patch.last_cta_response) ||
+      existing?.last_cta_response ||
+      null,
 
     answered_price_count:
       typeof patch.answered_price_count === "number"
@@ -835,7 +865,7 @@ async function extractLeadMemory({
   const messages = [
     {
       role: "system",
-      content: `
+content: `
 You extract structured sales memory from Instagram DMs.
 
 Return ONLY valid JSON.
@@ -845,9 +875,13 @@ Rules:
 - Do not invent anything
 - If unknown, use null
 - intent_level must be one of: "cold", "warm", "hot", or null
-- last_question_asked should only capture the assistant's latest meaningful question if one exists
-- objection should capture the user's main hesitation if present
 - summary should be 1 short sentence max
+- timeline = any time marker or deadline like "september", "summer", "in 8 weeks"
+- event_name = any event or reason with a date attached like "holiday", "wedding", "photoshoot", "birthday", "event"
+- motivation = emotional reason like "confidence", "look better", "feel good", "prove to myself"
+- budget = what they expected / can afford if mentioned
+- trust_barrier = if they seem unsure whether this will work, whether it's for them, or whether to trust it
+- last_question_asked should only capture the assistant's latest meaningful question if one exists
 
 Return exactly this shape:
 {
@@ -858,26 +892,36 @@ Return exactly this shape:
   "desired_outcome": null,
   "objection": null,
   "intent_level": null,
-  "last_question_asked": null
+  "last_question_asked": null,
+  "timeline": null,
+  "event_name": null,
+  "motivation": null,
+  "budget": null,
+  "trust_barrier": null
 }
-      `.trim(),
+`.trim(),
     },
     {
       role: "user",
       content: JSON.stringify(
         {
-          existing_memory: existingMemory
-            ? {
-                summary: existingMemory.summary,
-                goal: existingMemory.goal,
-                current_situation: existingMemory.current_situation,
-                pain_points: existingMemory.pain_points,
-                desired_outcome: existingMemory.desired_outcome,
-                objection: existingMemory.objection,
-                intent_level: existingMemory.intent_level,
-                last_question_asked: existingMemory.last_question_asked,
-              }
-            : null,
+existing_memory: existingMemory
+  ? {
+      summary: existingMemory.summary,
+      goal: existingMemory.goal,
+      current_situation: existingMemory.current_situation,
+      pain_points: existingMemory.pain_points,
+      desired_outcome: existingMemory.desired_outcome,
+      objection: existingMemory.objection,
+      intent_level: existingMemory.intent_level,
+      last_question_asked: existingMemory.last_question_asked,
+      timeline: existingMemory.timeline,
+      event_name: existingMemory.event_name,
+      motivation: existingMemory.motivation,
+      budget: existingMemory.budget,
+      trust_barrier: existingMemory.trust_barrier,
+    }
+  : null,
           latest_user_message: currentMessage,
           recent_messages: recent,
           lead_meta: {
@@ -918,7 +962,12 @@ const resp = await withTimeout(
       objection: parsed.objection,
       intent_level: parsed.intent_level,
       last_question_asked: parsed.last_question_asked,
-    });
+      timeline: parsed.timeline,
+      event_name: parsed.event_name,
+      motivation: parsed.motivation,
+      budget: parsed.budget,
+      trust_barrier: parsed.trust_barrier,    
+});
   } catch (e) {
     console.warn("lead memory extraction failed:", e?.message || e);
     return existingMemory || null;
@@ -1031,7 +1080,10 @@ function hasUsefulQualification(leadMemory) {
     leadMemory?.goal ||
     leadMemory?.current_situation ||
     leadMemory?.pain_points ||
-    leadMemory?.desired_outcome
+    leadMemory?.desired_outcome ||
+    leadMemory?.timeline ||
+    leadMemory?.event_name ||
+    leadMemory?.motivation
   );
 }
 function detectUserIntent(text) {
@@ -1306,18 +1358,29 @@ answer_what_you_sell_after_cta: [
       ? [structured.who_its_for]
       : [`it’s for people who want proper help and structure, not people just winging it`],
 handle_think_about_it: [
-  `fair - what’s the main thing holding you back?`,
+  `thats fair - what’s the main thing holding you back?`,
   `all good - what do you need to see before you can decide properly?`,
   `got you - is it price, timing or not being fully sure yet?`,
 ],
-    ask_qualifying_question: [
-      `what are you trying to sort out right now?`,
-      `what’s the main result you want at the minute?`,
-    ],
-    nudge_forward: [
-      `got you - what’s the main thing stopping you from moving on it now?`,
-      `fair - are you just looking around or do you actually want help with it?`,
-    ],
+ask_qualifying_question: [
+  `what’s the main thing you want to fix right now?`,
+  `what’s been the hardest part for you so far?`,
+  `what are you actually trying to get sorted?`,
+  `what’s the main result you want from this?`,
+  `what’s not working properly for you at the minute?`,
+  `what have you been struggling to sort on your own?`,
+],
+
+nudge_forward: [
+  `got you - what’s the main thing stopping you from moving on it now?`,
+  `okay - are you just looking around or do you actually want help with it?`,
+  `thats fair - what’s the bit you’re still not sold on?`,
+  `got you - is it more the price, the timing, or are you just not fully sure yet?`,
+  `okay - what’s actually holding you back from sorting it properly?`,
+  `thats fair - do you actually want help with this or are you still just weighing it up?`,
+  `got you - what needs clearing up before you’d move on it?`,
+  `thats fair - what’s the main hesitation right now?`,
+],
 soft_close_to_booking: bookingUrl
   ? [getEscalatedBookingReply(bookingUrl, leadMemory, "soft")]
   : [`makes sense - best next step is we go through it properly`],
@@ -1402,7 +1465,13 @@ function deriveConversationState({ lead, leadMemory, userIntent }) {
     (leadMemory?.booking_link_sent_count || 0) > 0;
 
   const hasQualification = hasUsefulQualification(leadMemory);
-  const objection = String(leadMemory?.objection || "").toLowerCase();
+  const hasGoal = !!leadMemory?.goal;
+  const hasObstacle =
+    !!leadMemory?.pain_points ||
+    !!leadMemory?.objection ||
+    !!leadMemory?.trust_barrier;
+  const hasReasonWhyNow = !!leadMemory?.timeline || !!leadMemory?.event_name;
+  const intent = String(leadMemory?.intent_level || "");
 
   if (bookingSent) {
     if (
@@ -1410,7 +1479,8 @@ function deriveConversationState({ lead, leadMemory, userIntent }) {
       userIntent === "offer_question" ||
       userIntent === "what_do_i_get_question" ||
       userIntent === "start_process_question" ||
-      userIntent === "who_its_for_question"
+      userIntent === "who_its_for_question" ||
+      userIntent === "think_about_it"
     ) {
       return "post_cta_followup";
     }
@@ -1418,21 +1488,27 @@ function deriveConversationState({ lead, leadMemory, userIntent }) {
     return "booking_cta_sent";
   }
 
-  if (objection) return "objection_handling";
+  if (userIntent === "think_about_it" || leadMemory?.objection) {
+    return "objection_handling";
+  }
 
-  if (hasQualification && leadMemory?.intent_level === "hot") {
+  if (intent === "hot" && hasQualification) {
     return "ready_to_close";
   }
 
-  if (hasQualification && leadMemory?.intent_level === "warm") {
-    return "warm_qualified";
+  if (intent === "warm" && hasGoal && hasObstacle) {
+    return "warmed";
+  }
+
+  if (hasQualification && hasReasonWhyNow) {
+    return "well_qualified";
   }
 
   if (hasQualification) {
     return "qualified";
   }
 
-  return "new_lead";
+  return "discovery";
 }
 
 function decideTurnStrategyFromIntent({
@@ -1452,6 +1528,13 @@ function decideTurnStrategyFromIntent({
 
   const hasBookingUrl = !!bookingUrl;
   const hasQualification = hasUsefulQualification(leadMemory);
+  const hasGoal = !!leadMemory?.goal;
+  const hasObstacle =
+    !!leadMemory?.pain_points ||
+    !!leadMemory?.objection ||
+    !!leadMemory?.trust_barrier;
+  const hasWhyNow = !!leadMemory?.timeline || !!leadMemory?.event_name;
+  const enoughWarmth = hasGoal && (hasObstacle || hasWhyNow);
 
   if (conversationState === "post_call") {
     return {
@@ -1461,11 +1544,8 @@ function decideTurnStrategyFromIntent({
     };
   }
 
-  // 1. HIGH INTENT -> CLOSE
   if (
-    (userIntent === "booking_link_request" ||
-      userIntent === "high_intent" ||
-      intentScore >= 4) &&
+    userIntent === "booking_link_request" &&
     hasBookingUrl &&
     !bookingRecentlySent
   ) {
@@ -1476,11 +1556,7 @@ function decideTurnStrategyFromIntent({
     };
   }
 
-  // 2. OBJECTION -> PROBE
-  if (
-    userIntent === "think_about_it" ||
-    detectObjectionType(text)
-  ) {
+  if (userIntent === "think_about_it" || detectObjectionType(text)) {
     return {
       type: "handle_think_about_it",
       intentScore,
@@ -1488,7 +1564,6 @@ function decideTurnStrategyFromIntent({
     };
   }
 
-  // 3. QUESTION -> ANSWER
   if (userIntent === "price_question") {
     return {
       type: bookingRecentlySent
@@ -1499,15 +1574,15 @@ function decideTurnStrategyFromIntent({
     };
   }
 
-  if (userIntent === "offer_question") {
-    return {
-      type: bookingRecentlySent
-        ? "answer_offer_question_after_cta"
-        : "answer_what_you_sell_after_cta",
-      intentScore,
-      shouldSendBookingLink: false,
-    };
-  }
+if (userIntent === "offer_question") {
+  return {
+    type: bookingRecentlySent
+      ? "answer_offer_question_after_cta"
+      : "answer_what_you_sell_after_cta",
+    intentScore,
+    shouldSendBookingLink: false,
+  };
+}
 
   if (userIntent === "what_do_i_get_question") {
     return {
@@ -1533,9 +1608,23 @@ function decideTurnStrategyFromIntent({
     };
   }
 
-  // warm but not fully explicit yet
   if (
-    (userIntent === "soft_intent" || intentScore >= 2 || conversationState === "warm_qualified") &&
+    (userIntent === "high_intent" || intentScore >= 4) &&
+    hasBookingUrl &&
+    !bookingRecentlySent &&
+    enoughWarmth
+  ) {
+    return {
+      type: "send_booking_link_now",
+      intentScore,
+      shouldSendBookingLink: true,
+    };
+  }
+
+  if (
+    (conversationState === "ready_to_close" ||
+      conversationState === "well_qualified" ||
+      (userIntent === "soft_intent" && enoughWarmth)) &&
     hasBookingUrl &&
     !bookingRecentlySent
   ) {
@@ -1546,8 +1635,7 @@ function decideTurnStrategyFromIntent({
     };
   }
 
-  // 4. EARLY -> QUALIFY
-  if (!hasQualification || conversationState === "new_lead") {
+  if (!hasQualification || conversationState === "discovery") {
     return {
       type: "ask_qualifying_question",
       intentScore,
@@ -1592,7 +1680,10 @@ function deriveLeadStage({
     leadMemory?.goal ||
     leadMemory?.current_situation ||
     leadMemory?.pain_points ||
-    leadMemory?.desired_outcome
+    leadMemory?.desired_outcome ||
+    leadMemory?.timeline ||
+    leadMemory?.event_name ||
+    leadMemory?.motivation
   ) {
     return "qualified";
   }
@@ -1664,29 +1755,43 @@ function getEscalatedBookingReply(bookingUrl, leadMemory, mode = "normal") {
   if (!bookingUrl) return null;
 
   const attempts = Number(leadMemory?.cta_attempts || 0);
+  const anchor = buildMemoryAnchor(leadMemory);
 
   if (mode === "soft") {
     if (attempts <= 0) {
-      return `makes sense - use this and grab a slot that works for you ${bookingUrl}`;
+      return anchor
+        ? `${bookingUrl}\n\nif you want to get this moving ${anchor}, grab a slot that works for you`
+        : `makes sense - use this and grab a slot that works for you ${bookingUrl}`;
     }
 
     if (attempts === 1) {
-      return `best next step is just get booked in here and we’ll go through it properly ${bookingUrl}`;
+      return anchor
+        ? `${bookingUrl}\n\nbest next step is getting booked in if you want to sort this ${anchor}`
+        : `best next step is just get booked in here and we’ll go through it properly ${bookingUrl}`;
     }
 
-    return `${bookingUrl}\n\nif you want to do it properly, book in and we’ll get it moving`;
+    return anchor
+      ? `${bookingUrl}\n\nif you’re serious about sorting this ${anchor}, get booked in`
+      : `${bookingUrl}\n\nif you want to do it properly, book in and we’ll get it moving`;
   }
 
   if (attempts <= 0) {
-    return `${bookingUrl}\n\nuse this and pick a time that works for you`;
+    return anchor
+      ? `${bookingUrl}\n\nif you want to sort this ${anchor}, use this and pick a time that works for you`
+      : `${bookingUrl}\n\nuse this and pick a time that works for you`;
   }
 
   if (attempts === 1) {
-    return `${bookingUrl}\n\nbook in here and we’ll get you sorted properly`;
+    return anchor
+      ? `${bookingUrl}\n\nbook in here if you want to get this handled ${anchor}`
+      : `${bookingUrl}\n\nbook in here and we’ll get you sorted properly`;
   }
 
-  return `${bookingUrl}\n\nif you’re serious about sorting it, book in and let’s get moving`;
+  return anchor
+    ? `${bookingUrl}\n\nif you’re serious about sorting this ${anchor}, book in and let’s get moving`
+    : `${bookingUrl}\n\nif you’re serious about sorting it, book in and let’s get moving`;
 }
+
 function getObjectionFollowUpReply(objectionText, leadMemory, cfg) {
   const t = String(objectionText || "").toLowerCase();
   const attempts = Number(leadMemory?.cta_attempts || 0);
@@ -1716,6 +1821,120 @@ function getObjectionFollowUpReply(objectionText, leadMemory, cfg) {
   }
 
   return "fair, what’s the main thing holding you back?";
+}
+
+function buildMemoryAnchor(leadMemory) {
+  const timeline = String(leadMemory?.timeline || "").trim();
+  const eventName = String(leadMemory?.event_name || "").trim();
+  const goal = String(leadMemory?.goal || "").trim();
+  const motivation = String(leadMemory?.motivation || "").trim();
+
+  if (eventName && timeline) {
+    return `for ${eventName} in ${timeline}`;
+  }
+
+  if (eventName) {
+    return `for ${eventName}`;
+  }
+
+  if (timeline && goal) {
+    return `${goal} by ${timeline}`;
+  }
+
+  if (timeline) {
+    return `by ${timeline}`;
+  }
+
+  if (motivation) {
+    return `especially if ${motivation}`;
+  }
+
+  if (goal) {
+    return `with ${goal}`;
+  }
+
+  return "";
+}
+
+function buildWarmCloseFromMemory(bookingUrl, leadMemory) {
+  const anchor = buildMemoryAnchor(leadMemory);
+
+  if (!bookingUrl) return null;
+
+  if (anchor) {
+    return `${bookingUrl}\n\nif you want to get this moving ${anchor}, get booked in and we’ll map it out properly`;
+  }
+
+  return `${bookingUrl}\n\nget booked in and we’ll go through it properly`;
+}
+
+function buildReflectPrefix(userText, leadMemory) {
+  const text = String(userText || "").toLowerCase();
+
+  if (
+    text.includes("price") ||
+    text.includes("expensive") ||
+    text.includes("cost") ||
+    leadMemory?.budget
+  ) {
+    if (leadMemory?.budget) {
+      return `yeah makes sense if you were expecting closer to ${leadMemory.budget}`;
+    }
+return "yeah makes sense if price is the bit you’re weighing up";
+  }
+
+  if (
+    text.includes("not the right time") ||
+    text.includes("busy") ||
+    text.includes("later") ||
+    text.includes("not now") ||
+    leadMemory?.timeline ||
+    leadMemory?.event_name
+  ) {
+    const anchor = buildMemoryAnchor(leadMemory);
+    if (anchor) {
+      return `yeah and if this matters ${anchor}, timing matters`;
+    }
+return "yeah makes sense if timing is the thing making you hesitate";
+  }
+
+  if (leadMemory?.goal) {
+    return `yeah makes sense if you’re trying to sort ${leadMemory.goal}`;
+  }
+
+  if (leadMemory?.motivation) {
+    return `yeah makes sense especially if it’s about ${leadMemory.motivation}`;
+  }
+
+  return "";
+}
+
+function maybeReflectThenGuide(reply, userText, leadMemory, turnStrategy) {
+  if (!reply) return reply;
+
+  const type = String(turnStrategy?.type || "");
+  const eligibleTypes = [
+    "soft_close_to_booking",
+    "nudge_forward",
+    "handle_think_about_it",
+  ];
+
+  if (!eligibleTypes.includes(type)) return reply;
+
+  const prefix = buildReflectPrefix(userText, leadMemory);
+  if (!prefix) return reply;
+
+  const lowerReply = String(reply).toLowerCase();
+  if (
+    lowerReply.startsWith("yeah") ||
+    lowerReply.startsWith("fair") ||
+    lowerReply.startsWith("makes sense") ||
+    lowerReply.startsWith(prefix.toLowerCase())
+  ) {
+    return reply;
+  }
+
+  return `${prefix}\n\n${reply}`;
 }
 
 function getLastAssistantMessages(historyMessages = [], n = 4) {
@@ -1778,7 +1997,7 @@ NON-NEGOTIABLE RULES:
 - sound human, casual, direct
 - keep replies concise
 - for simple answers, use 1-2 short sentences
-- for objections or process explanations, you can use 2-4 short message-like lines
+- for objections or process explanations, you can use a slightly longer natural paragraph when needed
 - sound like texting, not an essay
 - answer the user's actual question directly
 - do not dodge questions with vague filler
@@ -1793,6 +2012,16 @@ NON-NEGOTIABLE RULES:
 - never assume this is money coaching unless the provided context clearly says so
 - do not invent services, outcomes, pricing, deliverables, or niche details
 - stay inside the niche context provided
+- show genuine interest in what the lead is saying
+- reflect their goal or situation naturally before steering
+- do not rush to closing unless enough context has been built
+- if you already know their goal, timeline, event, or hesitation, use it naturally
+- longer replies are allowed when explaining the offer, the process, or why it matters for their situation
+- do not break lines randomly
+- only use multiple message bubbles when one point finishes and the next point is clearly separate
+- if a booking link was already sent, do not send it again unless explicitly asked
+- if explicitly asked after already sending it, tell them to use the link sent earlier
+
 QUESTION RULE (IMPORTANT):
 
 Only ask a question if it moves the conversation forward.
@@ -1849,6 +2078,9 @@ If the user hesitates, says it is expensive, says they are not sure, or says the
 - do NOT jump straight to the booking link
 - first ask a sharp, simple question to find the real issue
 - do not start objection replies with filler like "super simple", "totally get that", "makes sense", or "i get that"
+- first address what they actually said
+- then either ask one sharp question or guide the conversation forward
+- do not immediately jump back to the booking link unless the objection is clearly handled
 - examples:
   - "fair, what’s the main thing holding you back?"
   - "what part are you unsure about?"
@@ -1918,6 +2150,11 @@ lead_memory: leadMemory
       objection: leadMemory.objection || null,
       intent_level: leadMemory.intent_level || null,
       last_question_asked: leadMemory.last_question_asked || null,
+      timeline: leadMemory.timeline || null,
+      event_name: leadMemory.event_name || null,
+      motivation: leadMemory.motivation || null,
+      budget: leadMemory.budget || null,
+      trust_barrier: leadMemory.trust_barrier || null,
       last_cta_type: leadMemory.last_cta_type || null,
       booking_link_sent_count: leadMemory.booking_link_sent_count || 0,
       last_user_intent: leadMemory.last_user_intent || null,
@@ -3934,20 +4171,18 @@ const bookingAlreadySent =
   !!leadMemory?.last_cta_at ||
   (leadMemory?.booking_link_sent_count || 0) > 0;
 
-const canSendNewBookingPush = cfg?.booking_url && !bookingAlreadySent;
-const canResendBecauseAsked = cfg?.booking_url && explicitLinkRequest;
+const canSendNewBookingPush = !!cfg?.booking_url && !bookingAlreadySent;
+const canResendBecauseAsked = !!cfg?.booking_url && explicitLinkRequest && bookingAlreadySent;
 
-// explicit ask always wins
 if (canResendBecauseAsked) {
-  reply = getEscalatedBookingReply(cfg.booking_url, leadMemory, "normal");
-}
-else if (aiResult?.should_send_booking_link && canSendNewBookingPush) {
-  const closeMode =
-    turnStrategy?.type === "soft_close_to_booking" ? "soft" : "normal";
-
-  reply = getEscalatedBookingReply(cfg.booking_url, leadMemory, closeMode);
-}
-else if (highIntent && canSendNewBookingPush) {
+  reply = "use the link i sent earlier and get booked in";
+} else if (aiResult?.should_send_booking_link && canSendNewBookingPush) {
+  if (turnStrategy?.type === "soft_close_to_booking") {
+    reply = buildWarmCloseFromMemory(cfg.booking_url, leadMemory);
+  } else {
+    reply = getEscalatedBookingReply(cfg.booking_url, leadMemory, "normal");
+  }
+} else if (highIntent && canSendNewBookingPush) {
   reply = getEscalatedBookingReply(cfg.booking_url, leadMemory, "normal");
 }
 
@@ -4059,7 +4294,7 @@ if (
         } catch (e) {
           console.warn("lead stage update failed:", e?.message || e);
         }
-
+reply = maybeReflectThenGuide(reply, text, leadMemory, turnStrategy);
         const messagesToSend = splitIntoMessages(reply);
 
 const activeIgAccount = await getIgAccountByClientId(lead.client_id);
