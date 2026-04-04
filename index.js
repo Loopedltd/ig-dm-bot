@@ -1759,16 +1759,6 @@ const examplesToUse = hasStrongCustomExamples(cfg?.example_messages)
   ? parseExampleMessages(cfg?.example_messages)
   : getDefaultFallbackExamples(niche);
 
-const coachSystemPrompt = String(cfg?.system_prompt || "").trim();
-
-const finalSystemPrompt =
-  coachSystemPrompt.length >= 120
-    ? `${systemPrompt}
-
-COACH-SPECIFIC INSTRUCTIONS:
-${coachSystemPrompt}`
-    : systemPrompt;
-
   const exampleMessages = examplesToUse.flatMap((ex) => [
     { role: "user", content: ex.user },
     { role: "assistant", content: ex.assistant },
@@ -1884,7 +1874,15 @@ Return ONLY valid JSON in this exact shape:
   "should_send_booking_link": false
 }
   `.trim();
+const coachSystemPrompt = String(cfg?.system_prompt || "").trim();
 
+const finalSystemPrompt =
+  coachSystemPrompt.length >= 120
+    ? `${systemPrompt}
+
+COACH-SPECIFIC INSTRUCTIONS:
+${coachSystemPrompt}`
+    : systemPrompt;
 const context = {
   user_message: userText,
   niche,
@@ -3253,12 +3251,13 @@ ${cfg?.system_prompt || "(none)"}
 },
     ];
 
-    const resp = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      messages,
-      temperature: 0.5,
-      max_tokens: 350,
-    });
+const resp = await openai.chat.completions.create({
+  model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+  messages,
+  temperature: 0.5,
+  max_tokens: 350,
+  response_format: { type: "json_object" },
+});
 
     const text = resp?.choices?.[0]?.message?.content?.trim();
     if (!text) {
