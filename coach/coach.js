@@ -59,7 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      localStorage.setItem("coach_token", j.token);
+localStorage.setItem("coach_token", j.token);
       window.location.href = "/coach/dashboard.html";
     } catch (e) {
       if (err) {
@@ -338,6 +338,7 @@ function wireInstagramConnectButton() {
 function wireGeneratePromptButton() {
 const btn = qs("#generatePromptBtn");
 const igEl = qs("#instagram_handle");
+const nicheEl = qs("#niche");
 const promptEl = qs("#system_prompt");
 const exampleEl = qs("#example_messages");
 const promptStatusEl = qs("#promptStatus");
@@ -358,18 +359,24 @@ const offerPriceEl = qs("#offer_price");
         promptStatusEl.textContent = "";
       }
 
-      const instagram_handle = igEl ? String(igEl.value || "").trim() : "";
+const instagram_handle = igEl ? String(igEl.value || "").trim() : "";
 
-      if (!instagram_handle) {
-        setErr("Enter your Instagram handle first.");
-        return;
-      }
+if (!instagram_handle) {
+  setErr("Enter your Instagram handle first.");
+  return;
+}
+
+if (!isValidIgHandle(instagram_handle)) {
+  setErr("Instagram handle format is invalid.");
+  return;
+}
 const offer_what = offerWhatEl ? String(offerWhatEl.value || "").trim() : "";
 const offer_features = offerFeaturesEl ? String(offerFeaturesEl.value || "").trim() : "";
 const offer_audience = offerAudienceEl ? String(offerAudienceEl.value || "").trim() : "";
 const offer_process = offerProcessEl ? String(offerProcessEl.value || "").trim() : "";
 const offer_price = offerPriceEl ? String(offerPriceEl.value || "").trim() : "";
 const example_messages = exampleEl ? String(exampleEl.value || "").trim() : "";
+const niche = nicheEl ? String(nicheEl.value || "generic").trim() : "generic";
 
       btn.disabled = true;
       btn.style.opacity = "0.75";
@@ -379,41 +386,32 @@ const example_messages = exampleEl ? String(exampleEl.value || "").trim() : "";
         promptStatusEl.textContent =
           "Generating coach voice from your settings...";
       }
+const offer_description = `
+What you do:
+${offer_what}
+
+What they get:
+${offer_features}
+
+Who it's for:
+${offer_audience}
+
+How it works:
+${offer_process}
+`.trim();
+
 const data = await apiFetch(`${API}/generate-prompt`, {
   method: "POST",
   body: JSON.stringify({
     instagram_handle,
-    example_messages: exampleEl
-      ? String(exampleEl.value || "").trim()
-      : "",
-    offer_description: `
-What you do:
-${offerWhatEl ? String(offerWhatEl.value || "").trim() : ""}
-
-What they get:
-${offerFeaturesEl ? String(offerFeaturesEl.value || "").trim() : ""}
-
-Who it's for:
-${offerAudienceEl ? String(offerAudienceEl.value || "").trim() : ""}
-
-How it works:
-${offerProcessEl ? String(offerProcessEl.value || "").trim() : ""}
-`.trim(),
-    offer_price: offerPriceEl
-      ? String(offerPriceEl.value || "").trim()
-      : "",
-    what_you_do: offerWhatEl
-      ? String(offerWhatEl.value || "").trim()
-      : "",
-    what_they_get: offerFeaturesEl
-      ? String(offerFeaturesEl.value || "").trim()
-      : "",
-    who_its_for: offerAudienceEl
-      ? String(offerAudienceEl.value || "").trim()
-      : "",
-    how_it_works: offerProcessEl
-      ? String(offerProcessEl.value || "").trim()
-      : "",
+    niche,
+    example_messages,
+    offer_description,
+    offer_price,
+    what_you_do: offer_what,
+    what_they_get: offer_features,
+    who_its_for: offer_audience,
+    how_it_works: offer_process,
   }),
 });
 
@@ -445,6 +443,8 @@ ${offerProcessEl ? String(offerProcessEl.value || "").trim() : ""}
 
       await loadPromptUsageStatus();
 } finally {
+  btn.disabled = false;
+  btn.style.opacity = "1";
   await loadPromptUsageStatus();
 }
   });
@@ -660,6 +660,7 @@ function wireManualTakeoversRefreshButton() {
 const bookingEl = qs("#booking_url");
 const bookingAltEl = qs("#booking_url_alt");
 const igEl = qs("#instagram_handle");
+const nicheEl = qs("#niche");
 const toneEl = qs("#tone");
 const styleEl = qs("#style");
 const vocabularyEl = qs("#vocabulary");
@@ -685,6 +686,7 @@ await loadPromptUsageStatus();
 if (bookingEl) bookingEl.value = config.booking_url || "";
 if (bookingAltEl) bookingAltEl.value = config.booking_url_alt || "";
 if (igEl) igEl.value = config.instagram_handle || "";
+if (nicheEl) nicheEl.value = config.niche || "generic";
 if (toneEl) toneEl.value = config.tone || "";
 if (styleEl) styleEl.value = config.style || "";
 if (vocabularyEl) vocabularyEl.value = config.vocabulary || "";
@@ -748,6 +750,7 @@ const booking_url_alt = bookingAltEl
   ? String(bookingAltEl.value || "").trim()
   : "";
 const instagram_handle = igEl ? String(igEl.value || "").trim() : "";
+const niche = nicheEl ? String(nicheEl.value || "generic").trim() : "generic";
 const tone = toneEl ? String(toneEl.value || "").trim() : "";
 const style = styleEl ? String(styleEl.value || "").trim() : "";
 const vocabulary = vocabularyEl ? String(vocabularyEl.value || "").trim() : "";
@@ -758,7 +761,20 @@ const offer_features = offerFeaturesEl ? String(offerFeaturesEl.value || "").tri
 const offer_audience = offerAudienceEl ? String(offerAudienceEl.value || "").trim() : "";
 const offer_process = offerProcessEl ? String(offerProcessEl.value || "").trim() : "";
 const offer_price = offerPriceEl ? String(offerPriceEl.value || "").trim() : "";
+if (!isValidUrl(booking_url)) {
+  setErr("Booking URL must be a valid http or https URL.");
+  return;
+}
 
+if (!isValidUrl(booking_url_alt)) {
+  setErr("Alt Booking URL must be a valid http or https URL.");
+  return;
+}
+
+if (!isValidIgHandle(instagram_handle)) {
+  setErr("Instagram handle format is invalid.");
+  return;
+}
 const offerSections = [];
 
 if (offer_what) {
@@ -779,14 +795,21 @@ if (offer_process) {
 
 const offer_description = offerSections.join("\n\n");
 
-const parsedExamples = parseExampleMessages(rawExamples);
+let example_messages = "";
 
-if (!parsedExamples.ok) {
-  setErr(parsedExamples.error);
-  return;
+if (!rawExamples.trim()) {
+  // ✅ fallback to default examples
+  example_messages = getDefaultExampleMessages();
+} else {
+  const parsedExamples = parseExampleMessages(rawExamples);
+
+  if (!parsedExamples.ok) {
+    setErr(parsedExamples.error);
+    return;
+  }
+
+  example_messages = parsedExamples.value;
 }
-
-const example_messages = parsedExamples.value;
 
 if (!system_prompt && !offer_description && !example_messages) {
   setErr("Add at least some context — examples, offer details, or a prompt.");
@@ -800,6 +823,7 @@ const payload = {
   booking_url: booking_url || null,
   booking_url_alt: booking_url_alt || null,
   instagram_handle: instagram_handle || null,
+  niche: niche || "generic",
   tone: tone || null,
   style: style || null,
   vocabulary: vocabulary || null,

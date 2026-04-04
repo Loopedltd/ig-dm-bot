@@ -135,27 +135,27 @@
         font-weight: 650;
       }
 
-      input, textarea{
-        width:100%;
-        margin-top:6px;
-        padding:12px 12px;
-        border-radius: 12px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: var(--inputbg);
-        color: var(--text);
-        outline:none;
-        box-sizing:border-box;
-        transition: box-shadow .12s ease, border-color .12s ease;
-      }
+input, textarea, select{
+  width:100%;
+  margin-top:6px;
+  padding:12px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: var(--inputbg);
+  color: var(--text);
+  outline:none;
+  box-sizing:border-box;
+  transition: box-shadow .12s ease, border-color .12s ease;
+}
 
       input::placeholder, textarea::placeholder{
         color: rgba(15, 23, 42, 0.40);
       }
 
-      input:focus, textarea:focus{
-        border-color: rgba(45, 107, 255, 0.55);
-        box-shadow: 0 0 0 4px var(--ring);
-      }
+input:focus, textarea:focus, select:focus{
+  border-color: rgba(45, 107, 255, 0.55);
+  box-shadow: 0 0 0 4px var(--ring);
+}
 
       textarea{
         min-height: 240px;
@@ -485,6 +485,17 @@ I help men build a stronger physique and improve confidence through tailored onl
 
 <label>Instagram handle</label>
 <input id="instagram_handle" placeholder="looped.ltd" />
+
+<label>Niche</label>
+<select id="niche">
+  <option value="generic">Generic coach</option>
+  <option value="fitness">Fitness coach</option>
+  <option value="money">Money coach</option>
+</select>
+
+<div class="helper">
+  This controls the bot’s default fallback style when your examples or offer info are weak.
+</div>
 
 <div class="row">
   <div>

@@ -351,24 +351,13 @@ function humaniseText(text) {
   let t = String(text || "").trim();
   if (!t) return t;
 
-  if (Math.random() < 0.4) {
-    t = t.charAt(0).toLowerCase() + t.slice(1);
-  }
-
-if (Math.random() < 0.3) {
-  t = t.replace(/[.!]/g, "");
-}
-
   t = t
     .replace(/\bgoing to\b/gi, "gonna")
-    .replace(/\bwant to\b/gi, "wanna");
-
-  if (Math.random() < 0.2) {
-    const fillers = ["yeah", "fair", "ahh ok", "got you", "makes sense"];
-    t = `${fillers[Math.floor(Math.random() * fillers.length)]}\n\n${t}`;
-  }
+    .replace(/\bwant to\b/gi, "wanna")
+    .replace(/\bkind of\b/gi, "kinda");
 
   t = t.replace(/\s{2,}/g, " ").trim();
+
   return t;
 }
 
@@ -433,80 +422,249 @@ function extractOfferSection(raw, label, nextLabel = null) {
   const match = text.match(regex);
   return match ? String(match[1] || "").trim() : "";
 }
+function getEffectiveNiche(cfg) {
+  const niche = String(cfg?.niche || "").trim().toLowerCase();
+
+  if (["fitness", "money", "generic"].includes(niche)) {
+    return niche;
+  }
+
+  return "generic";
+}
+
+function getNicheLabel(niche) {
+  if (niche === "fitness") return "fitness coaching";
+  if (niche === "money") return "money/business coaching";
+  return "general coaching";
+}
+
+function getNichePreset(niche) {
+  if (niche === "fitness") {
+    return {
+      whatYouDo:
+        "I help people get in shape properly with structure, accountability, and a plan they actually stick to.",
+      whatTheyGet:
+        "You get proper structure, accountability, clear targets, and support so you actually follow through instead of falling off after a week.",
+      howItWorks:
+        "You get started, we look at where you're at now, what needs fixing, then everything gets built around that so you've got a clear plan and proper support.",
+      whoItsFor:
+        "It’s for people who are serious about getting in shape and want real structure, not people looking for a quick fix or random motivation.",
+    };
+  }
+
+  if (niche === "money") {
+    return {
+      whatYouDo:
+        "I help people tighten their offer, fix their messaging, and get more consistent clients instead of guessing and hoping.",
+      whatTheyGet:
+        "You get clarity on the offer, better positioning, direct support, and a proper path to getting clients more consistently.",
+      howItWorks:
+        "We look at where you're at, what’s not converting, what needs tightening up, then build a clearer path so you can actually move properly.",
+      whoItsFor:
+        "It’s for people who want to make more money, get more clients, and stop drifting with no real structure.",
+    };
+  }
+
+  return {
+    whatYouDo:
+      "I help people get a proper result with a clear plan, the right support, and a process that actually helps them follow through.",
+    whatTheyGet:
+      "You get proper support, structure, and guidance so you can stop guessing and actually move properly.",
+    howItWorks:
+      "We look at where you're at, what needs fixing, and the best next steps so everything is clear and moving in the right direction.",
+    whoItsFor:
+      "It’s for people who want proper help and structure, not people just winging it.",
+  };
+}
 
 function getStructuredOfferContext(cfg) {
   const raw = String(cfg?.offer_description || "").trim();
+  const niche = getEffectiveNiche(cfg);
+  const preset = getNichePreset(niche);
 
   return {
     what_you_do:
       String(cfg?.what_you_do || "").trim() ||
       extractOfferSection(raw, "What you do", "What they get") ||
-      "",
+      preset.whatYouDo,
+
     what_they_get:
       String(cfg?.what_they_get || "").trim() ||
       extractOfferSection(raw, "What they get", "Who it's for") ||
-      "",
+      preset.whatTheyGet,
+
     who_its_for:
       String(cfg?.who_its_for || "").trim() ||
       extractOfferSection(raw, "Who it's for", "How it works") ||
-      "",
+      preset.whoItsFor,
+
     how_it_works:
       String(cfg?.how_it_works || "").trim() ||
       extractOfferSection(raw, "How it works") ||
-      "",
+      preset.howItWorks,
   };
 }
-function getDefaultFallbackExamples() {
+function getDefaultFallbackExamples(niche = "generic") {
+  if (niche === "fitness") {
+    return [
+      {
+        user: "what do you actually help with",
+        assistant:
+          "I help people get in shape properly without guessing. Clear plan, accountability, proper support, and actually sticking to it.",
+      },
+      {
+        user: "what do i get",
+        assistant:
+          "You get structure, accountability, and proper support so you're not just left trying to figure it out on your own.",
+      },
+      {
+        user: "how does it work",
+        assistant:
+          "We look at where you're at now, what needs fixing, then everything gets set up properly around that.",
+      },
+      {
+        user: "how much is it",
+        assistant:
+          "I can break the price down for you properly. Want me to send that over?",
+      },
+      {
+        user: "sounds good",
+        assistant:
+          "good. want me to send the link so you can get started properly?",
+      },
+      {
+        user: "send me the link",
+        assistant:
+          "here you go - pick a slot that works for you and we’ll get moving.",
+      },
+      {
+        user: "i want it",
+        assistant:
+          "good. use this and get booked in.",
+      },
+      {
+        user: "that’s expensive",
+        assistant:
+          "compared to what though? what were you expecting to pay?",
+      },
+      {
+        user: "i’ll think about it",
+        assistant:
+          "fair. what’s the actual hesitation?",
+      },
+      {
+        user: "not sure if it’s for me",
+        assistant:
+          "what part are you unsure about - the fit, the process, or the price?",
+      },
+    ];
+  }
+
+  if (niche === "money") {
+    return [
+      {
+        user: "what do you actually help with",
+        assistant:
+          "I help people tighten their offer, fix the messaging, and get clients more consistently instead of guessing.",
+      },
+      {
+        user: "what do i get",
+        assistant:
+          "You get clearer positioning, proper direction, and support so you stop drifting and actually move properly.",
+      },
+      {
+        user: "how does it work",
+        assistant:
+          "We look at where you're at, what’s not converting, what needs fixing, then get a proper plan in place.",
+      },
+      {
+        user: "how much is it",
+        assistant:
+          "I can break the price down properly for you. Want me to send it over?",
+      },
+      {
+        user: "sounds good",
+        assistant:
+          "good. want me to send the link and get you moving on it?",
+      },
+      {
+        user: "send me the link",
+        assistant:
+          "here you go - use that and get booked in.",
+      },
+      {
+        user: "i want it",
+        assistant:
+          "good. get booked in and we’ll sort it properly.",
+      },
+      {
+        user: "that’s expensive",
+        assistant:
+          "fair - what were you expecting to invest?",
+      },
+      {
+        user: "i’ll think about it",
+        assistant:
+          "fair. what actually needs clearing up first?",
+      },
+      {
+        user: "not sure if it’s for me",
+        assistant:
+          "what part are you unsure about - whether it works, whether it fits, or the investment?",
+      },
+    ];
+  }
+
   return [
     {
       user: "what do you actually help with",
       assistant:
-        "I help people get a clear result without all the guesswork - proper support, a clear plan, and accountability so they actually follow through. What are you trying to sort out right now?",
-    },
-    {
-      user: "how much is it?",
-      assistant:
-        "I can break the price down properly for you. Want me to send the details?",
-    },
-    {
-      user: "how does it work",
-      assistant:
-        "You get booked in, we look at where you're at, what needs fixing, then everything gets set up properly from there. Want me to send the link?",
-    },
-    {
-      user: "i want it",
-      assistant:
-        "Good. I’ll send the link and you can get started.",
-    },
-    {
-      user: "send me the link",
-      assistant:
-        "Here you go - pick what works for you and we’ll get moving.",
-    },
-    {
-      user: "i’ll think about it",
-      assistant:
-        "Fair. What’s the main thing stopping you right now?",
-    },
-    {
-      user: "not sure if it’s for me",
-      assistant:
-        "What part are you unsure about - the price, the process, or whether it fits what you need?",
-    },
-    {
-      user: "that’s a bit much",
-      assistant:
-        "Fair. What were you expecting to pay if someone was actually gonna help you do this properly?",
-    },
-    {
-      user: "sounds good",
-      assistant:
-        "Calm. Want me to send the link so you can get started properly?",
+        "I help people get a proper result with clear structure and support instead of guessing their way through it.",
     },
     {
       user: "what do i get",
       assistant:
-        "You get proper support, a clear plan, and accountability so you actually stay on track. Want me to send the link?",
+        "You get support, structure, and proper guidance so you can actually move properly.",
+    },
+    {
+      user: "how does it work",
+      assistant:
+        "We look at where you're at, what needs fixing, then get a proper plan in place from there.",
+    },
+    {
+      user: "how much is it",
+      assistant:
+        "I can break the price down for you properly. Want me to send it over?",
+    },
+    {
+      user: "sounds good",
+      assistant:
+        "good. want me to send the link?",
+    },
+    {
+      user: "send me the link",
+      assistant:
+        "here you go - pick what works for you and get booked in.",
+    },
+    {
+      user: "i want it",
+      assistant:
+        "good. use the link and get started.",
+    },
+    {
+      user: "that’s expensive",
+      assistant:
+        "fair. compared to what?",
+    },
+    {
+      user: "i’ll think about it",
+      assistant:
+        "fair. what’s the actual hesitation?",
+    },
+    {
+      user: "not sure if it’s for me",
+      assistant:
+        "what part are you unsure about?",
     },
   ];
 }
@@ -1200,7 +1358,7 @@ if (
     return whatYouDo;
   }
 
-return `I help people get a proper result without all the guesswork - clear plan, proper support, and accountability so they actually follow through.`;
+return getEffectiveWhatYouDo(cfg);
 }
 
 if (turnStrategy?.type === "answer_what_do_i_get_after_cta") {
@@ -1502,11 +1660,6 @@ function getEffectiveVocabulary(cfg) {
   return cleanMemoryField(cfg?.vocabulary) || "casual, blunt, UK DM style";
 }
 
-function shouldUseCustomSystemPrompt(cfg) {
-  const prompt = String(cfg?.system_prompt || "").trim();
-  return prompt.length >= 120;
-}
-
 function getEscalatedBookingReply(bookingUrl, leadMemory, mode = "normal") {
   if (!bookingUrl) return null;
 
@@ -1600,9 +1753,21 @@ async function generateAiReply({
 const semanticIntent = detectUserIntent(userText);
   const recentAssistantReplies = getLastAssistantMessages(historyMessages, 4);
 
-  const examplesToUse = hasStrongCustomExamples(cfg?.example_messages)
-    ? parseExampleMessages(cfg?.example_messages)
-    : getDefaultFallbackExamples();
+const niche = getEffectiveNiche(cfg);
+
+const examplesToUse = hasStrongCustomExamples(cfg?.example_messages)
+  ? parseExampleMessages(cfg?.example_messages)
+  : getDefaultFallbackExamples(niche);
+
+const coachSystemPrompt = String(cfg?.system_prompt || "").trim();
+
+const finalSystemPrompt =
+  coachSystemPrompt.length >= 120
+    ? `${systemPrompt}
+
+COACH-SPECIFIC INSTRUCTIONS:
+${coachSystemPrompt}`
+    : systemPrompt;
 
   const exampleMessages = examplesToUse.flatMap((ex) => [
     { role: "user", content: ex.user },
@@ -1637,6 +1802,7 @@ NON-NEGOTIABLE RULES:
 - never assume this is fitness unless the provided context clearly says so
 - never assume this is money coaching unless the provided context clearly says so
 - do not invent services, outcomes, pricing, deliverables, or niche details
+- stay inside the niche context provided
 QUESTION RULE (IMPORTANT):
 
 Only ask a question if it moves the conversation forward.
@@ -1699,6 +1865,11 @@ If the user hesitates, says it is expensive, says they are not sure, or says the
   - "compared to what?"
   - "what were you expecting to pay?"
 
+NICHE RULE:
+- if niche is fitness, replies should sound natural for fitness coaching and body transformation conversations
+- if niche is money, replies should sound natural for client acquisition, offers, sales, business growth, and making more money
+- do not blur the niches together
+
 CTA ESCALATION RULE:
 - if cta_attempts is 0, keep closes light and easy
 - if cta_attempts is 1, be a bit firmer and clearer
@@ -1714,10 +1885,12 @@ Return ONLY valid JSON in this exact shape:
 }
   `.trim();
 
-  const context = {
-    user_message: userText,
-    semantic_intent: semanticIntent,
-    lead_stage: lead?.stage || null,
+const context = {
+  user_message: userText,
+  niche,
+  niche_label: getNicheLabel(niche),
+  semantic_intent: semanticIntent,
+  lead_stage: lead?.stage || null,
     call_completed: !!lead?.call_completed,
     booking_sent: !!lead?.booking_sent,
     booking_url_present: !!bookingUrl,
@@ -1767,10 +1940,10 @@ lead_memory: leadMemory
   };
 
   const messages = [
-    {
-      role: "system",
-      content: systemPrompt,
-    },
+{
+  role: "system",
+  content: finalSystemPrompt,
+},
     ...exampleMessages,
     ...(historyMessages || []),
     {
@@ -1847,7 +2020,8 @@ async function setLeadManualOverride({ leadId, clientId, enabled, reason, actor 
 
 function getEffectiveWhatYouDo(cfg) {
   const raw = String(cfg?.what_you_do || "").trim();
-  const offerDescription = String(cfg?.offer_description || "").trim();
+  const niche = getEffectiveNiche(cfg);
+  const preset = getNichePreset(niche);
 
   if (raw) {
     const weakPhrases = [
@@ -1855,6 +2029,8 @@ function getEffectiveWhatYouDo(cfg) {
       "help people get results",
       "support and guidance",
       "journey",
+      "transform lives",
+      "reach their goals",
     ];
 
     const lower = raw.toLowerCase();
@@ -1865,11 +2041,7 @@ function getEffectiveWhatYouDo(cfg) {
     }
   }
 
-  if (offerDescription) {
-    return "I help people get a proper result with a clear plan, the right support, and a process that actually helps them follow through.";
-  }
-
-  return "I help people get a proper result with a clear plan, the right support, and a process that actually helps them follow through.";
+  return preset.whatYouDo;
 }
 
 async function setClientBotPaused({ clientId, enabled, reason, actor }) {
@@ -2100,7 +2272,7 @@ app.get("/admin/api/stats", requireAdmin, async (req, res) => {
 
     if (cErr) return safeJson(res, 500, cErr);
 
-    const { count: leadsCount, error: lErr } = await supabase
+      const { count: leadsCount, error: lErr } = await supabase
       .from("leads")
       .select("*", { count: "exact", head: true });
 
@@ -2207,6 +2379,7 @@ const { data: config, error: configErr } = await supabase
     tone: "direct",
     style: "short, punchy",
     vocabulary: "casual UK coach",
+    niche: "generic",
     offer_description: null,
     offer_price: null,
     what_you_do: null,
@@ -2270,6 +2443,9 @@ if (
   patch.instagram_handle === null
 ) {
   allowed.instagram_handle = patch.instagram_handle;
+}
+if (typeof patch.niche === "string" || patch.niche === null) {
+  allowed.niche = patch.niche;
 }
 
 if (
@@ -2720,6 +2896,9 @@ if (typeof patch.vocabulary === "string" || patch.vocabulary === null) {
     ) {
       allowed.instagram_handle = patch.instagram_handle;
     }
+if (typeof patch.niche === "string" || patch.niche === null) {
+  allowed.niche = patch.niche;
+}
     if (
       typeof patch.offer_description === "string" ||
       patch.offer_description === null
@@ -2892,6 +3071,7 @@ const {
   what_they_get,
   how_it_works,
   who_its_for,
+  niche,
 } = req.body || {};
 
 const handleRaw = String(instagram_handle || "").trim();
@@ -2930,34 +3110,49 @@ const howItWorks =
   String(how_it_works || cfg?.how_it_works || "").trim();
 const whoItsFor =
   String(who_its_for || cfg?.who_its_for || "").trim();
+const effectiveNiche = getEffectiveNiche({
+  niche: niche || cfg?.niche || "generic",
+});
 if (!openai) {
-      const stub = [
-        "You are the coach's Instagram DM assistant.",
-        "Tone: friendly, confident, concise, UK vibe.",
-        "Write 1-2 short sentences max and end with ONE clear question.",
-        "Never mention AI.",
-        "No emojis by default. No em dashes or double hyphens.",
-        "Avoid repeating yourself; keep the conversation moving forward.",
-        "If asked about price: ask goal + current situation, say you'll confirm exact options.",
-        `Coach context: Instagram handle is @${handle}. Mirror their style (short, punchy, motivating).`,
-      ].join("\n");
+  const stub = [
+    "You are the coach's Instagram DM assistant.",
+    "Tone: friendly, confident, concise, UK vibe.",
+    "Write 1-2 short sentences max and end with ONE clear question.",
+    "Never mention AI.",
+    "No emojis by default. No em dashes or double hyphens.",
+    "Avoid repeating yourself; keep the conversation moving forward.",
+    "If asked about price: ask goal + current situation, say you'll confirm exact options.",
+    `Coach context: Instagram handle is @${handle}. Mirror their style (short, punchy, motivating).`,
+  ].join("\n");
 
-// ✅ increment usage AFTER successful generation
-await supabase.from("client_usage").upsert({
-  client_id: req.coach.client_id,
-  date: today,
-  prompt_generations: used + 1,
-});
-return safeJson(res, 200, {
-  ok: true,
-  system_prompt: stub,
-  tone: "direct",
-  style: "short, punchy",
-  vocabulary: "casual",
-  used_ai: false,
-  remaining: MAX_PROMPTS_PER_DAY - (used + 1),
-});
-    }
+  await supabase
+    .from("client_configs")
+    .update({
+      system_prompt: stub,
+      tone: "direct",
+      style: "short, punchy",
+      vocabulary: "casual",
+      instagram_handle: handle,
+      niche: effectiveNiche,
+    })
+    .eq("client_id", req.coach.client_id);
+
+  await supabase.from("client_usage").upsert({
+    client_id: req.coach.client_id,
+    date: today,
+    prompt_generations: used + 1,
+  });
+
+  return safeJson(res, 200, {
+    ok: true,
+    system_prompt: stub,
+    tone: "direct",
+    style: "short, punchy",
+    vocabulary: "casual",
+    used_ai: false,
+    remaining: MAX_PROMPTS_PER_DAY - (used + 1),
+  });
+}
 
     const messages = [
       {
@@ -2982,8 +3177,9 @@ The prompt must:
       },
 {
   role: "user",
-  content: `
+content: `
 Coach Instagram handle: @${handle}
+NICHE: ${effectiveNiche}
 
 Create a system prompt for their DM assistant.
 
@@ -3017,6 +3213,12 @@ IMPORTANT SALES BEHAVIOUR:
 - If the lead is warm, interested, asks price, asks how it works, or asks how to start, the prompt should bias toward moving them closer to booking
 - The assistant should not stay stuck in endless conversation mode
 - The assistant should qualify briefly, then guide decisively
+
+IMPORTANT NICHE RULE:
+- If niche is fitness, the assistant should naturally sound like someone who sells fitness coaching
+- If niche is money, the assistant should naturally sound like someone who sells business / money / client acquisition help
+- Do not mix niches
+- Do not sound generic if niche context exists
 
 WHAT THE COACH DOES:
 ${whatYouDo || "(not provided)"}
@@ -3078,15 +3280,16 @@ ${cfg?.system_prompt || "(none)"}
     const generatedStyle = parsed.style || "short, punchy";
     const generatedVocab = parsed.vocabulary || "casual";
 
-    const { error: updatePersonalityError } = await supabase
-      .from("client_configs")
-      .update({
-        system_prompt: generatedPrompt,
-        tone: generatedTone,
-        style: generatedStyle,
-        vocabulary: generatedVocab,
-        instagram_handle: handle,
-      })
+const { error: updatePersonalityError } = await supabase
+  .from("client_configs")
+  .update({
+    system_prompt: generatedPrompt,
+    tone: generatedTone,
+    style: generatedStyle,
+    vocabulary: generatedVocab,
+    instagram_handle: handle,
+    niche: effectiveNiche,
+  })
       .eq("client_id", req.coach.client_id);
 
     if (updatePersonalityError) {
@@ -3720,12 +3923,10 @@ const aiResult = await generateAiReply({
   userText: text,
 });
 
-let reply = null;
+let reply = aiResult?.reply || null;
 
-if (turnStrategy?.type === "handle_think_about_it") {
+if (!reply && turnStrategy?.type === "handle_think_about_it") {
   reply = getObjectionFollowUpReply(text, leadMemory, cfg);
-} else {
-  reply = aiResult?.reply || null;
 }
 
 const explicitLinkRequest = detectExplicitBookingLinkRequest(text);
