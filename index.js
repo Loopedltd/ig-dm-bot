@@ -445,6 +445,19 @@ function extractOfferSection(raw, label, nextLabel = null) {
   const match = text.match(regex);
   return match ? String(match[1] || "").trim() : "";
 }
+function extractSingleOfferSection(raw, label) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(
+    `${escapedLabel}:\\s*([\\s\\S]*?)(?=\\n\\n[A-Z][^\\n]*:|$)`,
+    "i"
+  );
+
+  const match = text.match(regex);
+  return match ? String(match[1] || "").trim() : "";
+}
 function getEffectiveNiche(cfg) {
   const niche = String(cfg?.niche || "").trim().toLowerCase();
 
@@ -521,10 +534,10 @@ function getStructuredOfferContext(cfg) {
       extractOfferSection(raw, "Who it's for", "How it works") ||
       preset.whoItsFor,
 
-    how_it_works:
-      String(cfg?.how_it_works || "").trim() ||
-      extractOfferSection(raw, "How it works") ||
-      preset.howItWorks,
+how_it_works:
+  String(cfg?.how_it_works || "").trim() ||
+  extractSingleOfferSection(raw, "How it works") ||
+  preset.howItWorks,
   };
 }
 function getDefaultFallbackExamples(niche = "generic") {
@@ -2007,7 +2020,7 @@ NON-NEGOTIABLE RULES:
 - do not use emojis by default
 - do not repeat the same meaning as recent assistant replies
 - you are replying on behalf of one specific business
-- use only the offer, tone, examples, price, process, and fit information provided in context
+- use only the offer, tone, examples, price, process, fit, objections, trust builders, urgency, FAQ, and closing information provided in context
 - never assume this is fitness unless the provided context clearly says so
 - never assume this is money coaching unless the provided context clearly says so
 - do not invent services, outcomes, pricing, deliverables, or niche details
@@ -2092,6 +2105,18 @@ NICHE RULE:
 - if niche is money, replies should sound natural for client acquisition, offers, sales, business growth, and making more money
 - do not blur the niches together
 
+COACH CONTEXT RULE:
+- if main_result is provided, use it to understand the core promised outcome
+- if best_fit_leads is provided, use it when answering "is this for me?" or qualifying fit
+- if not_a_fit is provided, do not position the offer for people who clearly fall outside that
+- if common_objections is provided, use it to understand likely hesitation and answer objections more sharply
+- if closing_triggers is provided, use it to understand when to move the conversation toward booking
+- if urgency_reason is provided, use it naturally when helping the lead see why acting now matters
+- if trust_builders is provided, use them when the lead seems uncertain, skeptical, or hesitant to trust
+- if faq is provided, use it when the lead asks direct practical questions
+- do not dump all of this in one reply
+- use only the parts that are relevant to the current message
+
 CTA ESCALATION RULE:
 - if cta_attempts is 0, keep closes light and easy
 - if cta_attempts is 1, be a bit firmer and clearer
@@ -2121,58 +2146,72 @@ const context = {
   niche_label: getNicheLabel(niche),
   semantic_intent: semanticIntent,
   lead_stage: lead?.stage || null,
-    call_completed: !!lead?.call_completed,
-    booking_sent: !!lead?.booking_sent,
-    booking_url_present: !!bookingUrl,
-    booking_url: bookingUrl || null,
-    offer_price: cfg?.offer_price || null,
-    offer_description: cfg?.offer_description || null,
-what_you_do: getEffectiveWhatYouDo(cfg),
-    what_they_get: structuredOffer.what_they_get || null,
-    who_its_for: structuredOffer.who_its_for || null,
-    how_it_works: structuredOffer.how_it_works || null,
-    tone: getEffectiveTone(cfg),
-    style: getEffectiveStyle(cfg),
-    vocabulary: getEffectiveVocabulary(cfg),
-    post_call_mode: !!postCallMode,
-    asks_price: !!asksPrice,
-    high_intent: !!highIntent,
-    think_about_it: !!thinkAboutIt,
-example_messages_present: examplesToUse.length,    
-recent_assistant_replies: recentAssistantReplies,
-lead_memory: leadMemory
-  ? {
-      summary: leadMemory.summary || null,
-      goal: leadMemory.goal || null,
-      current_situation: leadMemory.current_situation || null,
-      pain_points: leadMemory.pain_points || null,
-      desired_outcome: leadMemory.desired_outcome || null,
-      objection: leadMemory.objection || null,
-      intent_level: leadMemory.intent_level || null,
-      last_question_asked: leadMemory.last_question_asked || null,
-      timeline: leadMemory.timeline || null,
-      event_name: leadMemory.event_name || null,
-      motivation: leadMemory.motivation || null,
-      budget: leadMemory.budget || null,
-      trust_barrier: leadMemory.trust_barrier || null,
-      last_cta_type: leadMemory.last_cta_type || null,
-      booking_link_sent_count: leadMemory.booking_link_sent_count || 0,
-      last_user_intent: leadMemory.last_user_intent || null,
-      last_bot_reply_type: leadMemory.last_bot_reply_type || null,
-      conversation_state: leadMemory.conversation_state || null,
-      cta_attempts: leadMemory.cta_attempts || 0,
-      last_cta_response: leadMemory.last_cta_response || null,
-    }
-  : null,
+  call_completed: !!lead?.call_completed,
+  booking_sent: !!lead?.booking_sent,
+  booking_url_present: !!bookingUrl,
+  booking_url: bookingUrl || null,
 
-    turn_strategy: turnStrategy
-      ? {
-          type: turnStrategy.type,
-          intentScore: turnStrategy.intentScore ?? null,
-          shouldSendBookingLink: !!turnStrategy.shouldSendBookingLink,
-        }
-      : null,
-  };
+  offer_price: cfg?.offer_price || null,
+  offer_description: cfg?.offer_description || null,
+  what_you_do: getEffectiveWhatYouDo(cfg),
+  what_they_get: structuredOffer.what_they_get || null,
+  who_its_for: structuredOffer.who_its_for || null,
+  how_it_works: structuredOffer.how_it_works || null,
+
+  main_result: String(cfg?.main_result || "").trim() || null,
+  best_fit_leads: String(cfg?.best_fit_leads || "").trim() || null,
+  not_a_fit: String(cfg?.not_a_fit || "").trim() || null,
+  common_objections: String(cfg?.common_objections || "").trim() || null,
+  closing_triggers: String(cfg?.closing_triggers || "").trim() || null,
+  urgency_reason: String(cfg?.urgency_reason || "").trim() || null,
+  trust_builders: String(cfg?.trust_builders || "").trim() || null,
+  faq: String(cfg?.faq || "").trim() || null,
+
+  tone: getEffectiveTone(cfg),
+  style: getEffectiveStyle(cfg),
+  vocabulary: getEffectiveVocabulary(cfg),
+
+  post_call_mode: !!postCallMode,
+  asks_price: !!asksPrice,
+  high_intent: !!highIntent,
+  think_about_it: !!thinkAboutIt,
+
+  example_messages_present: examplesToUse.length,
+  recent_assistant_replies: recentAssistantReplies,
+
+  lead_memory: leadMemory
+    ? {
+        summary: leadMemory.summary || null,
+        goal: leadMemory.goal || null,
+        current_situation: leadMemory.current_situation || null,
+        pain_points: leadMemory.pain_points || null,
+        desired_outcome: leadMemory.desired_outcome || null,
+        objection: leadMemory.objection || null,
+        intent_level: leadMemory.intent_level || null,
+        last_question_asked: leadMemory.last_question_asked || null,
+        timeline: leadMemory.timeline || null,
+        event_name: leadMemory.event_name || null,
+        motivation: leadMemory.motivation || null,
+        budget: leadMemory.budget || null,
+        trust_barrier: leadMemory.trust_barrier || null,
+        last_cta_type: leadMemory.last_cta_type || null,
+        booking_link_sent_count: leadMemory.booking_link_sent_count || 0,
+        last_user_intent: leadMemory.last_user_intent || null,
+        last_bot_reply_type: leadMemory.last_bot_reply_type || null,
+        conversation_state: leadMemory.conversation_state || null,
+        cta_attempts: leadMemory.cta_attempts || 0,
+        last_cta_response: leadMemory.last_cta_response || null,
+      }
+    : null,
+
+  turn_strategy: turnStrategy
+    ? {
+        type: turnStrategy.type,
+        intentScore: turnStrategy.intentScore ?? null,
+        shouldSendBookingLink: !!turnStrategy.shouldSendBookingLink,
+      }
+    : null,
+};
 
   const messages = [
 {
@@ -2621,6 +2660,14 @@ const { data: config, error: configErr } = await supabase
     what_they_get: null,
     how_it_works: null,
     who_its_for: null,
+    main_result: null,
+    best_fit_leads: null,
+    not_a_fit: null,
+    common_objections: null,
+    closing_triggers: null,
+    urgency_reason: null,
+    trust_builders: null,
+    faq: null,
   })
   .select()
   .single();
@@ -2720,6 +2767,61 @@ if (
   patch.who_its_for === null
 ) {
   allowed.who_its_for = patch.who_its_for;
+}
+if (
+  typeof patch.main_result === "string" ||
+  patch.main_result === null
+) {
+  allowed.main_result = patch.main_result;
+}
+
+if (
+  typeof patch.best_fit_leads === "string" ||
+  patch.best_fit_leads === null
+) {
+  allowed.best_fit_leads = patch.best_fit_leads;
+}
+
+if (
+  typeof patch.not_a_fit === "string" ||
+  patch.not_a_fit === null
+) {
+  allowed.not_a_fit = patch.not_a_fit;
+}
+
+if (
+  typeof patch.common_objections === "string" ||
+  patch.common_objections === null
+) {
+  allowed.common_objections = patch.common_objections;
+}
+
+if (
+  typeof patch.closing_triggers === "string" ||
+  patch.closing_triggers === null
+) {
+  allowed.closing_triggers = patch.closing_triggers;
+}
+
+if (
+  typeof patch.urgency_reason === "string" ||
+  patch.urgency_reason === null
+) {
+  allowed.urgency_reason = patch.urgency_reason;
+}
+
+if (
+  typeof patch.trust_builders === "string" ||
+  patch.trust_builders === null
+) {
+  allowed.trust_builders = patch.trust_builders;
+}
+
+if (
+  typeof patch.faq === "string" ||
+  patch.faq === null
+) {
+  allowed.faq = patch.faq;
 }
 
     if (typeof patch.bot_paused === "boolean")
@@ -3172,7 +3274,61 @@ if (
 ) {
   allowed.who_its_for = patch.who_its_for;
 }
+if (
+  typeof patch.main_result === "string" ||
+  patch.main_result === null
+) {
+  allowed.main_result = patch.main_result;
+}
 
+if (
+  typeof patch.best_fit_leads === "string" ||
+  patch.best_fit_leads === null
+) {
+  allowed.best_fit_leads = patch.best_fit_leads;
+}
+
+if (
+  typeof patch.not_a_fit === "string" ||
+  patch.not_a_fit === null
+) {
+  allowed.not_a_fit = patch.not_a_fit;
+}
+
+if (
+  typeof patch.common_objections === "string" ||
+  patch.common_objections === null
+) {
+  allowed.common_objections = patch.common_objections;
+}
+
+if (
+  typeof patch.closing_triggers === "string" ||
+  patch.closing_triggers === null
+) {
+  allowed.closing_triggers = patch.closing_triggers;
+}
+
+if (
+  typeof patch.urgency_reason === "string" ||
+  patch.urgency_reason === null
+) {
+  allowed.urgency_reason = patch.urgency_reason;
+}
+
+if (
+  typeof patch.trust_builders === "string" ||
+  patch.trust_builders === null
+) {
+  allowed.trust_builders = patch.trust_builders;
+}
+
+if (
+  typeof patch.faq === "string" ||
+  patch.faq === null
+) {
+  allowed.faq = patch.faq;
+}
     const { data, error } = await supabase
       .from("client_configs")
       .update(allowed)
@@ -3306,6 +3462,14 @@ const {
   what_they_get,
   how_it_works,
   who_its_for,
+  main_result,
+  best_fit_leads,
+  not_a_fit,
+  common_objections,
+  closing_triggers,
+  urgency_reason,
+  trust_builders,
+  faq,
   niche,
 } = req.body || {};
 
@@ -3345,6 +3509,22 @@ const howItWorks =
   String(how_it_works || cfg?.how_it_works || "").trim();
 const whoItsFor =
   String(who_its_for || cfg?.who_its_for || "").trim();
+const mainResult =
+  String(main_result || cfg?.main_result || "").trim();
+const bestFitLeads =
+  String(best_fit_leads || cfg?.best_fit_leads || "").trim();
+const notAFit =
+  String(not_a_fit || cfg?.not_a_fit || "").trim();
+const commonObjections =
+  String(common_objections || cfg?.common_objections || "").trim();
+const closingTriggers =
+  String(closing_triggers || cfg?.closing_triggers || "").trim();
+const urgencyReason =
+  String(urgency_reason || cfg?.urgency_reason || "").trim();
+const trustBuilders =
+  String(trust_builders || cfg?.trust_builders || "").trim();
+const faqText =
+  String(faq || cfg?.faq || "").trim();
 const effectiveNiche = getEffectiveNiche({
   niche: niche || cfg?.niche || "generic",
 });
@@ -3472,6 +3652,30 @@ ${whoItsFor || "(not provided)"}
 
 HOW IT WORKS:
 ${howItWorks || "(not provided)"}
+
+MAIN RESULT / PROMISED OUTCOME:
+${mainResult || "(not provided)"}
+
+BEST FIT LEADS:
+${bestFitLeads || "(not provided)"}
+
+NOT A FIT:
+${notAFit || "(not provided)"}
+
+COMMON OBJECTIONS:
+${commonObjections || "(not provided)"}
+
+CLOSING TRIGGERS:
+${closingTriggers || "(not provided)"}
+
+URGENCY / WHY NOW:
+${urgencyReason || "(not provided)"}
+
+TRUST BUILDERS:
+${trustBuilders || "(not provided)"}
+
+FAQ:
+${faqText || "(not provided)"}
 
 REAL MESSAGE EXAMPLES FROM THE COACH:
 ${exampleMessages || "(none provided)"}

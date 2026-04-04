@@ -473,11 +473,151 @@ I help men build a stronger physique and improve confidence through tailored onl
   Fill all 4 properly. This gives the bot enough context to answer questions without just repeating the booking link.
 </div>
 
+<div class="divider"></div>
+
+<label>Main result / core outcome</label>
+<textarea
+  id="main_result"
+  placeholder="Example:
+Help beginners lose body fat, build confidence, and finally train with structure."
+  style="min-height: 90px;"
+></textarea>
+
+<div class="helper">
+  What is the main end result people are buying from you?
+</div>
+
+<label>Best fit leads</label>
+<textarea
+  id="best_fit_leads"
+  placeholder="Example:
+- Beginners who need structure
+- People who have struggled staying consistent
+- People willing to follow a plan and be coached"
+  style="min-height: 110px;"
+></textarea>
+
+<div class="helper">
+  Tell the bot who is a strong fit, so it knows when to lean in and push forward.
+</div>
+
+<label>Not a fit / red flags</label>
+<textarea
+  id="not_a_fit"
+  placeholder="Example:
+- People wanting instant results
+- People not willing to follow a plan
+- People only price shopping
+- People expecting daily 1 to 1 calls"
+  style="min-height: 110px;"
+></textarea>
+
+<div class="helper">
+  This stops the bot sounding desperate and helps it handle bad-fit leads properly.
+</div>
+
+<label>Common objections and how to handle them</label>
+<textarea
+  id="common_objections"
+  placeholder="Example:
+Price:
+- Reframe around value and ask what they expected to invest
+
+Not sure if it’s for me:
+- Ask what specifically they’re unsure about
+
+Need to think:
+- Ask what they need clearing up before deciding
+
+No time:
+- Ask what their actual schedule looks like and show how the plan fits around it"
+  style="min-height: 180px;"
+></textarea>
+
+<div class="helper">
+  Give the bot your preferred way of handling hesitation, doubt, price, timing, and trust issues.
+</div>
+
+<label>When the bot should close / send the booking link</label>
+<textarea
+  id="closing_triggers"
+  placeholder="Example:
+Send the booking link when they:
+- ask how to start
+- ask for the link
+- say they want help
+- ask price and still sound interested
+- confirm they want to move forward
+
+Do not send it too early if they are still confused or hesitant."
+  style="min-height: 140px;"
+></textarea>
+
+<div class="helper">
+  This is one of the most important fields. It tells the bot when to stop chatting and actually move to the close.
+</div>
+
+<label>Urgency / why now</label>
+<textarea
+  id="urgency_reason"
+  placeholder="Example:
+People usually come to me because they’re tired of drifting, want to feel better quickly, have a holiday coming up, or know they need proper structure now instead of waiting another few months."
+  style="min-height: 110px;"
+></textarea>
+
+<div class="helper">
+  This gives the bot a natural reason to move things forward without sounding forced.
+</div>
+
+<label>Trust builders / proof points</label>
+<textarea
+  id="trust_builders"
+  placeholder="Example:
+- Personal support
+- Proven structure
+- Tailored plan
+- Accountability
+- Real client results
+- Ongoing check-ins"
+  style="min-height: 120px;"
+></textarea>
+
+<div class="helper">
+  What should the bot lean on when someone is unsure whether this will work?
+</div>
+
+<label>FAQ / key answers the bot should know</label>
+<textarea
+  id="faq"
+  placeholder="Example:
+Check-ins:
+Weekly
+
+Support:
+DM support during the week
+
+Calls:
+Only onboarding call
+
+Plan delivery:
+Sent after joining
+
+Start time:
+Can start this week"
+  style="min-height: 180px;"
+></textarea>
+
+<div class="helper">
+  Add quick answers for common questions so the bot can reply clearly without guessing.
+</div>
+
+<div class="divider"></div>
+
 <label>Offer price</label>
 <input
   id="offer_price"
   placeholder="e.g. £200 one-off, £1500/month, from £99"
- />
+/>
 
 <div class="helper">
   This is the price the bot can use when someone asks “how much is it?”
@@ -528,13 +668,27 @@ I help men build a stronger physique and improve confidence through tailored onl
 
 <label>How your bot should reply</label>
 <textarea id="system_prompt" placeholder="Example:
-- Tone: friendly, confident, UK vibe. Short replies.
-- Rules: 1–2 sentences, ask ONE question at the end.
-- If asked price: ask goal + current situation, don’t invent numbers.
-- High intent: share booking link once, don’t spam.
-- Post-call: no booking push, focus next steps.
+Sound like a real coach in Instagram DMs, not support and not a chatbot.
 
-Write yours here…"></textarea>
+Rules:
+- Keep replies short and natural
+- Usually 1 to 2 sentences
+- Ask only one question at a time
+- Don’t waffle
+- Don’t sound needy or over-polite
+- Don’t keep chatting forever when there is enough intent to close
+- Answer direct questions directly
+- If they hesitate, find the real objection
+- Only send the booking link when they’re ready or after hesitation is handled
+- If they already have the link, don’t keep sending it again
+- If they ask what it is, what they get, how it works, or who it’s for, answer clearly and simply
+- Sound confident, slightly direct, and natural
+
+Style nuance:
+- occasional casual words like 'bro', 'got you', 'calm', 'makes sense' are good
+- use them sparingly
+- they should feel natural, not forced
+- never use 'bro' in every message"></textarea>
 
 <div class="tip">
   Tip: keep it specific (tone + rules + what to do when asked price + when to send booking link).
@@ -544,25 +698,42 @@ Write yours here…"></textarea>
 
 <label>Example messages (your real DMs)</label>
 <textarea id="example_messages">user: how much is it?
-assistant:
+assistant: it’s £200 to get started then £90 after that
 
 user: what do you actually help with?
-assistant:
+assistant: i help beginners get in shape properly with a plan, support and accountability
 
 user: i’m not sure if it’s for me
-assistant:
+assistant: fair, what’s making you think that
 
-user: how quickly will i see results?
-assistant:
+user: i’ve never really done gym before
+assistant: that’s calm, most people haven’t. what are you actually trying to get out of it
+
+user: £200 is a bit much
+assistant: fair, what were you expecting to pay
 
 user: i’ll think about it
-assistant:
+assistant: fair, what’s holding you back
+
+user: not sure it’ll work
+assistant: what part are you unsure about
+
+user: i don’t have time
+assistant: how much time do you actually have realistically
+
+user: sounds good
+assistant: good, want me to send the link
+
+user: send me the link
+assistant: use this and get booked in
 </textarea>
 
 <div class="tip">
   Tip: This is the fastest way to make the bot sound like you. Real messages > prompts.
 </div>
-
+<div class="tip">
+  Best format: real objections, real price replies, real closing lines, real “not sure” conversations.
+</div>
         <div class="actions">
           <button class="btn primary" id="saveBtn">Save</button>
         </div>

@@ -200,6 +200,37 @@ assistant: you book in, we go through where you’re at, then we get everything 
 user: i’ll think about it
 assistant: fair - what do you need to see before you can decide properly?`;
 }
+function buildStructuredCoachContext({
+  offer_what = "",
+  offer_features = "",
+  offer_audience = "",
+  offer_process = "",
+  main_result = "",
+  best_fit_leads = "",
+  not_a_fit = "",
+  common_objections = "",
+  closing_triggers = "",
+  urgency_reason = "",
+  trust_builders = "",
+  faq = "",
+}) {
+  const sections = [];
+
+  if (offer_what) sections.push(`What you do:\n${offer_what}`);
+  if (offer_features) sections.push(`What they get:\n${offer_features}`);
+  if (offer_audience) sections.push(`Who it's for:\n${offer_audience}`);
+  if (offer_process) sections.push(`How it works:\n${offer_process}`);
+  if (main_result) sections.push(`Main result:\n${main_result}`);
+  if (best_fit_leads) sections.push(`Best fit leads:\n${best_fit_leads}`);
+  if (not_a_fit) sections.push(`Not a fit:\n${not_a_fit}`);
+  if (common_objections) sections.push(`Common objections:\n${common_objections}`);
+  if (closing_triggers) sections.push(`Closing triggers:\n${closing_triggers}`);
+  if (urgency_reason) sections.push(`Urgency / why now:\n${urgency_reason}`);
+  if (trust_builders) sections.push(`Trust builders:\n${trust_builders}`);
+  if (faq) sections.push(`FAQ:\n${faq}`);
+
+  return sections.join("\n\n");
+}
   async function apiFetch(path, opts = {}) {
     const token = getToken();
 
@@ -346,6 +377,14 @@ const offerWhatEl = qs("#offer_what");
 const offerFeaturesEl = qs("#offer_features");
 const offerAudienceEl = qs("#offer_audience");
 const offerProcessEl = qs("#offer_process");
+const mainResultEl = qs("#main_result");
+const bestFitLeadsEl = qs("#best_fit_leads");
+const notAFitEl = qs("#not_a_fit");
+const commonObjectionsEl = qs("#common_objections");
+const closingTriggersEl = qs("#closing_triggers");
+const urgencyReasonEl = qs("#urgency_reason");
+const trustBuildersEl = qs("#trust_builders");
+const faqEl = qs("#faq");
 const offerPriceEl = qs("#offer_price");
 
   if (!btn || btn.__wired) return;
@@ -374,6 +413,14 @@ const offer_what = offerWhatEl ? String(offerWhatEl.value || "").trim() : "";
 const offer_features = offerFeaturesEl ? String(offerFeaturesEl.value || "").trim() : "";
 const offer_audience = offerAudienceEl ? String(offerAudienceEl.value || "").trim() : "";
 const offer_process = offerProcessEl ? String(offerProcessEl.value || "").trim() : "";
+const main_result = mainResultEl ? String(mainResultEl.value || "").trim() : "";
+const best_fit_leads = bestFitLeadsEl ? String(bestFitLeadsEl.value || "").trim() : "";
+const not_a_fit = notAFitEl ? String(notAFitEl.value || "").trim() : "";
+const common_objections = commonObjectionsEl ? String(commonObjectionsEl.value || "").trim() : "";
+const closing_triggers = closingTriggersEl ? String(closingTriggersEl.value || "").trim() : "";
+const urgency_reason = urgencyReasonEl ? String(urgencyReasonEl.value || "").trim() : "";
+const trust_builders = trustBuildersEl ? String(trustBuildersEl.value || "").trim() : "";
+const faq = faqEl ? String(faqEl.value || "").trim() : "";
 const offer_price = offerPriceEl ? String(offerPriceEl.value || "").trim() : "";
 const example_messages = exampleEl ? String(exampleEl.value || "").trim() : "";
 const niche = nicheEl ? String(nicheEl.value || "generic").trim() : "generic";
@@ -386,33 +433,42 @@ const niche = nicheEl ? String(nicheEl.value || "generic").trim() : "generic";
         promptStatusEl.textContent =
           "Generating coach voice from your settings...";
       }
-const offer_description = `
-What you do:
-${offer_what}
-
-What they get:
-${offer_features}
-
-Who it's for:
-${offer_audience}
-
-How it works:
-${offer_process}
-`.trim();
+const offer_description = buildStructuredCoachContext({
+  offer_what,
+  offer_features,
+  offer_audience,
+  offer_process,
+  main_result,
+  best_fit_leads,
+  not_a_fit,
+  common_objections,
+  closing_triggers,
+  urgency_reason,
+  trust_builders,
+  faq,
+});
 
 const data = await apiFetch(`${API}/generate-prompt`, {
   method: "POST",
-  body: JSON.stringify({
-    instagram_handle,
-    niche,
-    example_messages,
-    offer_description,
-    offer_price,
-    what_you_do: offer_what,
-    what_they_get: offer_features,
-    who_its_for: offer_audience,
-    how_it_works: offer_process,
-  }),
+body: JSON.stringify({
+  instagram_handle,
+  niche,
+  example_messages,
+  offer_description,
+  offer_price,
+  what_you_do: offer_what,
+  what_they_get: offer_features,
+  who_its_for: offer_audience,
+  how_it_works: offer_process,
+  main_result,
+  best_fit_leads,
+  not_a_fit,
+  common_objections,
+  closing_triggers,
+  urgency_reason,
+  trust_builders,
+  faq,
+}),
 });
 
       if (promptEl && data?.system_prompt) {
@@ -670,6 +726,14 @@ const offerWhatEl = qs("#offer_what");
 const offerFeaturesEl = qs("#offer_features");
 const offerAudienceEl = qs("#offer_audience");
 const offerProcessEl = qs("#offer_process");
+const mainResultEl = qs("#main_result");
+const bestFitLeadsEl = qs("#best_fit_leads");
+const notAFitEl = qs("#not_a_fit");
+const commonObjectionsEl = qs("#common_objections");
+const closingTriggersEl = qs("#closing_triggers");
+const urgencyReasonEl = qs("#urgency_reason");
+const trustBuildersEl = qs("#trust_builders");
+const faqEl = qs("#faq");
 const offerPriceEl = qs("#offer_price");
 
 if (!promptEl && !saveBtn) return;
@@ -702,6 +766,12 @@ function extractSection(label, nextLabel) {
   return match ? String(match[1] || "").trim() : "";
 }
 
+function extractSingleSection(label) {
+  const regex = new RegExp(`${label}:\\s*([\\s\\S]*?)(?=\\n\\n[A-Z][^\\n]*:|$)`, "i");
+  const match = savedOffer.match(regex);
+  return match ? String(match[1] || "").trim() : "";
+}
+
 if (offerWhatEl) {
   offerWhatEl.value =
     config.what_you_do || extractSection("What you do", "What they get");
@@ -719,7 +789,44 @@ if (offerAudienceEl) {
 
 if (offerProcessEl) {
   offerProcessEl.value =
-    config.how_it_works || extractSection("How it works", null);
+    config.how_it_works || extractSingleSection("How it works");
+}
+if (mainResultEl) {
+  mainResultEl.value = config.main_result || extractSingleSection("Main result");
+}
+
+if (bestFitLeadsEl) {
+  bestFitLeadsEl.value =
+    config.best_fit_leads || extractSingleSection("Best fit leads");
+}
+
+if (notAFitEl) {
+  notAFitEl.value =
+    config.not_a_fit || extractSingleSection("Not a fit");
+}
+
+if (commonObjectionsEl) {
+  commonObjectionsEl.value =
+    config.common_objections || extractSingleSection("Common objections");
+}
+
+if (closingTriggersEl) {
+  closingTriggersEl.value =
+    config.closing_triggers || extractSingleSection("Closing triggers");
+}
+
+if (urgencyReasonEl) {
+  urgencyReasonEl.value =
+    config.urgency_reason || extractSingleSection("Urgency / why now");
+}
+
+if (trustBuildersEl) {
+  trustBuildersEl.value =
+    config.trust_builders || extractSingleSection("Trust builders");
+}
+
+if (faqEl) {
+  faqEl.value = config.faq || extractSingleSection("FAQ");
 }
 if (offerPriceEl) offerPriceEl.value = config.offer_price || "";
 
@@ -760,6 +867,14 @@ const offer_what = offerWhatEl ? String(offerWhatEl.value || "").trim() : "";
 const offer_features = offerFeaturesEl ? String(offerFeaturesEl.value || "").trim() : "";
 const offer_audience = offerAudienceEl ? String(offerAudienceEl.value || "").trim() : "";
 const offer_process = offerProcessEl ? String(offerProcessEl.value || "").trim() : "";
+const main_result = mainResultEl ? String(mainResultEl.value || "").trim() : "";
+const best_fit_leads = bestFitLeadsEl ? String(bestFitLeadsEl.value || "").trim() : "";
+const not_a_fit = notAFitEl ? String(notAFitEl.value || "").trim() : "";
+const common_objections = commonObjectionsEl ? String(commonObjectionsEl.value || "").trim() : "";
+const closing_triggers = closingTriggersEl ? String(closingTriggersEl.value || "").trim() : "";
+const urgency_reason = urgencyReasonEl ? String(urgencyReasonEl.value || "").trim() : "";
+const trust_builders = trustBuildersEl ? String(trustBuildersEl.value || "").trim() : "";
+const faq = faqEl ? String(faqEl.value || "").trim() : "";
 const offer_price = offerPriceEl ? String(offerPriceEl.value || "").trim() : "";
 if (!isValidUrl(booking_url)) {
   setErr("Booking URL must be a valid http or https URL.");
@@ -775,25 +890,20 @@ if (!isValidIgHandle(instagram_handle)) {
   setErr("Instagram handle format is invalid.");
   return;
 }
-const offerSections = [];
-
-if (offer_what) {
-  offerSections.push(`What you do:\n${offer_what}`);
-}
-
-if (offer_features) {
-  offerSections.push(`What they get:\n${offer_features}`);
-}
-
-if (offer_audience) {
-  offerSections.push(`Who it's for:\n${offer_audience}`);
-}
-
-if (offer_process) {
-  offerSections.push(`How it works:\n${offer_process}`);
-}
-
-const offer_description = offerSections.join("\n\n");
+const offer_description = buildStructuredCoachContext({
+  offer_what,
+  offer_features,
+  offer_audience,
+  offer_process,
+  main_result,
+  best_fit_leads,
+  not_a_fit,
+  common_objections,
+  closing_triggers,
+  urgency_reason,
+  trust_builders,
+  faq,
+});
 
 let example_messages = "";
 
@@ -812,7 +922,7 @@ if (!rawExamples.trim()) {
 }
 
 if (!system_prompt && !offer_description && !example_messages) {
-  setErr("Add at least some context — examples, offer details, or a prompt.");
+  setErr("Add at least some context — examples, offer details, FAQs, objections, or a prompt.");
   return;
 }
 
@@ -835,6 +945,14 @@ const payload = {
   what_they_get: offer_features || null,
   who_its_for: offer_audience || null,
   how_it_works: offer_process || null,
+  main_result: main_result || null,
+  best_fit_leads: best_fit_leads || null,
+  not_a_fit: not_a_fit || null,
+  common_objections: common_objections || null,
+  closing_triggers: closing_triggers || null,
+  urgency_reason: urgency_reason || null,
+  trust_builders: trust_builders || null,
+  faq: faq || null,
 };
           await apiFetch(`${API}/config`, {
             method: "POST",
