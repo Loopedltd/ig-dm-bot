@@ -251,6 +251,71 @@ function parseIgEvent(reqBody) {
   const messaging = entry?.messaging?.[0];
   return { entry, messaging };
 }
+function normaliseTriggerText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^["']|["']$/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function parseKeywordFromPhrase(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  // If coach types: dm me "START"
+  const quoted = raw.match(/["']([^"']+)["']/);
+  if (quoted?.[1]) {
+    return normaliseTriggerText(quoted[1]);
+  }
+
+  // fallback: use whole field
+  return normaliseTriggerText(raw);
+}
+
+function isStoryReplyTrigger(messaging) {
+  // Meta payloads can vary depending on the exact entry point.
+  // This is defensive so you can log and tighten later if needed.
+  return !!(
+    messaging?.message?.reply_to?.story ||
+    messaging?.message?.reply_to?.mid ||
+    messaging?.postback?.referral?.source === "story_mention" ||
+    messaging?.referral?.source === "story_mention" ||
+    messaging?.message?.is_story_reply === true
+  );
+}
+
+function isPlainTextMessage(messaging) {
+  return !!String(messaging?.message?.text || "").trim();
+}
+
+function shouldUseStoryAutoDm(cfg, messaging) {
+  return !!(
+    cfg?.story_reply_auto_dm_enabled &&
+    String(cfg?.story_reply_auto_dm_text || "").trim() &&
+    isStoryReplyTrigger(messaging)
+  );
+}
+
+function shouldUseKeywordAutoDm(cfg, text) {
+  if (!cfg?.keyword_auto_dm_enabled) return false;
+
+  const trigger = parseKeywordFromPhrase(cfg?.keyword_trigger_text);
+  if (!trigger) return false;
+
+  const incoming = normaliseTriggerText(text);
+  if (!incoming) return false;
+
+  return incoming === trigger;
+}
+
+function getStoryAutoDmText(cfg) {
+  return String(cfg?.story_reply_auto_dm_text || "").trim();
+}
+
+function getKeywordAutoDmText(cfg) {
+  return String(cfg?.keyword_auto_dm_text || "").trim();
+}
 
 // ---------------------------
 // BOT STYLE HELPERS
@@ -724,6 +789,35 @@ async function getLeadMessageHistory(leadId, limit = 30) {
       return { role, content };
     })
     .filter(Boolean);
+}
+async function sendInstagramTextMessage({
+  accessToken,
+  recipientId,
+  text,
+}) {
+  const payload = {
+    recipient: { id: recipientId },
+    message: { text: String(text || "").trim() },
+  };
+
+  return sendWithRetry(async () => {
+    const sendResp = await fetch(
+      `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(accessToken)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    const sendData = await sendResp.json().catch(() => null);
+
+    if (!sendResp.ok) {
+      throw new Error(`Failed to send IG message: ${JSON.stringify(sendData)}`);
+    }
+
+    return { sendResp, sendData };
+  });
 }
 async function getLeadMemory(leadId) {
   const { data, error } = await supabase
@@ -2668,6 +2762,12 @@ const { data: config, error: configErr } = await supabase
     urgency_reason: null,
     trust_builders: null,
     faq: null,
+
+    story_reply_auto_dm_enabled: false,
+    story_reply_auto_dm_text: null,
+    keyword_auto_dm_enabled: false,
+    keyword_trigger_text: null,
+    keyword_auto_dm_text: null,
   })
   .select()
   .single();
@@ -2774,7 +2874,34 @@ if (
 ) {
   allowed.main_result = patch.main_result;
 }
+if (typeof patch.story_reply_auto_dm_enabled === "boolean") {
+  allowed.story_reply_auto_dm_enabled = patch.story_reply_auto_dm_enabled;
+}
 
+if (
+  typeof patch.story_reply_auto_dm_text === "string" ||
+  patch.story_reply_auto_dm_text === null
+) {
+  allowed.story_reply_auto_dm_text = patch.story_reply_auto_dm_text;
+}
+
+if (typeof patch.keyword_auto_dm_enabled === "boolean") {
+  allowed.keyword_auto_dm_enabled = patch.keyword_auto_dm_enabled;
+}
+
+if (
+  typeof patch.keyword_trigger_text === "string" ||
+  patch.keyword_trigger_text === null
+) {
+  allowed.keyword_trigger_text = patch.keyword_trigger_text;
+}
+
+if (
+  typeof patch.keyword_auto_dm_text === "string" ||
+  patch.keyword_auto_dm_text === null
+) {
+  allowed.keyword_auto_dm_text = patch.keyword_auto_dm_text;
+}
 if (
   typeof patch.best_fit_leads === "string" ||
   patch.best_fit_leads === null
@@ -3221,6 +3348,34 @@ if (typeof patch.vocabulary === "string" || patch.vocabulary === null) {
     if (typeof patch.booking_url === "string" || patch.booking_url === null) {
       allowed.booking_url = patch.booking_url;
     }
+if (typeof patch.story_reply_auto_dm_enabled === "boolean") {
+  allowed.story_reply_auto_dm_enabled = patch.story_reply_auto_dm_enabled;
+}
+
+if (
+  typeof patch.story_reply_auto_dm_text === "string" ||
+  patch.story_reply_auto_dm_text === null
+) {
+  allowed.story_reply_auto_dm_text = patch.story_reply_auto_dm_text;
+}
+
+if (typeof patch.keyword_auto_dm_enabled === "boolean") {
+  allowed.keyword_auto_dm_enabled = patch.keyword_auto_dm_enabled;
+}
+
+if (
+  typeof patch.keyword_trigger_text === "string" ||
+  patch.keyword_trigger_text === null
+) {
+  allowed.keyword_trigger_text = patch.keyword_trigger_text;
+}
+
+if (
+  typeof patch.keyword_auto_dm_text === "string" ||
+  patch.keyword_auto_dm_text === null
+) {
+  allowed.keyword_auto_dm_text = patch.keyword_auto_dm_text;
+}
     if (
       typeof patch.booking_url_alt === "string" ||
       patch.booking_url_alt === null
@@ -4142,7 +4297,7 @@ log("ig_webhook_received", {
   isEcho,
 });
 
-    if (!senderId || !text) return res.sendStatus(200);
+if (!senderId) return res.sendStatus(200);
 
     res.sendStatus(200);
 
@@ -4218,7 +4373,10 @@ void (async () => {
         if (!lead.client_id) return;
 
         const cfg = await getClientConfig(lead.client_id);
-
+let historyMessages = [];
+try {
+  historyMessages = await getLeadMessageHistory(lead.id, 30);
+} catch {}
         if (!isEcho && cfg?.bot_paused) return;
 
         if (isEcho) {
@@ -4246,12 +4404,74 @@ void (async () => {
             actor: "system",
           });
         }
+        const alreadyHasOutbound = (historyMessages || []).some(
+          (m) => m?.role === "assistant"
+        );
 
-        let historyMessages = [];
-        try {
-          historyMessages = await getLeadMessageHistory(lead.id, 30);
-        } catch {}
+        const storyAutoDmMatched =
+          !isEcho &&
+          !alreadyHasOutbound &&
+          shouldUseStoryAutoDm(cfg, messaging);
 
+        const keywordAutoDmMatched =
+          !isEcho &&
+          !alreadyHasOutbound &&
+          isPlainTextMessage(messaging) &&
+          shouldUseKeywordAutoDm(cfg, text);
+
+        if (storyAutoDmMatched || keywordAutoDmMatched) {
+          const opener = storyAutoDmMatched
+            ? getStoryAutoDmText(cfg)
+            : getKeywordAutoDmText(cfg);
+
+          if (opener) {
+            const activeIgAccount = await getIgAccountByClientId(lead.client_id);
+
+            if (!activeIgAccount?.page_access_token) {
+              console.error("Missing Instagram access token for trigger opener:", lead.client_id);
+              return;
+            }
+
+            const { sendResp, sendData } = await sendInstagramTextMessage({
+              accessToken: activeIgAccount.page_access_token,
+              recipientId: senderId,
+              text: opener,
+            });
+
+            log("ig_trigger_opener_sent", {
+              leadId: lead.id,
+              senderId,
+              triggerType: storyAutoDmMatched ? "story_reply" : "keyword_dm",
+              sendOk: sendResp.ok,
+              sendData,
+            });
+
+            const { error: insertOutgoingError } = await supabase
+              .from("messages")
+              .insert({
+                lead_id: lead.id,
+                direction: "out",
+                text: opener,
+                created_at: new Date().toISOString(),
+              });
+
+            if (insertOutgoingError) {
+              console.error("trigger opener insert outgoing failed:", insertOutgoingError);
+            }
+
+            try {
+              lead = await updateLeadTracking(lead.id, {
+                last_outbound_at: nowIso(),
+                last_outbound_text: opener,
+                stage: "warm",
+              });
+            } catch (e) {
+              console.warn("trigger opener lead tracking failed:", e?.message || e);
+            }
+
+            return;
+          }
+        }
         let leadMemory = null;
         try {
           leadMemory = await getLeadMemory(lead.id);
@@ -4528,28 +4748,10 @@ if (!activeIgAccount?.page_access_token) {
           const delay = typingDelay + extraDelay;
           await new Promise((res) => setTimeout(res, delay));
 
-const { sendResp, sendData } = await sendWithRetry(async () => {
-  const sendResp = await fetch(
-    `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(
-activeIgAccount.page_access_token
-    )}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        recipient: { id: senderId },
-        message: { text: msg },
-      }),
-    }
-  );
-
-  const sendData = await sendResp.json().catch(() => null);
-
-  if (!sendResp.ok) {
-    throw new Error(`Failed to send IG message: ${JSON.stringify(sendData)}`);
-  }
-
-  return { sendResp, sendData };
+const { sendResp, sendData } = await sendInstagramTextMessage({
+  accessToken: activeIgAccount.page_access_token,
+  recipientId: senderId,
+  text: msg,
 });
 log("ig_message_sent", {
   leadId: lead.id,

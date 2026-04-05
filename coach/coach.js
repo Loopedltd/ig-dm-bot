@@ -409,6 +409,20 @@ if (!isValidIgHandle(instagram_handle)) {
   setErr("Instagram handle format is invalid.");
   return;
 }
+if (story_reply_auto_dm_enabled && !story_reply_auto_dm_text) {
+  setErr("Add the story reply outbound message or turn Story reply auto-DM off.");
+  return;
+}
+
+if (keyword_auto_dm_enabled && !keyword_trigger_text) {
+  setErr("Add the trigger phrase or turn Keyword auto-DM off.");
+  return;
+}
+
+if (keyword_auto_dm_enabled && !keyword_auto_dm_text) {
+  setErr("Add the keyword outbound message or turn Keyword auto-DM off.");
+  return;
+}
 const offer_what = offerWhatEl ? String(offerWhatEl.value || "").trim() : "";
 const offer_features = offerFeaturesEl ? String(offerFeaturesEl.value || "").trim() : "";
 const offer_audience = offerAudienceEl ? String(offerAudienceEl.value || "").trim() : "";
@@ -736,6 +750,14 @@ const trustBuildersEl = qs("#trust_builders");
 const faqEl = qs("#faq");
 const offerPriceEl = qs("#offer_price");
 
+const storyReplyAutoDmEnabledEl = qs("#story_reply_auto_dm_enabled");
+const storyReplyAutoDmTextEl = qs("#story_reply_auto_dm_text");
+const keywordAutoDmEnabledEl = qs("#keyword_auto_dm_enabled");
+const keywordTriggerTextEl = qs("#keyword_trigger_text");
+const keywordAutoDmTextEl = qs("#keyword_auto_dm_text");
+const storyReplyToggleBadgeEl = qs("#storyReplyToggleBadge");
+const keywordToggleBadgeEl = qs("#keywordToggleBadge");
+
 if (!promptEl && !saveBtn) return;
 
     if (!getToken()) {
@@ -755,6 +777,42 @@ if (toneEl) toneEl.value = config.tone || "";
 if (styleEl) styleEl.value = config.style || "";
 if (vocabularyEl) vocabularyEl.value = config.vocabulary || "";
 if (promptEl) promptEl.value = config.system_prompt || "";
+
+if (storyReplyAutoDmEnabledEl) {
+  storyReplyAutoDmEnabledEl.value = config.story_reply_auto_dm_enabled ? "true" : "false";
+}
+
+if (storyReplyAutoDmTextEl) {
+  storyReplyAutoDmTextEl.value = config.story_reply_auto_dm_text || "";
+}
+
+if (keywordAutoDmEnabledEl) {
+  keywordAutoDmEnabledEl.value = config.keyword_auto_dm_enabled ? "true" : "false";
+}
+
+if (keywordTriggerTextEl) {
+  keywordTriggerTextEl.value = config.keyword_trigger_text || "";
+}
+
+if (keywordAutoDmTextEl) {
+  keywordAutoDmTextEl.value = config.keyword_auto_dm_text || "";
+}
+
+if (storyReplyToggleBadgeEl) {
+  const on = !!config.story_reply_auto_dm_enabled;
+  storyReplyToggleBadgeEl.className = on ? "badge connected" : "badge";
+  storyReplyToggleBadgeEl.textContent = on
+    ? "Story reply opener ON"
+    : "Story reply opener OFF";
+}
+
+if (keywordToggleBadgeEl) {
+  const on = !!config.keyword_auto_dm_enabled;
+  keywordToggleBadgeEl.className = on ? "badge connected" : "badge";
+  keywordToggleBadgeEl.textContent = on
+    ? "Keyword opener ON"
+    : "Keyword opener OFF";
+}
 const savedOffer = String(config.offer_description || "");
 
 function extractSection(label, nextLabel) {
@@ -876,6 +934,31 @@ const urgency_reason = urgencyReasonEl ? String(urgencyReasonEl.value || "").tri
 const trust_builders = trustBuildersEl ? String(trustBuildersEl.value || "").trim() : "";
 const faq = faqEl ? String(faqEl.value || "").trim() : "";
 const offer_price = offerPriceEl ? String(offerPriceEl.value || "").trim() : "";
+const story_reply_auto_dm_enabled =
+  storyReplyAutoDmEnabledEl
+    ? String(storyReplyAutoDmEnabledEl.value || "false") === "true"
+    : false;
+
+const story_reply_auto_dm_text =
+  storyReplyAutoDmTextEl
+    ? String(storyReplyAutoDmTextEl.value || "").trim()
+    : "";
+
+const keyword_auto_dm_enabled =
+  keywordAutoDmEnabledEl
+    ? String(keywordAutoDmEnabledEl.value || "false") === "true"
+    : false;
+
+const keyword_trigger_text =
+  keywordTriggerTextEl
+    ? String(keywordTriggerTextEl.value || "").trim()
+    : "";
+
+const keyword_auto_dm_text =
+  keywordAutoDmTextEl
+    ? String(keywordAutoDmTextEl.value || "").trim()
+    : "";
+
 if (!isValidUrl(booking_url)) {
   setErr("Booking URL must be a valid http or https URL.");
   return;
@@ -953,6 +1036,12 @@ const payload = {
   urgency_reason: urgency_reason || null,
   trust_builders: trust_builders || null,
   faq: faq || null,
+
+  story_reply_auto_dm_enabled,
+  story_reply_auto_dm_text: story_reply_auto_dm_text || null,
+  keyword_auto_dm_enabled,
+  keyword_trigger_text: keyword_trigger_text || null,
+  keyword_auto_dm_text: keyword_auto_dm_text || null,
 };
           await apiFetch(`${API}/config`, {
             method: "POST",

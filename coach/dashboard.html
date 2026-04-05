@@ -419,6 +419,79 @@ input:focus, textarea:focus, select:focus{
         </div>
       </div>
 
+      <div class="card" id="triggerAutomationCard">
+        <div class="takeoverHeader">
+          <div>
+            <div class="takeoverTitle">DM Trigger Automations</div>
+            <div class="takeoverSub">
+              Turn simple non-AI openers on or off for story replies and keyword DMs.
+            </div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top: 10px;">
+          <div>
+            <div class="takeoverTopLine" style="margin-bottom:8px;">
+              <span class="badge" id="storyReplyToggleBadge">Story reply opener OFF</span>
+            </div>
+
+            <label style="margin-top:0;">Story reply auto-DM</label>
+            <select id="story_reply_auto_dm_enabled">
+              <option value="false">Off</option>
+              <option value="true">On</option>
+            </select>
+
+            <label>Story reply outbound message</label>
+            <textarea
+              id="story_reply_auto_dm_text"
+              placeholder="Example:
+Appreciate the reply - what are you trying to sort right now?"
+              style="min-height: 120px;"
+            ></textarea>
+
+            <div class="helper">
+              This sends a prewritten opener when someone replies to a story and opens a DM thread.
+            </div>
+          </div>
+
+          <div>
+            <div class="takeoverTopLine" style="margin-bottom:8px;">
+              <span class="badge" id="keywordToggleBadge">Keyword opener OFF</span>
+            </div>
+
+            <label style="margin-top:0;">Keyword auto-DM</label>
+            <select id="keyword_auto_dm_enabled">
+              <option value="false">Off</option>
+              <option value="true">On</option>
+            </select>
+
+            <label>Trigger phrase</label>
+            <input
+              id="keyword_trigger_text"
+              placeholder='Example: START'
+            />
+
+            <label>Keyword outbound message</label>
+            <textarea
+              id="keyword_auto_dm_text"
+              placeholder="Example:
+Nice - saw your message. What’s the main thing you want help with right now?"
+              style="min-height: 120px;"
+            ></textarea>
+
+            <div class="helper">
+              If your CTA says something like <strong>DM me “START”</strong>, this sends a prewritten opener when they message that keyword.
+            </div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="tip">
+          These are not AI replies. They are fixed opening messages the coach can fully edit.
+        </div>
+      </div>
+
       <div class="card">
         <div class="row">
           <div>
