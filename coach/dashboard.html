@@ -429,68 +429,92 @@ input:focus, textarea:focus, select:focus{
           </div>
         </div>
 
-        <div class="row" style="margin-top: 10px;">
-          <div>
-            <div class="takeoverTopLine" style="margin-bottom:8px;">
-              <span class="badge" id="storyReplyToggleBadge">Story reply opener OFF</span>
-            </div>
+<div class="row" style="margin-top: 10px; grid-template-columns: 1fr 1fr 1fr;">
+  <div>
+    <div class="takeoverTopLine" style="margin-bottom:8px;">
+      <span class="badge" id="storyReplyToggleBadge">Story reply opener OFF</span>
+    </div>
 
-            <label style="margin-top:0;">Story reply auto-DM</label>
-            <select id="story_reply_auto_dm_enabled">
-              <option value="false">Off</option>
-              <option value="true">On</option>
-            </select>
+    <label style="margin-top:0;">Story reply auto-DM</label>
+    <select id="story_reply_auto_dm_enabled">
+      <option value="false">Off</option>
+      <option value="true">On</option>
+    </select>
 
-            <label>Story reply outbound message</label>
-            <textarea
-              id="story_reply_auto_dm_text"
-              placeholder="Example:
+    <label>Story reply outbound message</label>
+    <textarea
+      id="story_reply_auto_dm_text"
+      placeholder="Example:
 Appreciate the reply - what are you trying to sort right now?"
-              style="min-height: 120px;"
-            ></textarea>
+      style="min-height: 120px;"
+    ></textarea>
 
-            <div class="helper">
-              This sends a prewritten opener when someone replies to a story and opens a DM thread.
-            </div>
-          </div>
+    <div class="helper">
+      This sends a prewritten opener when someone replies to a story and opens a DM thread.
+    </div>
+  </div>
 
-          <div>
-            <div class="takeoverTopLine" style="margin-bottom:8px;">
-              <span class="badge" id="keywordToggleBadge">Keyword opener OFF</span>
-            </div>
+  <div>
+    <div class="takeoverTopLine" style="margin-bottom:8px;">
+      <span class="badge" id="commentReplyToggleBadge">Comment reply opener OFF</span>
+    </div>
 
-            <label style="margin-top:0;">Keyword auto-DM</label>
-            <select id="keyword_auto_dm_enabled">
-              <option value="false">Off</option>
-              <option value="true">On</option>
-            </select>
+    <label style="margin-top:0;">Comment reply auto-DM</label>
+    <select id="comment_reply_auto_dm_enabled">
+      <option value="false">Off</option>
+      <option value="true">On</option>
+    </select>
 
-            <label>Trigger phrase</label>
-            <input
-              id="keyword_trigger_text"
-              placeholder='Example: START'
-            />
+    <label>Comment reply outbound message</label>
+    <textarea
+      id="comment_reply_auto_dm_text"
+      placeholder="Example:
+Saw your comment - what are you trying to get help with?"
+      style="min-height: 120px;"
+    ></textarea>
 
-            <label>Keyword outbound message</label>
-            <textarea
-              id="keyword_auto_dm_text"
-              placeholder="Example:
+    <div class="helper">
+      This sends a prewritten opener when someone comes into DMs from a post comment or comment CTA.
+    </div>
+  </div>
+
+  <div>
+    <div class="takeoverTopLine" style="margin-bottom:8px;">
+      <span class="badge" id="keywordToggleBadge">Keyword opener OFF</span>
+    </div>
+
+    <label style="margin-top:0;">Keyword auto-DM</label>
+    <select id="keyword_auto_dm_enabled">
+      <option value="false">Off</option>
+      <option value="true">On</option>
+    </select>
+
+    <label>Trigger phrase</label>
+    <input
+      id="keyword_trigger_text"
+      placeholder='Example: START'
+    />
+
+    <label>Keyword outbound message</label>
+    <textarea
+      id="keyword_auto_dm_text"
+      placeholder="Example:
 Nice - saw your message. What’s the main thing you want help with right now?"
-              style="min-height: 120px;"
-            ></textarea>
+      style="min-height: 120px;"
+    ></textarea>
 
-            <div class="helper">
-              If your CTA says something like <strong>DM me “START”</strong>, this sends a prewritten opener when they message that keyword.
-            </div>
-          </div>
-        </div>
+    <div class="helper">
+      If your CTA says something like <strong>DM me “START”</strong>, this sends a prewritten opener when they message that keyword.
+    </div>
+  </div>
+</div>
 
-        <div class="divider"></div>
+<div class="divider"></div>
 
-        <div class="tip">
-          These are not AI replies. They are fixed opening messages the coach can fully edit.
-        </div>
-      </div>
+<div class="tip">
+  These are not AI replies. They are fixed opening messages the coach can fully edit.
+</div>
+</div>
 
       <div class="card">
         <div class="row">

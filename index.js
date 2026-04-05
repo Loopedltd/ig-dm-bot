@@ -239,17 +239,35 @@ function isAppHost(req) {
 // IG HELPERS (webhook parsing)
 // ---------------------------
 function extractIgText(messaging) {
-  return messaging?.message?.text || messaging?.message?.attachments?.[0]?.payload?.url || "";
+  const directText = String(messaging?.message?.text || "").trim();
+  if (directText) return directText;
+
+  const firstAttachment = messaging?.message?.attachments?.[0];
+  const attachmentUrl = String(firstAttachment?.payload?.url || "").trim();
+  if (attachmentUrl) return attachmentUrl;
+
+  const quickReply = String(messaging?.message?.quick_reply?.payload || "").trim();
+  if (quickReply) return quickReply;
+
+  return "";
 }
 
 function isIgEcho(messaging) {
   return !!messaging?.message?.is_echo;
 }
 
-function parseIgEvent(reqBody) {
-  const entry = reqBody?.entry?.[0];
-  const messaging = entry?.messaging?.[0];
-  return { entry, messaging };
+function getAllIgMessagingEvents(reqBody) {
+  const entries = Array.isArray(reqBody?.entry) ? reqBody.entry : [];
+
+  const events = [];
+  for (const entry of entries) {
+    const messagingItems = Array.isArray(entry?.messaging) ? entry.messaging : [];
+    for (const messaging of messagingItems) {
+      events.push({ entry, messaging });
+    }
+  }
+
+  return events;
 }
 function normaliseTriggerText(value) {
   return String(value || "")
@@ -315,6 +333,41 @@ function getStoryAutoDmText(cfg) {
 
 function getKeywordAutoDmText(cfg) {
   return String(cfg?.keyword_auto_dm_text || "").trim();
+}
+function isCommentReplyTrigger(messaging) {
+  const referralSource = String(
+    messaging?.referral?.source ||
+    messaging?.postback?.referral?.source ||
+    ""
+  ).toLowerCase();
+
+  const referralType = String(
+    messaging?.referral?.type ||
+    messaging?.postback?.referral?.type ||
+    ""
+  ).toLowerCase();
+
+  const replyTo = messaging?.message?.reply_to || null;
+
+  return !!(
+    messaging?.message?.is_comment_reply === true ||
+    replyTo?.comment_id ||
+    referralSource === "comments" ||
+    referralSource === "post" ||
+    referralType === "comment_mention"
+  );
+}
+
+function shouldUseCommentAutoDm(cfg, messaging) {
+  return !!(
+    cfg?.comment_reply_auto_dm_enabled &&
+    String(cfg?.comment_reply_auto_dm_text || "").trim() &&
+    isCommentReplyTrigger(messaging)
+  );
+}
+
+function getCommentAutoDmText(cfg) {
+  return String(cfg?.comment_reply_auto_dm_text || "").trim();
 }
 
 // ---------------------------
@@ -2763,11 +2816,15 @@ const { data: config, error: configErr } = await supabase
     trust_builders: null,
     faq: null,
 
-    story_reply_auto_dm_enabled: false,
-    story_reply_auto_dm_text: null,
-    keyword_auto_dm_enabled: false,
-    keyword_trigger_text: null,
-    keyword_auto_dm_text: null,
+story_reply_auto_dm_enabled: false,
+story_reply_auto_dm_text: null,
+
+comment_reply_auto_dm_enabled: false,
+comment_reply_auto_dm_text: null,
+
+keyword_auto_dm_enabled: false,
+keyword_trigger_text: null,
+keyword_auto_dm_text: null,
   })
   .select()
   .single();
@@ -2884,7 +2941,16 @@ if (
 ) {
   allowed.story_reply_auto_dm_text = patch.story_reply_auto_dm_text;
 }
+if (typeof patch.comment_reply_auto_dm_enabled === "boolean") {
+  allowed.comment_reply_auto_dm_enabled = patch.comment_reply_auto_dm_enabled;
+}
 
+if (
+  typeof patch.comment_reply_auto_dm_text === "string" ||
+  patch.comment_reply_auto_dm_text === null
+) {
+  allowed.comment_reply_auto_dm_text = patch.comment_reply_auto_dm_text;
+}
 if (typeof patch.keyword_auto_dm_enabled === "boolean") {
   allowed.keyword_auto_dm_enabled = patch.keyword_auto_dm_enabled;
 }
@@ -3358,7 +3424,16 @@ if (
 ) {
   allowed.story_reply_auto_dm_text = patch.story_reply_auto_dm_text;
 }
+if (typeof patch.comment_reply_auto_dm_enabled === "boolean") {
+  allowed.comment_reply_auto_dm_enabled = patch.comment_reply_auto_dm_enabled;
+}
 
+if (
+  typeof patch.comment_reply_auto_dm_text === "string" ||
+  patch.comment_reply_auto_dm_text === null
+) {
+  allowed.comment_reply_auto_dm_text = patch.comment_reply_auto_dm_text;
+}
 if (typeof patch.keyword_auto_dm_enabled === "boolean") {
   allowed.keyword_auto_dm_enabled = patch.keyword_auto_dm_enabled;
 }
@@ -4281,167 +4356,559 @@ app.get("/webhook", (req, res) => {
 
 app.post("/webhook", async (req, res) => {
   try {
-    const { messaging } = parseIgEvent(req.body);
+    const events = getAllIgMessagingEvents(req.body);
 
-    if (!messaging) return res.sendStatus(200);
-
-    const senderId = messaging.sender?.id;
-    const recipientId = messaging.recipient?.id;
-    const text = extractIgText(messaging);
-    const isEcho = isIgEcho(messaging);
-
-log("ig_webhook_received", {
-  senderId,
-  recipientId,
-  hasText: !!text,
-  isEcho,
-});
-
-if (!senderId) return res.sendStatus(200);
+    if (!events.length) {
+      return res.sendStatus(200);
+    }
 
     res.sendStatus(200);
 
-void (async () => {
-  try {
-    const { data: igAccount, error: igLookupError } = await supabase
-      .from("ig_accounts")
-      .select("client_id, ig_user_id, page_id")
-      .eq("is_active", true)
-      .or(`page_id.eq.${recipientId},ig_user_id.eq.${recipientId}`)
-      .maybeSingle();
+    for (const { messaging } of events) {
+      void (async () => {
+        try {
+          const senderId = messaging.sender?.id;
+          const recipientId = messaging.recipient?.id;
+          const text = extractIgText(messaging);
+          const isEcho = isIgEcho(messaging);
 
-    if (igLookupError || !igAccount?.client_id) {
-      console.error("No active Instagram account/client mapping found", {
-        recipientId,
-        igLookupError: igLookupError?.message || null,
-      });
-      return;
-    }
+          log("ig_webhook_received", {
+            senderId,
+            recipientId,
+            hasText: !!text,
+            isEcho,
+            hasAttachments: !!messaging?.message?.attachments?.length,
+            rawMid: messaging?.message?.mid || null,
+          });
 
-    let { data: lead, error: leadLookupError } = await supabase
-      .from("leads")
-      .select("*")
-      .eq("client_id", igAccount.client_id)
-      .eq("ig_psid", senderId)
-      .maybeSingle();
+log("ig_event_debug", {
+  senderId: messaging?.sender?.id || null,
+  recipientId: messaging?.recipient?.id || null,
+  text: messaging?.message?.text || null,
+  hasAttachments: !!messaging?.message?.attachments?.length,
+  attachmentType: messaging?.message?.attachments?.[0]?.type || null,
+  isEcho: !!messaging?.message?.is_echo,
+  referralSource:
+    messaging?.referral?.source ||
+    messaging?.postback?.referral?.source ||
+    null,
+  referralType:
+    messaging?.referral?.type ||
+    messaging?.postback?.referral?.type ||
+    null,
+  replyTo: messaging?.message?.reply_to || null,
+  isStoryReplyTrigger: isStoryReplyTrigger(messaging),
+  isCommentReplyTrigger: isCommentReplyTrigger(messaging),
+  rawKeys: Object.keys(messaging || {}),
+});
 
-    if (leadLookupError) {
-      console.error("lead lookup failed:", leadLookupError);
-      return;
-    }
+          if (!senderId) return;
 
-    if (!lead) {
-      const { data: newLead, error: newLeadError } = await supabase
-        .from("leads")
-        .insert({
-          client_id: igAccount.client_id,
-          ig_psid: senderId,
-          stage: "new",
-        })
-        .select()
-        .single();
+          const hasMessage =
+            !!String(text || "").trim() ||
+            !!messaging?.message?.attachments?.length;
 
-      if (newLeadError) {
-        console.error("lead create failed:", newLeadError);
-        return;
-      }
+          if (!hasMessage) return;
 
-      lead = newLead;
-    }
+          const { data: igAccount, error: igLookupError } = await supabase
+            .from("ig_accounts")
+            .select("client_id, ig_user_id, page_id")
+            .eq("is_active", true)
+            .or(`page_id.eq.${recipientId},ig_user_id.eq.${recipientId}`)
+            .maybeSingle();
 
-        const { error: insertIncomingError } = await supabase.from("messages").insert({
-          lead_id: lead.id,
-          direction: isEcho ? "out" : "in",
-          text,
-          created_at: new Date().toISOString(),
-        });
-
-        if (insertIncomingError) {
-          console.error("messages insert incoming failed:", insertIncomingError);
-        }
-
-        if (!isEcho) {
-          try {
-            lead = await updateLeadTracking(lead.id, {
-              last_inbound_at: nowIso(),
+          if (igLookupError || !igAccount?.client_id) {
+            console.error("No active Instagram account/client mapping found", {
+              recipientId,
+              igLookupError: igLookupError?.message || null,
             });
-          } catch (e) {
-            console.warn("last_inbound_at update failed:", e?.message || e);
+            return;
           }
-        }
 
-        if (!lead.client_id) return;
+          let { data: lead, error: leadLookupError } = await supabase
+            .from("leads")
+            .select("*")
+            .eq("client_id", igAccount.client_id)
+            .eq("ig_psid", senderId)
+            .maybeSingle();
 
-        const cfg = await getClientConfig(lead.client_id);
-let historyMessages = [];
-try {
-  historyMessages = await getLeadMessageHistory(lead.id, 30);
-} catch {}
-        if (!isEcho && cfg?.bot_paused) return;
+          if (leadLookupError) {
+            console.error("lead lookup failed:", leadLookupError);
+            return;
+          }
 
-        if (isEcho) {
-          await setLeadManualOverride({
-            leadId: lead.id,
-            clientId: lead.client_id,
-            enabled: true,
-            reason: "Coach replied manually",
-            actor: "system",
-          });
-          return;
-        }
+          if (!lead) {
+            const { data: newLead, error: newLeadError } = await supabase
+              .from("leads")
+              .insert({
+                client_id: igAccount.client_id,
+                ig_psid: senderId,
+                stage: "new",
+              })
+              .select()
+              .single();
 
-        if (lead.manual_override) {
-          const H24 = 24 * 60 * 60 * 1000;
-          const idleMs = msSince(lead.manual_override_at);
-
-          if (idleMs <= H24) return;
-
-          await setLeadManualOverride({
-            leadId: lead.id,
-            clientId: lead.client_id,
-            enabled: false,
-            reason: "Auto resume",
-            actor: "system",
-          });
-        }
-        const alreadyHasOutbound = (historyMessages || []).some(
-          (m) => m?.role === "assistant"
-        );
-
-        const storyAutoDmMatched =
-          !isEcho &&
-          !alreadyHasOutbound &&
-          shouldUseStoryAutoDm(cfg, messaging);
-
-        const keywordAutoDmMatched =
-          !isEcho &&
-          !alreadyHasOutbound &&
-          isPlainTextMessage(messaging) &&
-          shouldUseKeywordAutoDm(cfg, text);
-
-        if (storyAutoDmMatched || keywordAutoDmMatched) {
-          const opener = storyAutoDmMatched
-            ? getStoryAutoDmText(cfg)
-            : getKeywordAutoDmText(cfg);
-
-          if (opener) {
-            const activeIgAccount = await getIgAccountByClientId(lead.client_id);
-
-            if (!activeIgAccount?.page_access_token) {
-              console.error("Missing Instagram access token for trigger opener:", lead.client_id);
+            if (newLeadError) {
+              console.error("lead create failed:", newLeadError);
               return;
             }
+
+            lead = newLead;
+          }
+
+          const { error: insertIncomingError } = await supabase
+            .from("messages")
+            .insert({
+              lead_id: lead.id,
+              direction: isEcho ? "out" : "in",
+              text: text || "[non-text message]",
+              created_at: new Date().toISOString(),
+            });
+
+          if (insertIncomingError) {
+            console.error("messages insert incoming failed:", insertIncomingError);
+          }
+
+          if (!isEcho) {
+            try {
+              lead = await updateLeadTracking(lead.id, {
+                last_inbound_at: nowIso(),
+              });
+            } catch (e) {
+              console.warn("last_inbound_at update failed:", e?.message || e);
+            }
+          }
+
+          if (!lead.client_id) return;
+
+          const cfg = await getClientConfig(lead.client_id);
+
+          let historyMessages = [];
+          try {
+            historyMessages = await getLeadMessageHistory(lead.id, 30);
+          } catch {}
+
+          if (!isEcho && cfg?.bot_paused) return;
+
+          if (isEcho) {
+            await setLeadManualOverride({
+              leadId: lead.id,
+              clientId: lead.client_id,
+              enabled: true,
+              reason: "Coach replied manually",
+              actor: "system",
+            });
+            return;
+          }
+
+          if (lead.manual_override) {
+            const H24 = 24 * 60 * 60 * 1000;
+            const idleMs = msSince(lead.manual_override_at);
+
+            if (idleMs <= H24) return;
+
+            await setLeadManualOverride({
+              leadId: lead.id,
+              clientId: lead.client_id,
+              enabled: false,
+              reason: "Auto resume",
+              actor: "system",
+            });
+          }
+
+          const alreadyHasOutbound = (historyMessages || []).some(
+            (m) => m?.role === "assistant"
+          );
+
+const storyAutoDmMatched =
+  !isEcho &&
+  !alreadyHasOutbound &&
+  shouldUseStoryAutoDm(cfg, messaging);
+
+const commentAutoDmMatched =
+  !isEcho &&
+  !alreadyHasOutbound &&
+  shouldUseCommentAutoDm(cfg, messaging);
+
+const keywordAutoDmMatched =
+  !isEcho &&
+  !alreadyHasOutbound &&
+  isPlainTextMessage(messaging) &&
+  shouldUseKeywordAutoDm(cfg, text);
+
+if (storyAutoDmMatched || commentAutoDmMatched || keywordAutoDmMatched) {
+  const opener = storyAutoDmMatched
+    ? getStoryAutoDmText(cfg)
+    : commentAutoDmMatched
+    ? getCommentAutoDmText(cfg)
+    : getKeywordAutoDmText(cfg);
+
+            if (opener) {
+              const activeIgAccount = await getIgAccountByClientId(lead.client_id);
+
+              if (!activeIgAccount?.page_access_token) {
+                console.error(
+                  "Missing Instagram access token for trigger opener:",
+                  lead.client_id
+                );
+                return;
+              }
+
+              const { sendResp, sendData } = await sendInstagramTextMessage({
+                accessToken: activeIgAccount.page_access_token,
+                recipientId: senderId,
+                text: opener,
+              });
+
+log("ig_trigger_opener_sent", {
+  leadId: lead.id,
+  senderId,
+  triggerType: storyAutoDmMatched
+    ? "story_reply"
+    : commentAutoDmMatched
+    ? "comment_reply"
+    : "keyword_dm",
+  sendOk: sendResp.ok,
+  sendData,
+});
+
+              const { error: insertOutgoingError } = await supabase
+                .from("messages")
+                .insert({
+                  lead_id: lead.id,
+                  direction: "out",
+                  text: opener,
+                  created_at: new Date().toISOString(),
+                });
+
+              if (insertOutgoingError) {
+                console.error(
+                  "trigger opener insert outgoing failed:",
+                  insertOutgoingError
+                );
+              }
+
+              try {
+                lead = await updateLeadTracking(lead.id, {
+                  last_outbound_at: nowIso(),
+                  last_outbound_text: opener,
+                  stage: "warm",
+                });
+              } catch (e) {
+                console.warn(
+                  "trigger opener lead tracking failed:",
+                  e?.message || e
+                );
+              }
+
+              return;
+            }
+          }
+
+          let leadMemory = null;
+          try {
+            leadMemory = await getLeadMemory(lead.id);
+          } catch (e) {
+            console.warn("getLeadMemory failed:", e?.message || e);
+          }
+
+          try {
+            const extractedMemory = await extractLeadMemory({
+              lead,
+              historyMessages,
+              existingMemory: leadMemory,
+              currentMessage: text,
+            });
+
+            const detectedUserIntent = detectUserIntent(text);
+
+            const derivedState = deriveConversationState({
+              lead,
+              leadMemory: extractedMemory || leadMemory,
+              userIntent: detectedUserIntent,
+            });
+
+            leadMemory = await upsertLeadMemory({
+              leadId: lead.id,
+              clientId: lead.client_id,
+              patch: {
+                ...(extractedMemory || {}),
+                last_user_intent: detectedUserIntent,
+                conversation_state: derivedState,
+              },
+              existing: leadMemory,
+            });
+          } catch (e) {
+            console.warn("lead memory update failed:", e?.message || e);
+          }
+
+          try {
+            const nextStage = deriveLeadStage({
+              lead,
+              turnStrategy: null,
+              leadMemory,
+            });
+
+            if (nextStage !== lead.stage) {
+              lead = await updateLeadTracking(lead.id, {
+                stage: nextStage,
+              });
+            }
+          } catch (e) {
+            console.warn("post-memory stage update failed:", e?.message || e);
+          }
+
+          const thinkAboutIt = detectThinkAboutIt(text);
+          const asksPrice = detectPriceQuestion(text);
+          const highIntent = detectHighIntent(text);
+          const userIntent = detectUserIntent(text);
+
+          const bookingAlreadySentBeforeReply =
+            !!lead?.booking_sent ||
+            !!leadMemory?.last_cta_at ||
+            (leadMemory?.booking_link_sent_count || 0) > 0;
+
+          if (
+            bookingAlreadySentBeforeReply &&
+            [
+              "think_about_it",
+              "price_question",
+              "offer_question",
+              "what_do_i_get_question",
+              "start_process_question",
+              "who_its_for_question",
+            ].includes(userIntent)
+          ) {
+            try {
+              leadMemory = await upsertLeadMemory({
+                leadId: lead.id,
+                clientId: lead.client_id,
+                existing: leadMemory,
+                patch: {
+                  last_cta_response: userIntent,
+                },
+              });
+            } catch (e) {
+              console.warn("last_cta_response update failed:", e?.message || e);
+            }
+          }
+
+          const conversationState = deriveConversationState({
+            lead,
+            leadMemory,
+            userIntent,
+          });
+
+          let turnStrategy = decideTurnStrategyFromIntent({
+            userIntent,
+            conversationState,
+            lead,
+            leadMemory,
+            text,
+            bookingUrl: cfg?.booking_url || null,
+          });
+
+          turnStrategy = preventRepeatedReplyType(turnStrategy, leadMemory);
+
+          lead.last_message = text;
+
+          const aiResult = await generateAiReply({
+            cfg,
+            lead,
+            historyMessages,
+            leadMemory,
+            turnStrategy,
+            postCallMode: lead.call_completed,
+            asksPrice,
+            highIntent,
+            bookingUrl: cfg?.booking_url || null,
+            thinkAboutIt,
+            userText: text,
+          });
+
+          let reply = aiResult?.reply || null;
+
+          if (!reply && turnStrategy?.type === "handle_think_about_it") {
+            reply = getObjectionFollowUpReply(text, leadMemory, cfg);
+          }
+
+          const explicitLinkRequest = detectExplicitBookingLinkRequest(text);
+          const bookingAlreadySent =
+            !!lead?.booking_sent ||
+            !!leadMemory?.last_cta_at ||
+            (leadMemory?.booking_link_sent_count || 0) > 0;
+
+          const canSendNewBookingPush =
+            !!cfg?.booking_url && !bookingAlreadySent;
+          const canResendBecauseAsked =
+            !!cfg?.booking_url &&
+            explicitLinkRequest &&
+            bookingAlreadySent;
+
+          if (canResendBecauseAsked) {
+            reply = "use the link i sent earlier and get booked in";
+          } else if (aiResult?.should_send_booking_link && canSendNewBookingPush) {
+            if (turnStrategy?.type === "soft_close_to_booking") {
+              reply = buildWarmCloseFromMemory(cfg.booking_url, leadMemory);
+            } else {
+              reply = getEscalatedBookingReply(
+                cfg.booking_url,
+                leadMemory,
+                "normal"
+              );
+            }
+          } else if (highIntent && canSendNewBookingPush) {
+            reply = getEscalatedBookingReply(cfg.booking_url, leadMemory, "normal");
+          }
+
+          if (!reply || looksIncompleteReply(reply)) {
+            if (turnStrategy?.type === "handle_think_about_it") {
+              reply = getObjectionFollowUpReply(text, leadMemory, cfg);
+            }
+
+            if (!reply) {
+              reply =
+                buildDeterministicReply({
+                  turnStrategy,
+                  cfg,
+                }) ||
+                getFallbackReply({
+                  turnStrategy,
+                  cfg,
+                  leadMemory,
+                });
+            }
+          }
+
+          if (!reply) return;
+
+          const shouldHumanise = ![
+            "answer_price_after_cta",
+            "handle_price_then_cta",
+            "answer_offer_question_after_cta",
+            "answer_what_you_sell_after_cta",
+            "answer_what_do_i_get_after_cta",
+            "answer_start_process_after_cta",
+            "answer_who_its_for_after_cta",
+            "handle_think_about_it",
+          ].includes(String(turnStrategy?.type || ""));
+
+          if (shouldHumanise) {
+            reply = humaniseText(reply);
+          }
+
+          const recentAssistantHistory = (historyMessages || [])
+            .filter((m) => m?.role === "assistant")
+            .slice(-5);
+
+          if (
+            isReplyTooSimilar(reply, recentAssistantHistory, turnStrategy?.type) ||
+            looksIncompleteReply(reply)
+          ) {
+            const retryAiResult = await generateAiReply({
+              cfg,
+              lead,
+              historyMessages: [
+                ...(historyMessages || []),
+                {
+                  role: "system",
+                  content:
+                    "Your last draft was too repetitive or incomplete. Answer the user's meaning directly in a new way. Do not repeat recent assistant wording.",
+                },
+              ],
+              leadMemory,
+              turnStrategy,
+              postCallMode: lead.call_completed,
+              asksPrice,
+              highIntent,
+              bookingUrl: cfg?.booking_url || null,
+              thinkAboutIt,
+              userText: text,
+            });
+
+            if (retryAiResult?.reply && !looksIncompleteReply(retryAiResult.reply)) {
+              reply = retryAiResult.reply;
+            } else {
+              const fallback =
+                buildDeterministicReply({
+                  turnStrategy,
+                  cfg,
+                }) ||
+                getFallbackReply({
+                  turnStrategy,
+                  cfg,
+                  leadMemory,
+                });
+
+              if (fallback) {
+                const fallbackIsStructured =
+                  turnStrategy?.type === "answer_price_after_cta" ||
+                  turnStrategy?.type === "handle_price_then_cta" ||
+                  turnStrategy?.type === "answer_offer_question_after_cta" ||
+                  turnStrategy?.type === "answer_what_do_i_get_after_cta" ||
+                  turnStrategy?.type === "answer_start_process_after_cta" ||
+                  turnStrategy?.type === "answer_who_its_for_after_cta" ||
+                  turnStrategy?.type === "answer_what_you_sell_after_cta";
+
+                reply = fallbackIsStructured ? fallback : humaniseText(fallback);
+              }
+            }
+          }
+
+          try {
+            const nextStage = deriveLeadStage({
+              lead,
+              turnStrategy,
+              leadMemory,
+            });
+
+            lead = await updateLeadTracking(lead.id, {
+              stage: nextStage,
+            });
+          } catch (e) {
+            console.warn("lead stage update failed:", e?.message || e);
+          }
+
+          reply = maybeReflectThenGuide(reply, text, leadMemory, turnStrategy);
+          const messagesToSend = splitIntoMessages(reply);
+
+          const activeIgAccount = await getIgAccountByClientId(lead.client_id);
+
+          if (!activeIgAccount?.page_access_token) {
+            console.error("Missing Instagram access token for client:", lead.client_id);
+            return;
+          }
+
+          for (let i = 0; i < messagesToSend.length; i++) {
+            const msg = messagesToSend[i];
+
+            const words = msg.split(" ").length;
+            const typingDelay = Math.min(words * 250, 5000);
+
+            const rand = Math.random();
+            let extraDelay;
+
+            if (rand < 0.2) {
+              extraDelay = Math.random() * 2000 + 1000;
+            } else if (rand < 0.85) {
+              extraDelay = Math.random() * 5000 + 3000;
+            } else {
+              extraDelay = Math.random() * 8000 + 8000;
+            }
+
+            const delay = typingDelay + extraDelay;
+            await new Promise((res) => setTimeout(res, delay));
 
             const { sendResp, sendData } = await sendInstagramTextMessage({
               accessToken: activeIgAccount.page_access_token,
               recipientId: senderId,
-              text: opener,
+              text: msg,
             });
 
-            log("ig_trigger_opener_sent", {
+            log("ig_message_sent", {
               leadId: lead.id,
               senderId,
-              triggerType: storyAutoDmMatched ? "story_reply" : "keyword_dm",
+              messagePreview: String(msg).slice(0, 120),
               sendOk: sendResp.ok,
               sendData,
             });
@@ -4451,397 +4918,87 @@ try {
               .insert({
                 lead_id: lead.id,
                 direction: "out",
-                text: opener,
+                text: msg,
                 created_at: new Date().toISOString(),
               });
 
             if (insertOutgoingError) {
-              console.error("trigger opener insert outgoing failed:", insertOutgoingError);
+              console.error("messages insert outgoing failed:", insertOutgoingError);
             }
 
             try {
+              const sentBookingLink =
+                !!cfg?.booking_url &&
+                String(msg).includes(String(cfg.booking_url));
+
               lead = await updateLeadTracking(lead.id, {
                 last_outbound_at: nowIso(),
-                last_outbound_text: opener,
-                stage: "warm",
+                last_outbound_text: msg,
+                booking_sent: sentBookingLink ? true : lead.booking_sent,
+                booking_sent_at: sentBookingLink ? nowIso() : lead.booking_sent_at,
+                booking_sent_count: sentBookingLink
+                  ? (lead.booking_sent_count || 0) + 1
+                  : lead.booking_sent_count || 0,
+                stage: sentBookingLink ? "booking_pushed" : lead.stage,
+              });
+
+              const replyTrackingPatch = buildReplyTrackingPatch(
+                leadMemory,
+                turnStrategy
+              );
+
+              leadMemory = await upsertLeadMemory({
+                leadId: lead.id,
+                clientId: lead.client_id,
+                existing: leadMemory,
+                patch: {
+                  ...replyTrackingPatch,
+                  conversation_state: sentBookingLink
+                    ? "booking_cta_sent"
+                    : leadMemory?.conversation_state || null,
+
+                  cta_attempts: sentBookingLink
+                    ? (leadMemory?.cta_attempts || 0) + 1
+                    : leadMemory?.cta_attempts || 0,
+
+                  last_cta_response: sentBookingLink
+                    ? "sent_booking_link"
+                    : leadMemory?.last_cta_response || null,
+
+                  ...(sentBookingLink
+                    ? {
+                        last_cta_type: "booking_link",
+                        last_cta_at: nowIso(),
+                        booking_link_sent_count:
+                          (leadMemory?.booking_link_sent_count || 0) + 1,
+                      }
+                    : {}),
+                },
               });
             } catch (e) {
-              console.warn("trigger opener lead tracking failed:", e?.message || e);
+              console.warn("lead outbound tracking failed:", e?.message || e);
             }
 
-            return;
+            try {
+              if (msg.length < 120 && !msg.includes("http")) {
+                await saveLearnedExample({
+                  clientId: lead.client_id,
+                  leadId: lead.id,
+                  userMessage: text,
+                  assistantMessage: msg,
+                });
+              }
+            } catch (e) {
+              console.warn("learned example save failed:", e?.message || e);
+            }
           }
-        }
-        let leadMemory = null;
-        try {
-          leadMemory = await getLeadMemory(lead.id);
-        } catch (e) {
-          console.warn("getLeadMemory failed:", e?.message || e);
-        }
-
-        try {
-          const extractedMemory = await extractLeadMemory({
-            lead,
-            historyMessages,
-            existingMemory: leadMemory,
-            currentMessage: text,
+        } catch (err) {
+          log("webhook_async_error", {
+            error: err?.message || String(err),
           });
-
-          const detectedUserIntent = detectUserIntent(text);
-
-          const derivedState = deriveConversationState({
-            lead,
-            leadMemory: extractedMemory || leadMemory,
-            userIntent: detectedUserIntent,
-          });
-
-          leadMemory = await upsertLeadMemory({
-            leadId: lead.id,
-            clientId: lead.client_id,
-            patch: {
-              ...(extractedMemory || {}),
-              last_user_intent: detectedUserIntent,
-              conversation_state: derivedState,
-            },
-            existing: leadMemory,
-          });
-        } catch (e) {
-          console.warn("lead memory update failed:", e?.message || e);
         }
-        try {
-          const nextStage = deriveLeadStage({
-            lead,
-            turnStrategy: null,
-            leadMemory,
-          });
-
-          if (nextStage !== lead.stage) {
-            lead = await updateLeadTracking(lead.id, {
-              stage: nextStage,
-            });
-          }
-        } catch (e) {
-          console.warn("post-memory stage update failed:", e?.message || e);
-        }
-
-        const thinkAboutIt = detectThinkAboutIt(text);
-        const asksPrice = detectPriceQuestion(text);
-        const highIntent = detectHighIntent(text);
-const userIntent = detectUserIntent(text);
-const bookingAlreadySentBeforeReply =
-  !!lead?.booking_sent ||
-  !!leadMemory?.last_cta_at ||
-  (leadMemory?.booking_link_sent_count || 0) > 0;
-
-if (
-  bookingAlreadySentBeforeReply &&
-  ["think_about_it", "price_question", "offer_question", "what_do_i_get_question", "start_process_question", "who_its_for_question"].includes(userIntent)
-) {
-  try {
-    leadMemory = await upsertLeadMemory({
-      leadId: lead.id,
-      clientId: lead.client_id,
-      existing: leadMemory,
-      patch: {
-        last_cta_response: userIntent,
-      },
-    });
-  } catch (e) {
-    console.warn("last_cta_response update failed:", e?.message || e);
-  }
-}
-const conversationState = deriveConversationState({
-  lead,
-  leadMemory,
-  userIntent,
-});
-
-let turnStrategy = decideTurnStrategyFromIntent({
-  userIntent,
-  conversationState,
-  lead,
-  leadMemory,
-  text,
-  bookingUrl: cfg?.booking_url || null,
-});
-
-turnStrategy = preventRepeatedReplyType(turnStrategy, leadMemory);
-
-        lead.last_message = text;
-
-const aiResult = await generateAiReply({
-  cfg,
-  lead,
-  historyMessages,
-  leadMemory,
-  turnStrategy,
-  postCallMode: lead.call_completed,
-  asksPrice,
-  highIntent,
-  bookingUrl: cfg?.booking_url || null,
-  thinkAboutIt,
-  userText: text,
-});
-
-let reply = aiResult?.reply || null;
-
-if (!reply && turnStrategy?.type === "handle_think_about_it") {
-  reply = getObjectionFollowUpReply(text, leadMemory, cfg);
-}
-
-const explicitLinkRequest = detectExplicitBookingLinkRequest(text);
-const bookingAlreadySent =
-  !!lead?.booking_sent ||
-  !!leadMemory?.last_cta_at ||
-  (leadMemory?.booking_link_sent_count || 0) > 0;
-
-const canSendNewBookingPush = !!cfg?.booking_url && !bookingAlreadySent;
-const canResendBecauseAsked = !!cfg?.booking_url && explicitLinkRequest && bookingAlreadySent;
-
-if (canResendBecauseAsked) {
-  reply = "use the link i sent earlier and get booked in";
-} else if (aiResult?.should_send_booking_link && canSendNewBookingPush) {
-  if (turnStrategy?.type === "soft_close_to_booking") {
-    reply = buildWarmCloseFromMemory(cfg.booking_url, leadMemory);
-  } else {
-    reply = getEscalatedBookingReply(cfg.booking_url, leadMemory, "normal");
-  }
-} else if (highIntent && canSendNewBookingPush) {
-  reply = getEscalatedBookingReply(cfg.booking_url, leadMemory, "normal");
-}
-
-if (!reply || looksIncompleteReply(reply)) {
-  if (turnStrategy?.type === "handle_think_about_it") {
-    reply = getObjectionFollowUpReply(text, leadMemory, cfg);
-  }
-
-  if (!reply) {
-    reply =
-      buildDeterministicReply({
-        turnStrategy,
-        cfg,
-      }) ||
-      getFallbackReply({
-        turnStrategy,
-        cfg,
-        leadMemory,
-      });
-  }
-}
-
-if (!reply) return;
-
-const shouldHumanise =
-  ![
-    "answer_price_after_cta",
-    "handle_price_then_cta",
-    "answer_offer_question_after_cta",
-    "answer_what_you_sell_after_cta",
-    "answer_what_do_i_get_after_cta",
-    "answer_start_process_after_cta",
-    "answer_who_its_for_after_cta",
-    "handle_think_about_it",
-  ].includes(String(turnStrategy?.type || ""));
-
-if (shouldHumanise) {
-  reply = humaniseText(reply);
-}
-
-const recentAssistantHistory = (historyMessages || [])
-  .filter((m) => m?.role === "assistant")
-  .slice(-5);
-
-if (
-  isReplyTooSimilar(reply, recentAssistantHistory, turnStrategy?.type) ||
-  looksIncompleteReply(reply)
-) {
-  const retryAiResult = await generateAiReply({
-    cfg,
-    lead,
-    historyMessages: [
-      ...(historyMessages || []),
-      {
-        role: "system",
-        content:
-          "Your last draft was too repetitive or incomplete. Answer the user's meaning directly in a new way. Do not repeat recent assistant wording.",
-      },
-    ],
-    leadMemory,
-    turnStrategy,
-    postCallMode: lead.call_completed,
-    asksPrice,
-    highIntent,
-    bookingUrl: cfg?.booking_url || null,
-    thinkAboutIt,
-    userText: text,
-  });
-
-  if (retryAiResult?.reply && !looksIncompleteReply(retryAiResult.reply)) {
-    reply = retryAiResult.reply;
-  } else {
-    const fallback =
-      buildDeterministicReply({
-        turnStrategy,
-        cfg,
-      }) ||
-      getFallbackReply({
-        turnStrategy,
-        cfg,
-        leadMemory,
-      });
-
-    if (fallback) {
-      const fallbackIsStructured =
-        turnStrategy?.type === "answer_price_after_cta" ||
-        turnStrategy?.type === "handle_price_then_cta" ||
-        turnStrategy?.type === "answer_offer_question_after_cta" ||
-        turnStrategy?.type === "answer_what_do_i_get_after_cta" ||
-        turnStrategy?.type === "answer_start_process_after_cta" ||
-        turnStrategy?.type === "answer_who_its_for_after_cta" ||
-        turnStrategy?.type === "answer_what_you_sell_after_cta";
-
-      reply = fallbackIsStructured ? fallback : humaniseText(fallback);
+      })();
     }
-  }
-}
-
-        try {
-          const nextStage = deriveLeadStage({
-            lead,
-            turnStrategy,
-            leadMemory,
-          });
-
-          lead = await updateLeadTracking(lead.id, {
-            stage: nextStage,
-          });
-        } catch (e) {
-          console.warn("lead stage update failed:", e?.message || e);
-        }
-reply = maybeReflectThenGuide(reply, text, leadMemory, turnStrategy);
-        const messagesToSend = splitIntoMessages(reply);
-
-const activeIgAccount = await getIgAccountByClientId(lead.client_id);
-
-if (!activeIgAccount?.page_access_token) {
-  console.error("Missing Instagram access token for client:", lead.client_id);
-  return;
-}
-
-        for (let i = 0; i < messagesToSend.length; i++) {
-          const msg = messagesToSend[i];
-
-          const words = msg.split(" ").length;
-          const typingDelay = Math.min(words * 250, 5000);
-
-          const rand = Math.random();
-          let extraDelay;
-
-          if (rand < 0.2) {
-            extraDelay = Math.random() * 2000 + 1000;
-          } else if (rand < 0.85) {
-            extraDelay = Math.random() * 5000 + 3000;
-          } else {
-            extraDelay = Math.random() * 8000 + 8000;
-          }
-
-          const delay = typingDelay + extraDelay;
-          await new Promise((res) => setTimeout(res, delay));
-
-const { sendResp, sendData } = await sendInstagramTextMessage({
-  accessToken: activeIgAccount.page_access_token,
-  recipientId: senderId,
-  text: msg,
-});
-log("ig_message_sent", {
-  leadId: lead.id,
-  senderId,
-  messagePreview: String(msg).slice(0, 120),
-  sendOk: sendResp.ok,
-  sendData,
-});
-          const { error: insertOutgoingError } = await supabase.from("messages").insert({
-            lead_id: lead.id,
-            direction: "out",
-            text: msg,
-            created_at: new Date().toISOString(),
-          });
-
-          if (insertOutgoingError) {
-            console.error("messages insert outgoing failed:", insertOutgoingError);
-          }
-          try {
-            const sentBookingLink =
-              !!cfg?.booking_url && String(msg).includes(String(cfg.booking_url));
-
-            lead = await updateLeadTracking(lead.id, {
-              last_outbound_at: nowIso(),
-              last_outbound_text: msg,
-              booking_sent: sentBookingLink ? true : lead.booking_sent,
-              booking_sent_at: sentBookingLink ? nowIso() : lead.booking_sent_at,
-              booking_sent_count: sentBookingLink
-                ? (lead.booking_sent_count || 0) + 1
-                : lead.booking_sent_count || 0,
-              stage: sentBookingLink ? "booking_pushed" : lead.stage,
-            });
-
-            const replyTrackingPatch = buildReplyTrackingPatch(
-              leadMemory,
-              turnStrategy
-            );
-
-            leadMemory = await upsertLeadMemory({
-              leadId: lead.id,
-              clientId: lead.client_id,
-              existing: leadMemory,
-patch: {
-  ...replyTrackingPatch,
-  conversation_state: sentBookingLink
-    ? "booking_cta_sent"
-    : leadMemory?.conversation_state || null,
-
-  cta_attempts: sentBookingLink
-    ? (leadMemory?.cta_attempts || 0) + 1
-    : leadMemory?.cta_attempts || 0,
-
-  last_cta_response: sentBookingLink
-    ? "sent_booking_link"
-    : leadMemory?.last_cta_response || null,
-
-  ...(sentBookingLink
-    ? {
-        last_cta_type: "booking_link",
-        last_cta_at: nowIso(),
-        booking_link_sent_count:
-          (leadMemory?.booking_link_sent_count || 0) + 1,
-      }
-    : {}),
-},
-
-            });
-          } catch (e) {
-            console.warn("lead outbound tracking failed:", e?.message || e);
-          }
-          try {
-            if (msg.length < 120 && !msg.includes("http")) {
-              await saveLearnedExample({
-                clientId: lead.client_id,
-                leadId: lead.id,
-                userMessage: text,
-                assistantMessage: msg,
-              });
-            }
-          } catch (e) {
-            console.warn("learned example save failed:", e?.message || e);
-          }
-
-        }
-      } catch (err) {
-log("webhook_async_error", {
-  error: err?.message || String(err),
-});
-      }
-    })();
   } catch (err) {
     console.error("Webhook error:", err);
     return res.sendStatus(200);

@@ -386,6 +386,13 @@ const urgencyReasonEl = qs("#urgency_reason");
 const trustBuildersEl = qs("#trust_builders");
 const faqEl = qs("#faq");
 const offerPriceEl = qs("#offer_price");
+const storyReplyAutoDmEnabledEl = qs("#story_reply_auto_dm_enabled");
+const storyReplyAutoDmTextEl = qs("#story_reply_auto_dm_text");
+const commentReplyAutoDmEnabledEl = qs("#comment_reply_auto_dm_enabled");
+const commentReplyAutoDmTextEl = qs("#comment_reply_auto_dm_text");
+const keywordAutoDmEnabledEl = qs("#keyword_auto_dm_enabled");
+const keywordTriggerTextEl = qs("#keyword_trigger_text");
+const keywordAutoDmTextEl = qs("#keyword_auto_dm_text");
 
   if (!btn || btn.__wired) return;
   btn.__wired = true;
@@ -414,6 +421,11 @@ if (story_reply_auto_dm_enabled && !story_reply_auto_dm_text) {
   return;
 }
 
+if (comment_reply_auto_dm_enabled && !comment_reply_auto_dm_text) {
+  setErr("Add the comment reply outbound message or turn Comment reply auto-DM off.");
+  return;
+}
+
 if (keyword_auto_dm_enabled && !keyword_trigger_text) {
   setErr("Add the trigger phrase or turn Keyword auto-DM off.");
   return;
@@ -438,6 +450,40 @@ const faq = faqEl ? String(faqEl.value || "").trim() : "";
 const offer_price = offerPriceEl ? String(offerPriceEl.value || "").trim() : "";
 const example_messages = exampleEl ? String(exampleEl.value || "").trim() : "";
 const niche = nicheEl ? String(nicheEl.value || "generic").trim() : "generic";
+const story_reply_auto_dm_enabled =
+  storyReplyAutoDmEnabledEl
+    ? String(storyReplyAutoDmEnabledEl.value || "false") === "true"
+    : false;
+
+const story_reply_auto_dm_text =
+  storyReplyAutoDmTextEl
+    ? String(storyReplyAutoDmTextEl.value || "").trim()
+    : "";
+
+const comment_reply_auto_dm_enabled =
+  commentReplyAutoDmEnabledEl
+    ? String(commentReplyAutoDmEnabledEl.value || "false") === "true"
+    : false;
+
+const comment_reply_auto_dm_text =
+  commentReplyAutoDmTextEl
+    ? String(commentReplyAutoDmTextEl.value || "").trim()
+    : "";
+
+const keyword_auto_dm_enabled =
+  keywordAutoDmEnabledEl
+    ? String(keywordAutoDmEnabledEl.value || "false") === "true"
+    : false;
+
+const keyword_trigger_text =
+  keywordTriggerTextEl
+    ? String(keywordTriggerTextEl.value || "").trim()
+    : "";
+
+const keyword_auto_dm_text =
+  keywordAutoDmTextEl
+    ? String(keywordAutoDmTextEl.value || "").trim()
+    : "";
 
       btn.disabled = true;
       btn.style.opacity = "0.75";
@@ -752,10 +798,13 @@ const offerPriceEl = qs("#offer_price");
 
 const storyReplyAutoDmEnabledEl = qs("#story_reply_auto_dm_enabled");
 const storyReplyAutoDmTextEl = qs("#story_reply_auto_dm_text");
+const commentReplyAutoDmEnabledEl = qs("#comment_reply_auto_dm_enabled");
+const commentReplyAutoDmTextEl = qs("#comment_reply_auto_dm_text");
 const keywordAutoDmEnabledEl = qs("#keyword_auto_dm_enabled");
 const keywordTriggerTextEl = qs("#keyword_trigger_text");
 const keywordAutoDmTextEl = qs("#keyword_auto_dm_text");
 const storyReplyToggleBadgeEl = qs("#storyReplyToggleBadge");
+const commentReplyToggleBadgeEl = qs("#commentReplyToggleBadge");
 const keywordToggleBadgeEl = qs("#keywordToggleBadge");
 
 if (!promptEl && !saveBtn) return;
@@ -786,6 +835,14 @@ if (storyReplyAutoDmTextEl) {
   storyReplyAutoDmTextEl.value = config.story_reply_auto_dm_text || "";
 }
 
+if (commentReplyAutoDmEnabledEl) {
+  commentReplyAutoDmEnabledEl.value = config.comment_reply_auto_dm_enabled ? "true" : "false";
+}
+
+if (commentReplyAutoDmTextEl) {
+  commentReplyAutoDmTextEl.value = config.comment_reply_auto_dm_text || "";
+}
+
 if (keywordAutoDmEnabledEl) {
   keywordAutoDmEnabledEl.value = config.keyword_auto_dm_enabled ? "true" : "false";
 }
@@ -804,6 +861,14 @@ if (storyReplyToggleBadgeEl) {
   storyReplyToggleBadgeEl.textContent = on
     ? "Story reply opener ON"
     : "Story reply opener OFF";
+}
+
+if (commentReplyToggleBadgeEl) {
+  const on = !!config.comment_reply_auto_dm_enabled;
+  commentReplyToggleBadgeEl.className = on ? "badge connected" : "badge";
+  commentReplyToggleBadgeEl.textContent = on
+    ? "Comment reply opener ON"
+    : "Comment reply opener OFF";
 }
 
 if (keywordToggleBadgeEl) {
@@ -934,6 +999,7 @@ const urgency_reason = urgencyReasonEl ? String(urgencyReasonEl.value || "").tri
 const trust_builders = trustBuildersEl ? String(trustBuildersEl.value || "").trim() : "";
 const faq = faqEl ? String(faqEl.value || "").trim() : "";
 const offer_price = offerPriceEl ? String(offerPriceEl.value || "").trim() : "";
+
 const story_reply_auto_dm_enabled =
   storyReplyAutoDmEnabledEl
     ? String(storyReplyAutoDmEnabledEl.value || "false") === "true"
@@ -942,6 +1008,16 @@ const story_reply_auto_dm_enabled =
 const story_reply_auto_dm_text =
   storyReplyAutoDmTextEl
     ? String(storyReplyAutoDmTextEl.value || "").trim()
+    : "";
+
+const comment_reply_auto_dm_enabled =
+  commentReplyAutoDmEnabledEl
+    ? String(commentReplyAutoDmEnabledEl.value || "false") === "true"
+    : false;
+
+const comment_reply_auto_dm_text =
+  commentReplyAutoDmTextEl
+    ? String(commentReplyAutoDmTextEl.value || "").trim()
     : "";
 
 const keyword_auto_dm_enabled =
@@ -971,6 +1047,25 @@ if (!isValidUrl(booking_url_alt)) {
 
 if (!isValidIgHandle(instagram_handle)) {
   setErr("Instagram handle format is invalid.");
+  return;
+}
+if (story_reply_auto_dm_enabled && !story_reply_auto_dm_text) {
+  setErr("Add the story reply outbound message or turn Story reply auto-DM off.");
+  return;
+}
+
+if (comment_reply_auto_dm_enabled && !comment_reply_auto_dm_text) {
+  setErr("Add the comment reply outbound message or turn Comment reply auto-DM off.");
+  return;
+}
+
+if (keyword_auto_dm_enabled && !keyword_trigger_text) {
+  setErr("Add the trigger phrase or turn Keyword auto-DM off.");
+  return;
+}
+
+if (keyword_auto_dm_enabled && !keyword_auto_dm_text) {
+  setErr("Add the keyword outbound message or turn Keyword auto-DM off.");
   return;
 }
 const offer_description = buildStructuredCoachContext({
@@ -1037,11 +1132,13 @@ const payload = {
   trust_builders: trust_builders || null,
   faq: faq || null,
 
-  story_reply_auto_dm_enabled,
-  story_reply_auto_dm_text: story_reply_auto_dm_text || null,
-  keyword_auto_dm_enabled,
-  keyword_trigger_text: keyword_trigger_text || null,
-  keyword_auto_dm_text: keyword_auto_dm_text || null,
+story_reply_auto_dm_enabled,
+story_reply_auto_dm_text: story_reply_auto_dm_text || null,
+comment_reply_auto_dm_enabled,
+comment_reply_auto_dm_text: comment_reply_auto_dm_text || null,
+keyword_auto_dm_enabled,
+keyword_trigger_text: keyword_trigger_text || null,
+keyword_auto_dm_text: keyword_auto_dm_text || null,
 };
           await apiFetch(`${API}/config`, {
             method: "POST",
