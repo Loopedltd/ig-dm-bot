@@ -5123,8 +5123,131 @@ const { error: upsertErr } = await supabase.from("ig_accounts").upsert(
   }
 });
 
+/**
+ * ===========================
+ * 24-HOUR FOLLOW-UP JOB
+ * ===========================
+ * Runs every 30 minutes. For each lead where:
+ *   - bot sent the last message > 24h ago
+ *   - the lead never replied after that message
+ *   - conversation hasn't converted (no booking, no call)
+ *   - follow-up hasn't already been sent
+ *   - no active manual override
+ * ...send one casual re-engagement DM and mark followup_sent = true.
+ */
+
+function buildFollowUpText(leadMemory) {
+  const goal = String(leadMemory?.goal || "").trim();
+  const motivation = String(leadMemory?.motivation || "").trim();
+  const painPoints = String(leadMemory?.pain_points || "").trim();
+
+  if (goal) {
+    return `hey, just checking in — still happy to chat if you have any questions about sorting ${goal}`;
+  }
+  if (painPoints) {
+    return `hey, just wanted to check in — still here if you want to talk anything through`;
+  }
+  if (motivation) {
+    return `hey, just checking in — whenever you're ready, still happy to help`;
+  }
+  return "hey, just checking in — still happy to help if you've got any questions!";
+}
+
+async function runFollowUpJob() {
+  const H24 = 24 * 60 * 60 * 1000;
+  const cutoff = new Date(Date.now() - H24).toISOString();
+
+  const { data: leads, error } = await supabase
+    .from("leads")
+    .select(
+      "id, ig_psid, client_id, last_outbound_at, last_inbound_at, booking_sent, call_completed, followup_sent, manual_override"
+    )
+    .eq("booking_sent", false)
+    .eq("call_completed", false)
+    .eq("followup_sent", false)
+    .eq("manual_override", false)
+    .not("last_outbound_at", "is", null)
+    .lt("last_outbound_at", cutoff);
+
+  if (error) {
+    console.error("followup_job: lead query failed", error.message);
+    return;
+  }
+
+  for (const lead of leads || []) {
+    // Skip if they replied after the bot's last message
+    if (
+      lead.last_inbound_at &&
+      new Date(lead.last_inbound_at) > new Date(lead.last_outbound_at)
+    ) {
+      continue;
+    }
+
+    try {
+      const igAccount = await getIgAccountByClientId(lead.client_id);
+      if (!igAccount?.page_access_token) continue;
+
+      let leadMemory = null;
+      try {
+        leadMemory = await getLeadMemory(lead.id);
+      } catch {}
+
+      const text = buildFollowUpText(leadMemory);
+
+      const { sendResp, sendData } = await sendInstagramTextMessage({
+        accessToken: igAccount.page_access_token,
+        recipientId: lead.ig_psid,
+        text,
+      });
+
+      log("followup_dm_sent", {
+        leadId: lead.id,
+        clientId: lead.client_id,
+        sendOk: sendResp.ok,
+        sendData,
+        text,
+      });
+
+      if (sendResp.ok) {
+        await updateLeadTracking(lead.id, {
+          followup_sent: true,
+          last_outbound_at: nowIso(),
+          last_outbound_text: text,
+        });
+
+        await supabase.from("messages").insert({
+          lead_id: lead.id,
+          direction: "out",
+          text,
+          created_at: new Date().toISOString(),
+        });
+      }
+    } catch (e) {
+      console.error(
+        "followup_job: failed for lead",
+        lead.id,
+        e?.message || e
+      );
+    }
+  }
+}
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+
+  // Run once on startup (after 2 min to let the server settle)
+  setTimeout(() => {
+    runFollowUpJob().catch((e) =>
+      console.error("followup_job: startup run failed", e?.message || e)
+    );
+  }, 2 * 60 * 1000);
+
+  // Then run every 30 minutes
+  setInterval(() => {
+    runFollowUpJob().catch((e) =>
+      console.error("followup_job: interval run failed", e?.message || e)
+    );
+  }, 30 * 60 * 1000);
 });
 
