@@ -2051,74 +2051,6 @@ function buildWarmCloseFromMemory(bookingUrl, leadMemory) {
   return `${bookingUrl}\n\nget booked in and we’ll go through it properly`;
 }
 
-function buildReflectPrefix(userText, leadMemory) {
-  const text = String(userText || "").toLowerCase();
-
-  if (
-    text.includes("price") ||
-    text.includes("expensive") ||
-    text.includes("cost") ||
-    leadMemory?.budget
-  ) {
-    if (leadMemory?.budget) {
-      return `yeah makes sense if you were expecting closer to ${leadMemory.budget}`;
-    }
-return "yeah makes sense if price is the bit you’re weighing up";
-  }
-
-  if (
-    text.includes("not the right time") ||
-    text.includes("busy") ||
-    text.includes("later") ||
-    text.includes("not now") ||
-    leadMemory?.timeline ||
-    leadMemory?.event_name
-  ) {
-    const anchor = buildMemoryAnchor(leadMemory);
-    if (anchor) {
-      return `yeah and if this matters ${anchor}, timing matters`;
-    }
-return "yeah makes sense if timing is the thing making you hesitate";
-  }
-
-  if (leadMemory?.goal) {
-    return `yeah makes sense if you’re trying to sort ${leadMemory.goal}`;
-  }
-
-  if (leadMemory?.motivation) {
-    return `yeah makes sense especially if it’s about ${leadMemory.motivation}`;
-  }
-
-  return "";
-}
-
-function maybeReflectThenGuide(reply, userText, leadMemory, turnStrategy) {
-  if (!reply) return reply;
-
-  const type = String(turnStrategy?.type || "");
-  const eligibleTypes = [
-    "soft_close_to_booking",
-    "nudge_forward",
-    "handle_think_about_it",
-  ];
-
-  if (!eligibleTypes.includes(type)) return reply;
-
-  const prefix = buildReflectPrefix(userText, leadMemory);
-  if (!prefix) return reply;
-
-  const lowerReply = String(reply).toLowerCase();
-  if (
-    lowerReply.startsWith("yeah") ||
-    lowerReply.startsWith("fair") ||
-    lowerReply.startsWith("makes sense") ||
-    lowerReply.startsWith(prefix.toLowerCase())
-  ) {
-    return reply;
-  }
-
-  return `${prefix}\n\n${reply}`;
-}
 
 function getLastAssistantMessages(historyMessages = [], n = 4) {
   return historyMessages
@@ -4900,7 +4832,6 @@ log("ig_trigger_opener_sent", {
             console.warn("lead stage update failed:", e?.message || e);
           }
 
-          reply = maybeReflectThenGuide(reply, text, leadMemory, turnStrategy);
           const messagesToSend = splitIntoMessages(reply);
 
           const activeIgAccount = await getIgAccountByClientId(lead.client_id);
