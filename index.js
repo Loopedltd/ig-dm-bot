@@ -292,6 +292,52 @@ function extractFollowEvents(reqBody) {
 
   return followEvents;
 }
+
+function extractPostCommentEvents(reqBody) {
+  // Fires when someone comments on a post/reel owned by the page.
+  // Meta sends entry.changes[].field === "comments"
+  const entries = Array.isArray(reqBody?.entry) ? reqBody.entry : [];
+  const commentEvents = [];
+
+  for (const entry of entries) {
+    const changes = Array.isArray(entry?.changes) ? entry.changes : [];
+    for (const change of changes) {
+      if (change?.field === "comments" && change?.value) {
+        const v = change.value;
+        // v.from.id is the commenter, v.id is the comment id, v.message is the comment text
+        if (v?.from?.id && v?.id && v?.message) {
+          commentEvents.push({
+            igAccountId: entry.id,
+            commentId: String(v.id),
+            commenterId: String(v.from.id),
+            commentText: String(v.message),
+          });
+        }
+      }
+    }
+  }
+
+  return commentEvents;
+}
+
+function extractEmail(text) {
+  const match = String(text || "").match(
+    /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/
+  );
+  return match ? match[0].toLowerCase() : null;
+}
+
+function extractPhone(text) {
+  // Match common phone formats: +447123456789, 07123456789, (555) 123-4567, etc.
+  const match = String(text || "").match(
+    /(\+?\d[\d\s\-().]{7,}\d)/
+  );
+  if (!match) return null;
+  const digits = match[1].replace(/\D/g, "");
+  // At least 7 digits, at most 15
+  if (digits.length < 7 || digits.length > 15) return null;
+  return match[1].trim();
+}
 function normaliseTriggerText(value) {
   return String(value || "")
     .trim()
@@ -2229,6 +2275,15 @@ Use what the client explicitly said — check lead_memory in this order:
 4. If none of the above are set, use a generic close: "looking forward to helping you reach your goals"
 Only reference something the client actually said. Never assume or invent a goal they didn’t mention.
 
+CONTACT COLLECTION RULE:
+Only applies when contact_collection_enabled is true in the context.
+- if email_already_collected is false: once you have answered their question and the conversation is warm (not first message), ask naturally for their email — "what's the best email to reach you on?" or "drop me your email and I'll send over the details"
+- if phone_already_collected is false and you already have their email: you may ask for their number in a later message — "and what's the best number for you?"
+- never ask for email AND phone in the same message
+- if email_already_collected and phone_already_collected are both true: never ask again
+- never ask for contact details in Phase 1 (high_intent: false, cta_attempts: 0)
+- keep the ask short and casual, not formal
+
 NICHE RULE:
 - if niche is fitness, sound natural for fitness and body transformation conversations
 - if niche is money, sound natural for client acquisition, business growth, and sales
@@ -2321,6 +2376,10 @@ const context = {
         shouldSendBookingLink: !!turnStrategy.shouldSendBookingLink,
       }
     : null,
+
+  contact_collection_enabled: !!cfg?.contact_collection_enabled,
+  email_already_collected: !!lead?.email,
+  phone_already_collected: !!lead?.phone,
 };
 
   const messages = [
@@ -2931,6 +2990,26 @@ if (
 ) {
   allowed.keyword_auto_dm_text = patch.keyword_auto_dm_text;
 }
+// Feature 1 — comment keyword DM
+if (typeof patch.comment_keyword_dm_enabled === "boolean") {
+  allowed.comment_keyword_dm_enabled = patch.comment_keyword_dm_enabled;
+}
+if (typeof patch.comment_keyword_trigger === "string" || patch.comment_keyword_trigger === null) {
+  allowed.comment_keyword_trigger = patch.comment_keyword_trigger;
+}
+if (typeof patch.comment_keyword_dm_text === "string" || patch.comment_keyword_dm_text === null) {
+  allowed.comment_keyword_dm_text = patch.comment_keyword_dm_text;
+}
+if (typeof patch.comment_keyword_reply_enabled === "boolean") {
+  allowed.comment_keyword_reply_enabled = patch.comment_keyword_reply_enabled;
+}
+if (typeof patch.comment_keyword_reply_text === "string" || patch.comment_keyword_reply_text === null) {
+  allowed.comment_keyword_reply_text = patch.comment_keyword_reply_text;
+}
+// Feature 2 — contact collection
+if (typeof patch.contact_collection_enabled === "boolean") {
+  allowed.contact_collection_enabled = patch.contact_collection_enabled;
+}
 if (
   typeof patch.best_fit_leads === "string" ||
   patch.best_fit_leads === null
@@ -3413,6 +3492,26 @@ if (
   patch.keyword_auto_dm_text === null
 ) {
   allowed.keyword_auto_dm_text = patch.keyword_auto_dm_text;
+}
+// Feature 1 — comment keyword DM
+if (typeof patch.comment_keyword_dm_enabled === "boolean") {
+  allowed.comment_keyword_dm_enabled = patch.comment_keyword_dm_enabled;
+}
+if (typeof patch.comment_keyword_trigger === "string" || patch.comment_keyword_trigger === null) {
+  allowed.comment_keyword_trigger = patch.comment_keyword_trigger;
+}
+if (typeof patch.comment_keyword_dm_text === "string" || patch.comment_keyword_dm_text === null) {
+  allowed.comment_keyword_dm_text = patch.comment_keyword_dm_text;
+}
+if (typeof patch.comment_keyword_reply_enabled === "boolean") {
+  allowed.comment_keyword_reply_enabled = patch.comment_keyword_reply_enabled;
+}
+if (typeof patch.comment_keyword_reply_text === "string" || patch.comment_keyword_reply_text === null) {
+  allowed.comment_keyword_reply_text = patch.comment_keyword_reply_text;
+}
+// Feature 2 — contact collection
+if (typeof patch.contact_collection_enabled === "boolean") {
+  allowed.contact_collection_enabled = patch.contact_collection_enabled;
 }
     if (
       typeof patch.booking_url_alt === "string" ||
@@ -4058,6 +4157,145 @@ return_url: `${APP_PUBLIC_URL}/dashboard`,
 });
 /**
  * ===========================
+ * FEATURE 3: BROADCAST API
+ * ===========================
+ */
+
+app.get("/coach/api/broadcast/leads", requireCoach, async (req, res) => {
+  try {
+    const clientId = req.coachConfig?.client_id;
+    const stage = req.query.stage || null;
+
+    let query = supabase
+      .from("leads")
+      .select("id, ig_psid, stage, last_inbound_at, email, phone")
+      .eq("client_id", clientId)
+      .order("last_inbound_at", { ascending: false })
+      .limit(200);
+
+    if (stage && stage !== "all") {
+      query = query.eq("stage", stage);
+    }
+
+    const { data, error } = await query;
+    if (error) return safeJson(res, 500, { error: error.message });
+
+    return safeJson(res, 200, { leads: data || [] });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+app.post("/coach/api/broadcast", requireCoach, async (req, res) => {
+  try {
+    const clientId = req.coachConfig?.client_id;
+    const { message, lead_ids } = req.body || {};
+
+    if (!message || !String(message).trim()) {
+      return safeJson(res, 400, { error: "message is required" });
+    }
+
+    if (!Array.isArray(lead_ids) || lead_ids.length === 0) {
+      return safeJson(res, 400, { error: "at least one lead_id is required" });
+    }
+
+    if (lead_ids.length > 200) {
+      return safeJson(res, 400, { error: "max 200 recipients per broadcast" });
+    }
+
+    // Per-client 50/hour rate limit
+    let tracker = broadcastRateTracker.get(clientId);
+    const now = Date.now();
+    if (!tracker || now - tracker.windowStart >= 60 * 60 * 1000) {
+      tracker = { count: 0, windowStart: now };
+      broadcastRateTracker.set(clientId, tracker);
+    }
+
+    const remaining = BROADCAST_MAX_PER_HOUR - tracker.count;
+    if (remaining <= 0) {
+      return safeJson(res, 429, { error: "Broadcast limit reached (50/hour). Try again later." });
+    }
+
+    const toSend = lead_ids.slice(0, remaining);
+
+    // Fetch the lead ig_psids
+    const { data: leads, error: leadsError } = await supabase
+      .from("leads")
+      .select("id, ig_psid")
+      .eq("client_id", clientId)
+      .in("id", toSend);
+
+    if (leadsError) return safeJson(res, 500, { error: leadsError.message });
+    if (!leads || leads.length === 0) {
+      return safeJson(res, 400, { error: "No valid leads found" });
+    }
+
+    const msgText = String(message).trim();
+    let queued = 0;
+
+    for (const lead of leads) {
+      if (!lead.ig_psid) continue;
+      try {
+        await queueDm({ clientId, igPsid: lead.ig_psid, text: msgText });
+        queued += 1;
+      } catch (e) {
+        console.error("broadcast: queueDm failed for lead", lead.id, e?.message || e);
+      }
+    }
+
+    tracker.count += queued;
+
+    return safeJson(res, 200, {
+      ok: true,
+      queued,
+      skipped: lead_ids.length - queued,
+      remaining: BROADCAST_MAX_PER_HOUR - tracker.count,
+    });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+/**
+ * ===========================
+ * FEATURE 4: QUEUE STATUS API
+ * ===========================
+ */
+
+app.get("/coach/api/queue-status", requireCoach, async (req, res) => {
+  try {
+    const clientId = req.coachConfig?.client_id;
+
+    const { data, error } = await supabase
+      .from("dm_queue")
+      .select("status")
+      .eq("client_id", clientId)
+      .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+    if (error) return safeJson(res, 500, { error: error.message });
+
+    const counts = { pending: 0, sent: 0, failed: 0 };
+    for (const row of data || []) {
+      if (counts[row.status] !== undefined) counts[row.status] += 1;
+    }
+
+    // Rate tracker info
+    const tracker = broadcastRateTracker.get(clientId);
+    const broadcastRemaining = tracker
+      ? Math.max(0, BROADCAST_MAX_PER_HOUR - tracker.count)
+      : BROADCAST_MAX_PER_HOUR;
+
+    return safeJson(res, 200, {
+      last_24h: counts,
+      broadcast_remaining_this_hour: broadcastRemaining,
+    });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+/**
+ * ===========================
  * PAYMENT LINK TOKEN RESOLVE
  * ===========================
  */
@@ -4357,7 +4595,209 @@ async function handleNewFollowerDm(igAccountId, followerId) {
 
 /**
  * ===========================
- * INSTAGRAM WEBHOOK
+ * FEATURE 1: POST COMMENT KEYWORD → DM + OPTIONAL PUBLIC REPLY
+ * ===========================
+ */
+
+async function postPublicCommentReply(accessToken, commentId, replyText) {
+  const resp = await fetch(
+    `https://graph.facebook.com/v19.0/${encodeURIComponent(commentId)}/replies?access_token=${encodeURIComponent(accessToken)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: replyText }),
+    }
+  );
+  const data = await resp.json().catch(() => ({}));
+  return { ok: resp.ok, data };
+}
+
+async function handlePostCommentKeyword(igAccountId, commentId, commenterId, commentText) {
+  try {
+    const { data: igAccount, error: igLookupError } = await supabase
+      .from("ig_accounts")
+      .select("client_id, ig_user_id, page_id, page_access_token")
+      .eq("is_active", true)
+      .or(`page_id.eq.${igAccountId},ig_user_id.eq.${igAccountId}`)
+      .maybeSingle();
+
+    if (igLookupError || !igAccount?.page_access_token) {
+      console.error("comment_keyword: no active IG account found", {
+        igAccountId,
+        error: igLookupError?.message || null,
+      });
+      return;
+    }
+
+    const { data: cfg } = await supabase
+      .from("client_configs")
+      .select("comment_keyword_dm_enabled, comment_keyword_trigger, comment_keyword_dm_text, comment_keyword_reply_enabled, comment_keyword_reply_text")
+      .eq("client_id", igAccount.client_id)
+      .maybeSingle();
+
+    if (!cfg?.comment_keyword_dm_enabled) return;
+
+    const trigger = normaliseTriggerText(cfg.comment_keyword_trigger || "");
+    if (!trigger) return;
+
+    const incoming = normaliseTriggerText(commentText);
+    // Match if comment contains the keyword (more permissive than exact match for comments)
+    if (!incoming.includes(trigger)) return;
+
+    const dmText = String(cfg.comment_keyword_dm_text || "").trim();
+    if (!dmText) return;
+
+    // Send DM to commenter
+    const { sendResp, sendData } = await sendInstagramTextMessage({
+      accessToken: igAccount.page_access_token,
+      recipientId: commenterId,
+      text: dmText,
+    });
+
+    log("ig_comment_keyword_dm_sent", {
+      igAccountId,
+      commentId,
+      commenterId,
+      clientId: igAccount.client_id,
+      sendOk: sendResp.ok,
+      sendData,
+    });
+
+    // Optionally post a public reply to the comment
+    if (cfg.comment_keyword_reply_enabled) {
+      const replyText = String(cfg.comment_keyword_reply_text || "").trim();
+      if (replyText) {
+        const { ok: replyOk, data: replyData } = await postPublicCommentReply(
+          igAccount.page_access_token,
+          commentId,
+          replyText
+        );
+        log("ig_comment_public_reply_sent", {
+          igAccountId,
+          commentId,
+          replyOk,
+          replyData,
+        });
+      }
+    }
+  } catch (e) {
+    console.error("handlePostCommentKeyword failed:", e?.message || e);
+  }
+}
+
+/**
+ * ===========================
+ * FEATURE 4: DM SAFETY QUEUE
+ * ===========================
+ */
+
+// Rate tracker: { igAccountId: { count: N, windowStart: Date } }
+const dmQueueRateTracker = new Map();
+const DM_QUEUE_MAX_PER_HOUR = 200;
+
+async function queueDm({ clientId, igPsid, text }) {
+  const { error } = await supabase.from("dm_queue").insert({
+    client_id: clientId,
+    ig_psid: igPsid,
+    message: text,
+    status: "pending",
+  });
+  if (error) {
+    console.error("queueDm insert failed:", error);
+    throw error;
+  }
+}
+
+async function processDmQueue() {
+  try {
+    // Fetch pending messages ordered by created_at (oldest first), limit batch
+    const { data: pendingItems, error } = await supabase
+      .from("dm_queue")
+      .select("*")
+      .eq("status", "pending")
+      .order("created_at", { ascending: true })
+      .limit(50);
+
+    if (error) {
+      console.error("processDmQueue fetch failed:", error);
+      return;
+    }
+    if (!pendingItems || pendingItems.length === 0) return;
+
+    for (const item of pendingItems) {
+      try {
+        // Check rate limit per account
+        let tracker = dmQueueRateTracker.get(item.client_id);
+        const now = Date.now();
+        if (!tracker || now - tracker.windowStart >= 60 * 60 * 1000) {
+          tracker = { count: 0, windowStart: now };
+          dmQueueRateTracker.set(item.client_id, tracker);
+        }
+        if (tracker.count >= DM_QUEUE_MAX_PER_HOUR) {
+          log("dm_queue_rate_limited", { clientId: item.client_id, count: tracker.count });
+          continue;
+        }
+
+        // Look up IG account
+        const igAccount = await getIgAccountByClientId(item.client_id);
+        if (!igAccount?.page_access_token) {
+          console.error("dm_queue: no access token for client", item.client_id);
+          await supabase.from("dm_queue").update({
+            status: "failed",
+            error: "No access token",
+            processed_at: new Date().toISOString(),
+          }).eq("id", item.id);
+          continue;
+        }
+
+        // Send the message
+        const { sendResp } = await sendInstagramTextMessage({
+          accessToken: igAccount.page_access_token,
+          recipientId: item.ig_psid,
+          text: item.message,
+        });
+
+        tracker.count += 1;
+
+        await supabase.from("dm_queue").update({
+          status: sendResp.ok ? "sent" : "failed",
+          error: sendResp.ok ? null : `HTTP ${sendResp.status}`,
+          processed_at: new Date().toISOString(),
+        }).eq("id", item.id);
+
+        log("dm_queue_processed", {
+          id: item.id,
+          clientId: item.client_id,
+          igPsid: item.ig_psid,
+          sendOk: sendResp.ok,
+        });
+      } catch (e) {
+        console.error("dm_queue item failed:", item.id, e?.message || e);
+        await supabase.from("dm_queue").update({
+          status: "failed",
+          error: String(e?.message || e).slice(0, 200),
+          processed_at: new Date().toISOString(),
+        }).eq("id", item.id).catch(() => {});
+      }
+    }
+  } catch (e) {
+    console.error("processDmQueue error:", e?.message || e);
+  }
+}
+
+/**
+ * ===========================
+ * FEATURE 3: BROADCAST MESSAGES
+ * ===========================
+ */
+
+// Rate tracker per client for broadcasts: { clientId: { count: N, windowStart: Date } }
+const broadcastRateTracker = new Map();
+const BROADCAST_MAX_PER_HOUR = 50;
+
+/**
+ * ===========================
+ * INSTAGRAM WEBHOOK (POST)
  * ===========================
  */
 
@@ -4365,8 +4805,9 @@ app.post("/webhook", async (req, res) => {
   try {
     const events = getAllIgMessagingEvents(req.body);
     const followEvents = extractFollowEvents(req.body);
+    const commentEvents = extractPostCommentEvents(req.body);
 
-    if (!events.length && !followEvents.length) {
+    if (!events.length && !followEvents.length && !commentEvents.length) {
       return res.sendStatus(200);
     }
 
@@ -4374,6 +4815,10 @@ app.post("/webhook", async (req, res) => {
 
     for (const { igAccountId, followerId } of followEvents) {
       void handleNewFollowerDm(igAccountId, followerId);
+    }
+
+    for (const { igAccountId, commentId, commenterId, commentText } of commentEvents) {
+      void handlePostCommentKeyword(igAccountId, commentId, commenterId, commentText);
     }
 
     for (const { messaging } of events) {
@@ -4531,6 +4976,30 @@ log("ig_event_debug", {
           const alreadyHasOutbound = (historyMessages || []).some(
             (m) => m?.role === "assistant"
           );
+
+          // ---- Feature 2: Extract contact details from inbound messages ----
+          if (text && cfg?.contact_collection_enabled) {
+            try {
+              const detectedEmail = !lead?.email ? extractEmail(text) : null;
+              const detectedPhone = !lead?.phone ? extractPhone(text) : null;
+              if (detectedEmail || detectedPhone) {
+                const contactPatch = {};
+                if (detectedEmail) contactPatch.email = detectedEmail;
+                if (detectedPhone) contactPatch.phone = detectedPhone;
+                const { error: contactUpdateError } = await supabase
+                  .from("leads")
+                  .update(contactPatch)
+                  .eq("id", lead.id);
+                if (!contactUpdateError) {
+                  if (detectedEmail) lead = { ...lead, email: detectedEmail };
+                  if (detectedPhone) lead = { ...lead, phone: detectedPhone };
+                  log("contact_extracted", { leadId: lead.id, ...contactPatch });
+                }
+              }
+            } catch (e) {
+              console.warn("contact extraction failed:", e?.message || e);
+            }
+          }
 
 const storyAutoDmMatched =
   !isEcho &&
@@ -4883,13 +5352,6 @@ log("ig_trigger_opener_sent", {
 
           const messagesToSend = splitIntoMessages(reply);
 
-          const activeIgAccount = await getIgAccountByClientId(lead.client_id);
-
-          if (!activeIgAccount?.page_access_token) {
-            console.error("Missing Instagram access token for client:", lead.client_id);
-            return;
-          }
-
           for (let i = 0; i < messagesToSend.length; i++) {
             const msg = messagesToSend[i];
 
@@ -4910,18 +5372,13 @@ log("ig_trigger_opener_sent", {
             const delay = typingDelay + extraDelay;
             await new Promise((res) => setTimeout(res, delay));
 
-            const { sendResp, sendData } = await sendInstagramTextMessage({
-              accessToken: activeIgAccount.page_access_token,
-              recipientId: senderId,
-              text: msg,
-            });
+            // Feature 4: route through DM safety queue
+            await queueDm({ clientId: lead.client_id, igPsid: senderId, text: msg });
 
-            log("ig_message_sent", {
+            log("ig_message_queued", {
               leadId: lead.id,
               senderId,
               messagePreview: String(msg).slice(0, 120),
-              sendOk: sendResp.ok,
-              sendData,
             });
 
             const { error: insertOutgoingError } = await supabase
@@ -5267,5 +5724,12 @@ app.listen(PORT, () => {
       console.error("followup_job: interval run failed", e?.message || e)
     );
   }, 30 * 60 * 1000);
+
+  // Feature 4: DM Safety Queue — process every 30 seconds
+  setInterval(() => {
+    processDmQueue().catch((e) =>
+      console.error("dm_queue: processor error", e?.message || e)
+    );
+  }, 30 * 1000);
 });
 

@@ -373,6 +373,12 @@ input:focus, textarea:focus, select:focus{
         .connectCardRow{ flex-direction:column; }
         .connectRight{ justify-content:flex-end; width:100%; }
       }
+      @media (max-width: 1080px) and (min-width: 901px){
+        .row[style*="1fr 1fr 1fr 1fr"]{ grid-template-columns: 1fr 1fr !important; }
+      }
+      @media (max-width: 900px){
+        .row[style*="1fr 1fr 1fr 1fr"]{ grid-template-columns: 1fr !important; }
+      }
     </style>
   </head>
 
@@ -429,89 +435,131 @@ input:focus, textarea:focus, select:focus{
           </div>
         </div>
 
-<div class="row" style="margin-top: 10px; grid-template-columns: 1fr 1fr 1fr;">
+<div class=”row” style=”margin-top: 10px; grid-template-columns: 1fr 1fr 1fr 1fr;”>
   <div>
-    <div class="takeoverTopLine" style="margin-bottom:8px;">
-      <span class="badge" id="storyReplyToggleBadge">Story reply opener OFF</span>
+    <div class=”takeoverTopLine” style=”margin-bottom:8px;”>
+      <span class=”badge” id=”storyReplyToggleBadge”>Story reply opener OFF</span>
     </div>
 
-    <label style="margin-top:0;">Story reply auto-DM</label>
-    <select id="story_reply_auto_dm_enabled">
-      <option value="false">Off</option>
-      <option value="true">On</option>
+    <label style=”margin-top:0;”>Story reply auto-DM</label>
+    <select id=”story_reply_auto_dm_enabled”>
+      <option value=”false”>Off</option>
+      <option value=”true”>On</option>
     </select>
 
     <label>Story reply outbound message</label>
     <textarea
-      id="story_reply_auto_dm_text"
-      placeholder="Example:
-Appreciate the reply - what are you trying to sort right now?"
-      style="min-height: 120px;"
+      id=”story_reply_auto_dm_text”
+      placeholder=”Example:
+Appreciate the reply - what are you trying to sort right now?”
+      style=”min-height: 120px;”
     ></textarea>
 
-    <div class="helper">
+    <div class=”helper”>
       This sends a prewritten opener when someone replies to a story and opens a DM thread.
     </div>
   </div>
 
   <div>
-    <div class="takeoverTopLine" style="margin-bottom:8px;">
-      <span class="badge" id="commentReplyToggleBadge">Comment reply opener OFF</span>
+    <div class=”takeoverTopLine” style=”margin-bottom:8px;”>
+      <span class=”badge” id=”commentReplyToggleBadge”>Comment reply opener OFF</span>
     </div>
 
-    <label style="margin-top:0;">Comment reply auto-DM</label>
-    <select id="comment_reply_auto_dm_enabled">
-      <option value="false">Off</option>
-      <option value="true">On</option>
+    <label style=”margin-top:0;”>Comment reply auto-DM</label>
+    <select id=”comment_reply_auto_dm_enabled”>
+      <option value=”false”>Off</option>
+      <option value=”true”>On</option>
     </select>
 
     <label>Comment reply outbound message</label>
     <textarea
-      id="comment_reply_auto_dm_text"
-      placeholder="Example:
-Saw your comment - what are you trying to get help with?"
-      style="min-height: 120px;"
+      id=”comment_reply_auto_dm_text”
+      placeholder=”Example:
+Saw your comment - what are you trying to get help with?”
+      style=”min-height: 120px;”
     ></textarea>
 
-    <div class="helper">
+    <div class=”helper”>
       This sends a prewritten opener when someone comes into DMs from a post comment or comment CTA.
     </div>
   </div>
 
   <div>
-    <div class="takeoverTopLine" style="margin-bottom:8px;">
-      <span class="badge" id="keywordToggleBadge">Keyword opener OFF</span>
+    <div class=”takeoverTopLine” style=”margin-bottom:8px;”>
+      <span class=”badge” id=”keywordToggleBadge”>Keyword opener OFF</span>
     </div>
 
-    <label style="margin-top:0;">Keyword auto-DM</label>
-    <select id="keyword_auto_dm_enabled">
-      <option value="false">Off</option>
-      <option value="true">On</option>
+    <label style=”margin-top:0;”>Keyword auto-DM</label>
+    <select id=”keyword_auto_dm_enabled”>
+      <option value=”false”>Off</option>
+      <option value=”true”>On</option>
     </select>
 
     <label>Trigger phrase</label>
     <input
-      id="keyword_trigger_text"
-      placeholder='Example: START'
+      id=”keyword_trigger_text”
+      placeholder=’Example: START’
     />
 
     <label>Keyword outbound message</label>
     <textarea
-      id="keyword_auto_dm_text"
-      placeholder="Example:
-Nice - saw your message. What’s the main thing you want help with right now?"
-      style="min-height: 120px;"
+      id=”keyword_auto_dm_text”
+      placeholder=”Example:
+Nice - saw your message. What’s the main thing you want help with right now?”
+      style=”min-height: 120px;”
     ></textarea>
 
-    <div class="helper">
+    <div class=”helper”>
       If your CTA says something like <strong>DM me “START”</strong>, this sends a prewritten opener when they message that keyword.
+    </div>
+  </div>
+
+  <div>
+    <div class=”takeoverTopLine” style=”margin-bottom:8px;”>
+      <span class=”badge” id=”commentKeywordToggleBadge”>Comment keyword OFF</span>
+    </div>
+
+    <label style=”margin-top:0;”>Comment keyword auto-DM</label>
+    <select id=”comment_keyword_dm_enabled”>
+      <option value=”false”>Off</option>
+      <option value=”true”>On</option>
+    </select>
+
+    <label>Comment keyword trigger</label>
+    <input
+      id=”comment_keyword_trigger”
+      placeholder=’Example: FREE’
+    />
+
+    <label>DM to send them</label>
+    <textarea
+      id=”comment_keyword_dm_text”
+      placeholder=”Example:
+Hey - I just sent you the details. What’s the main thing you’re trying to sort?”
+      style=”min-height: 80px;”
+    ></textarea>
+
+    <label>Public reply to comment</label>
+    <select id=”comment_keyword_reply_enabled”>
+      <option value=”false”>Off</option>
+      <option value=”true”>On</option>
+    </select>
+
+    <label>Public reply text</label>
+    <input
+      id=”comment_keyword_reply_text”
+      placeholder=’Example: Sent you a DM!’
+    />
+
+    <div class=”helper”>
+      When someone comments your keyword on a post, the bot DMs them and (optionally) replies publicly to their comment.
     </div>
   </div>
 </div>
 
-<div class="divider"></div>
+<div class=”divider”></div>
 
-<div class="tip">
+<div class=”tip”>
   These are not AI replies. They are fixed opening messages the coach can fully edit.
 </div>
 </div>
@@ -838,6 +886,102 @@ assistant: use this and get booked in
         <div class="err" id="err"></div>
         <div class="ok" id="ok">Saved ✅</div>
       </div>
+      <div class="card" id="contactCollectionCard">
+        <div class="takeoverHeader">
+          <div>
+            <div class="takeoverTitle">Contact Collection</div>
+            <div class="takeoverSub">
+              When turned on, the bot will naturally ask leads for their email and phone number during conversation.
+            </div>
+          </div>
+          <div>
+            <span class="badge" id="contactCollectionBadge">Off</span>
+          </div>
+        </div>
+
+        <div style="margin-top:12px; max-width:320px;">
+          <label style="margin-top:0;">Collect email &amp; phone</label>
+          <select id="contact_collection_enabled">
+            <option value="false">Off</option>
+            <option value="true">On</option>
+          </select>
+          <div class="helper">
+            Email and phone are saved to the lead's record. Only asks once per lead, never on the first message.
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="broadcastCard">
+        <div class="takeoverHeader">
+          <div>
+            <div class="takeoverTitle">Broadcast Message</div>
+            <div class="takeoverSub">
+              Send a single message to multiple leads at once. Max 50 per hour.
+            </div>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button class="btn small" id="loadBroadcastLeadsBtn">Load leads</button>
+          </div>
+        </div>
+
+        <div style="margin-top:14px;">
+          <label style="margin-top:0;">Filter by stage</label>
+          <select id="broadcastStageFilter" style="max-width:220px;">
+            <option value="all">All leads</option>
+            <option value="new">New</option>
+            <option value="engaged">Engaged</option>
+            <option value="high_intent">High intent</option>
+            <option value="booking_pushed">Booking pushed</option>
+            <option value="booked">Booked</option>
+          </select>
+
+          <div id="broadcastLeadList" style="margin-top:12px; display:none;">
+            <div class="takeoverMeta" id="broadcastLeadCount" style="margin-bottom:8px;"></div>
+            <div id="broadcastLeadRows" style="max-height:240px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;"></div>
+            <div style="margin-top:8px;">
+              <label>
+                <input type="checkbox" id="broadcastSelectAll" style="width:auto; margin-top:0; padding:0;"> Select all
+              </label>
+            </div>
+          </div>
+
+          <label>Message to send</label>
+          <textarea
+            id="broadcastMessage"
+            placeholder="Example:
+Hey — just checking in. If you're still thinking about it, happy to answer any questions."
+            style="min-height:100px;"
+          ></textarea>
+
+          <div style="margin-top:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button class="btn primary" id="sendBroadcastBtn">Send broadcast</button>
+            <span class="takeoverMeta" id="broadcastStatus"></span>
+          </div>
+
+          <div class="helper" style="margin-top:8px;">
+            Messages go into the send queue. Max 50 per hour. Leads without a connected Instagram DM thread will not receive the message.
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="queueStatusCard">
+        <div class="takeoverHeader">
+          <div>
+            <div class="takeoverTitle">DM Queue</div>
+            <div class="takeoverSub">
+              All outgoing AI replies are queued and sent at a safe rate (max 200/hour per account).
+            </div>
+          </div>
+          <div>
+            <button class="btn small" id="refreshQueueBtn">Refresh</button>
+          </div>
+        </div>
+
+        <div class="takeoverList" id="queueStatusList" style="margin-top:12px;">
+          <div class="takeoverMeta" id="queueStatusLoading">Loading…</div>
+        </div>
+      </div>
+
       <div class="card" id="globalPauseCard">
         <div class="takeoverHeader">
           <div>

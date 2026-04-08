@@ -772,6 +772,173 @@ function wireManualTakeoversRefreshButton() {
     }
   });
 }
+
+// ---- Feature 3: Broadcast ----
+let broadcastLeads = [];
+
+async function loadBroadcastLeads() {
+  const stageFilter = qs("#broadcastStageFilter");
+  const stage = stageFilter ? stageFilter.value : "all";
+  const listEl = qs("#broadcastLeadList");
+  const rowsEl = qs("#broadcastLeadRows");
+  const countEl = qs("#broadcastLeadCount");
+
+  try {
+    const data = await apiFetch(`${API}/broadcast/leads?stage=${encodeURIComponent(stage)}`, { method: "GET" });
+    broadcastLeads = data?.leads || [];
+    if (listEl) listEl.style.display = "block";
+    if (countEl) countEl.textContent = `${broadcastLeads.length} lead${broadcastLeads.length !== 1 ? "s" : ""} found`;
+
+    if (rowsEl) {
+      rowsEl.innerHTML = broadcastLeads.map((l) => {
+        const label = l.email ? `${l.email}` : `Lead …${String(l.ig_psid || "").slice(-4)}`;
+        return `<label style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:10px; background:#fff; cursor:pointer; font-size:13px;">
+          <input type="checkbox" class="broadcastLeadCheck" data-id="${l.id}" style="width:auto; margin:0; padding:0;">
+          <span>${label}</span>
+          <span class="badge" style="margin-left:auto; font-size:11px;">${l.stage || "new"}</span>
+        </label>`;
+      }).join("");
+    }
+
+    wireBroadcastSelectAll();
+  } catch (e) {
+    setErr(String(e.message || e));
+  }
+}
+
+function wireBroadcastSelectAll() {
+  const selectAllEl = qs("#broadcastSelectAll");
+  if (!selectAllEl || selectAllEl.__wired) return;
+  selectAllEl.__wired = true;
+
+  selectAllEl.addEventListener("change", () => {
+    document.querySelectorAll(".broadcastLeadCheck").forEach((cb) => {
+      cb.checked = selectAllEl.checked;
+    });
+  });
+}
+
+function wireBroadcast() {
+  const loadBtn = qs("#loadBroadcastLeadsBtn");
+  const sendBtn = qs("#sendBroadcastBtn");
+  const statusEl = qs("#broadcastStatus");
+
+  if (loadBtn && !loadBtn.__wired) {
+    loadBtn.__wired = true;
+    loadBtn.addEventListener("click", async () => {
+      try {
+        clearErr();
+        loadBtn.disabled = true;
+        loadBtn.textContent = "Loading...";
+        await loadBroadcastLeads();
+      } catch (e) {
+        setErr(String(e.message || e));
+      } finally {
+        loadBtn.disabled = false;
+        loadBtn.textContent = "Load leads";
+      }
+    });
+  }
+
+  if (sendBtn && !sendBtn.__wired) {
+    sendBtn.__wired = true;
+    sendBtn.addEventListener("click", async () => {
+      try {
+        clearErr();
+        const msgEl = qs("#broadcastMessage");
+        const message = msgEl ? String(msgEl.value || "").trim() : "";
+        if (!message) {
+          setErr("Enter a message to broadcast.");
+          return;
+        }
+
+        const checkedIds = Array.from(document.querySelectorAll(".broadcastLeadCheck:checked"))
+          .map((cb) => cb.getAttribute("data-id"))
+          .filter(Boolean);
+
+        if (checkedIds.length === 0) {
+          setErr("Select at least one lead.");
+          return;
+        }
+
+        sendBtn.disabled = true;
+        sendBtn.textContent = "Sending...";
+        if (statusEl) statusEl.textContent = "";
+
+        const result = await apiFetch(`${API}/broadcast`, {
+          method: "POST",
+          body: JSON.stringify({ message, lead_ids: checkedIds }),
+        });
+
+        if (statusEl) {
+          statusEl.textContent = `Queued ${result.queued} message${result.queued !== 1 ? "s" : ""}. ${result.remaining} broadcast slots remaining this hour.`;
+        }
+        if (msgEl) msgEl.value = "";
+        document.querySelectorAll(".broadcastLeadCheck").forEach((cb) => (cb.checked = false));
+        const selectAll = qs("#broadcastSelectAll");
+        if (selectAll) selectAll.checked = false;
+
+        await loadQueueStatus();
+      } catch (e) {
+        setErr(String(e.message || e));
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = "Send broadcast";
+      }
+    });
+  }
+}
+
+// ---- Feature 4: Queue Status ----
+async function loadQueueStatus() {
+  const listEl = qs("#queueStatusList");
+  const loadingEl = qs("#queueStatusLoading");
+  if (!listEl) return;
+
+  try {
+    const data = await apiFetch(`${API}/queue-status`, { method: "GET" });
+    const c = data?.last_24h || {};
+    const broadcastRemaining = data?.broadcast_remaining_this_hour ?? 50;
+
+    const rows = [
+      { label: "Pending", value: c.pending ?? 0, cls: c.pending > 0 ? "warn" : "" },
+      { label: "Sent (last 24h)", value: c.sent ?? 0, cls: c.sent > 0 ? "connected" : "" },
+      { label: "Failed (last 24h)", value: c.failed ?? 0, cls: c.failed > 0 ? "warn" : "" },
+      { label: "Broadcast slots left this hour", value: broadcastRemaining, cls: "" },
+    ];
+
+    listEl.innerHTML = rows.map((r) => `
+      <div class="takeoverRow" style="padding:10px 14px;">
+        <div class="takeoverLeft">
+          <div class="takeoverMeta">${r.label}</div>
+        </div>
+        <div class="takeoverRight">
+          <span class="badge${r.cls ? " " + r.cls : ""}">${r.value}</span>
+        </div>
+      </div>
+    `).join("");
+
+    if (loadingEl) loadingEl.style.display = "none";
+  } catch (e) {
+    if (listEl) listEl.innerHTML = `<div class="takeoverMeta">Could not load queue status</div>`;
+  }
+}
+
+function wireQueueRefreshButton() {
+  const btn = qs("#refreshQueueBtn");
+  if (!btn || btn.__wired) return;
+  btn.__wired = true;
+
+  btn.addEventListener("click", async () => {
+    try {
+      clearErr();
+      await loadQueueStatus();
+    } catch (e) {
+      setErr(String(e.message || e));
+    }
+  });
+}
+
   async function loadDashboard() {
 const bookingEl = qs("#booking_url");
 const bookingAltEl = qs("#booking_url_alt");
@@ -806,6 +973,16 @@ const keywordAutoDmTextEl = qs("#keyword_auto_dm_text");
 const storyReplyToggleBadgeEl = qs("#storyReplyToggleBadge");
 const commentReplyToggleBadgeEl = qs("#commentReplyToggleBadge");
 const keywordToggleBadgeEl = qs("#keywordToggleBadge");
+// Feature 1 — comment keyword DM
+const commentKeywordDmEnabledEl = qs("#comment_keyword_dm_enabled");
+const commentKeywordTriggerEl = qs("#comment_keyword_trigger");
+const commentKeywordDmTextEl = qs("#comment_keyword_dm_text");
+const commentKeywordReplyEnabledEl = qs("#comment_keyword_reply_enabled");
+const commentKeywordReplyTextEl = qs("#comment_keyword_reply_text");
+const commentKeywordToggleBadgeEl = qs("#commentKeywordToggleBadge");
+// Feature 2 — contact collection
+const contactCollectionEnabledEl = qs("#contact_collection_enabled");
+const contactCollectionBadgeEl = qs("#contactCollectionBadge");
 
 if (!promptEl && !saveBtn) return;
 
@@ -878,6 +1055,39 @@ if (keywordToggleBadgeEl) {
     ? "Keyword opener ON"
     : "Keyword opener OFF";
 }
+
+// Feature 1 — load comment keyword DM
+if (commentKeywordDmEnabledEl) {
+  commentKeywordDmEnabledEl.value = config.comment_keyword_dm_enabled ? "true" : "false";
+}
+if (commentKeywordTriggerEl) {
+  commentKeywordTriggerEl.value = config.comment_keyword_trigger || "";
+}
+if (commentKeywordDmTextEl) {
+  commentKeywordDmTextEl.value = config.comment_keyword_dm_text || "";
+}
+if (commentKeywordReplyEnabledEl) {
+  commentKeywordReplyEnabledEl.value = config.comment_keyword_reply_enabled ? "true" : "false";
+}
+if (commentKeywordReplyTextEl) {
+  commentKeywordReplyTextEl.value = config.comment_keyword_reply_text || "";
+}
+if (commentKeywordToggleBadgeEl) {
+  const on = !!config.comment_keyword_dm_enabled;
+  commentKeywordToggleBadgeEl.className = on ? "badge connected" : "badge";
+  commentKeywordToggleBadgeEl.textContent = on ? "Comment keyword ON" : "Comment keyword OFF";
+}
+
+// Feature 2 — load contact collection
+if (contactCollectionEnabledEl) {
+  contactCollectionEnabledEl.value = config.contact_collection_enabled ? "true" : "false";
+}
+if (contactCollectionBadgeEl) {
+  const on = !!config.contact_collection_enabled;
+  contactCollectionBadgeEl.className = on ? "badge connected" : "badge";
+  contactCollectionBadgeEl.textContent = on ? "On" : "Off";
+}
+
 const savedOffer = String(config.offer_description || "");
 
 function extractSection(label, nextLabel) {
@@ -961,11 +1171,14 @@ wireInstagramConnectButton();
 wireGeneratePromptButton();
 wireGlobalPauseButton();
 wireManualTakeoversRefreshButton();
+wireBroadcast();
+wireQueueRefreshButton();
 await Promise.allSettled([
   loadInstagramConnectionStatus(),
   loadPromptUsageStatus(),
   loadGlobalPauseStatus(),
   loadManualTakeovers(),
+  loadQueueStatus(),
 ]);
 
     if (saveBtn && !saveBtn.__wired) {
@@ -1068,6 +1281,33 @@ if (keyword_auto_dm_enabled && !keyword_auto_dm_text) {
   setErr("Add the keyword outbound message or turn Keyword auto-DM off.");
   return;
 }
+
+const comment_keyword_dm_enabled = commentKeywordDmEnabledEl
+  ? String(commentKeywordDmEnabledEl.value) === "true"
+  : false;
+if (comment_keyword_dm_enabled) {
+  const ckTrigger = commentKeywordTriggerEl ? String(commentKeywordTriggerEl.value || "").trim() : "";
+  const ckDmText = commentKeywordDmTextEl ? String(commentKeywordDmTextEl.value || "").trim() : "";
+  if (!ckTrigger) {
+    setErr("Add the comment keyword trigger or turn Comment keyword auto-DM off.");
+    return;
+  }
+  if (!ckDmText) {
+    setErr("Add the comment keyword DM text or turn Comment keyword auto-DM off.");
+    return;
+  }
+  const ckReplyEnabled = commentKeywordReplyEnabledEl
+    ? String(commentKeywordReplyEnabledEl.value) === "true"
+    : false;
+  if (ckReplyEnabled) {
+    const ckReplyText = commentKeywordReplyTextEl ? String(commentKeywordReplyTextEl.value || "").trim() : "";
+    if (!ckReplyText) {
+      setErr("Add the public reply text or turn the public comment reply off.");
+      return;
+    }
+  }
+}
+
 const offer_description = buildStructuredCoachContext({
   offer_what,
   offer_features,
@@ -1139,6 +1379,28 @@ comment_reply_auto_dm_text: comment_reply_auto_dm_text || null,
 keyword_auto_dm_enabled,
 keyword_trigger_text: keyword_trigger_text || null,
 keyword_auto_dm_text: keyword_auto_dm_text || null,
+
+// Feature 1 — comment keyword DM
+comment_keyword_dm_enabled: commentKeywordDmEnabledEl
+  ? String(commentKeywordDmEnabledEl.value) === "true"
+  : false,
+comment_keyword_trigger: commentKeywordTriggerEl
+  ? String(commentKeywordTriggerEl.value || "").trim() || null
+  : null,
+comment_keyword_dm_text: commentKeywordDmTextEl
+  ? String(commentKeywordDmTextEl.value || "").trim() || null
+  : null,
+comment_keyword_reply_enabled: commentKeywordReplyEnabledEl
+  ? String(commentKeywordReplyEnabledEl.value) === "true"
+  : false,
+comment_keyword_reply_text: commentKeywordReplyTextEl
+  ? String(commentKeywordReplyTextEl.value || "").trim() || null
+  : null,
+
+// Feature 2 — contact collection
+contact_collection_enabled: contactCollectionEnabledEl
+  ? String(contactCollectionEnabledEl.value) === "true"
+  : false,
 };
           await apiFetch(`${API}/config`, {
             method: "POST",
