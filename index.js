@@ -3764,6 +3764,99 @@ app.get("/coach/api/leads", requireCoach, async (req, res) => {
   }
 });
 
+// ── Debug: return what client_id the JWT has vs ig_accounts ──────────────
+app.get("/coach/api/instagram/debug", requireCoach, async (req, res) => {
+  try {
+    const clientId = req.coach.client_id;
+
+    const { data: igRows } = await supabase
+      .from("ig_accounts")
+      .select("id, client_id, ig_username, is_active, created_at")
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    const { data: coachRow } = await supabase
+      .from("coach_users")
+      .select("id, email, client_id")
+      .eq("client_id", clientId)
+      .maybeSingle();
+
+    return safeJson(res, 200, {
+      jwt_client_id: clientId,
+      coach_user: coachRow || null,
+      ig_accounts: igRows || [],
+    });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+// ── Backfill ig_name for leads where it is null ───────────────────────────
+app.post("/coach/api/leads/refresh-names", requireCoach, async (req, res) => {
+  try {
+    const clientId = req.coach.client_id;
+
+    // Get page_access_token for this coach
+    const { data: igAcc } = await supabase
+      .from("ig_accounts")
+      .select("page_access_token, ig_username")
+      .eq("client_id", clientId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!igAcc?.page_access_token) {
+      return safeJson(res, 400, {
+        error: "No active Instagram connection found. Connect Instagram first.",
+      });
+    }
+
+    // Find leads with no ig_name
+    const { data: leads, error: leadsErr } = await supabase
+      .from("leads")
+      .select("id, ig_psid")
+      .eq("client_id", clientId)
+      .is("ig_name", null)
+      .not("ig_psid", "is", null)
+      .limit(200);
+
+    if (leadsErr) return safeJson(res, 500, { error: leadsErr.message });
+    if (!leads || !leads.length) {
+      return safeJson(res, 200, { ok: true, updated: 0, message: "All leads already have names." });
+    }
+
+    let updated = 0;
+    let failed = 0;
+
+    for (const lead of leads) {
+      const name = await lookupIgName(igAcc.page_access_token, lead.ig_psid);
+      if (name) {
+        const { error: upErr } = await supabase
+          .from("leads")
+          .update({ ig_name: name })
+          .eq("id", lead.id);
+        if (!upErr) updated++;
+        else failed++;
+      } else {
+        failed++;
+      }
+      // Respect Instagram API rate limits
+      await new Promise((r) => setTimeout(r, 120));
+    }
+
+    return safeJson(res, 200, {
+      ok: true,
+      updated,
+      failed,
+      total: leads.length,
+      message: `Updated ${updated} of ${leads.length} leads.`,
+    });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
 /**
  * ===========================
  * COACH PROMPT GENERATOR

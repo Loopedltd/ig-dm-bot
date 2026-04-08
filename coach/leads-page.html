@@ -121,7 +121,11 @@
           </select>
           <span class="count" id="leadCount"></span>
         </div>
-        <button class="btn primary" id="exportCsvBtn">Export CSV</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <button class="btn" id="refreshNamesBtn">Refresh names</button>
+          <button class="btn primary" id="exportCsvBtn">Export CSV</button>
+        </div>
+        <div id="refreshNamesStatus" style="display:none; font-size:13px; color:rgba(15,23,42,0.55); margin-top:6px;"></div>
       </div>
 
       <div class="tableWrap">

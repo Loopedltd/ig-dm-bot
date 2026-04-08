@@ -120,6 +120,35 @@
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
+  async function refreshNames() {
+    const btn = qs("#refreshNamesBtn");
+    const statusEl = qs("#refreshNamesStatus");
+    if (!btn) return;
+
+    btn.disabled = true;
+    btn.style.opacity = "0.65";
+    btn.textContent = "Refreshing…";
+    if (statusEl) { statusEl.textContent = "Looking up Instagram names — this may take a moment…"; statusEl.style.display = "block"; statusEl.style.color = "rgba(15,23,42,0.55)"; }
+
+    try {
+      const data = await apiFetch(`${API}/leads/refresh-names`, { method: "POST" });
+      if (statusEl) {
+        statusEl.textContent = data?.message || `Updated ${data?.updated ?? 0} leads.`;
+        statusEl.style.color = "#027a48";
+      }
+      // Reload table to show new names
+      await loadLeads();
+    } catch (e) {
+      if (statusEl) {
+        statusEl.textContent = "Error: " + String(e.message || e);
+        statusEl.style.color = "#c0262d";
+        statusEl.style.display = "block";
+      }
+    } finally {
+      if (btn) { btn.disabled = false; btn.style.opacity = "1"; btn.textContent = "Refresh names"; }
+    }
+  }
+
   async function loadLeads() {
     const tbody = qs("#leadsTableBody");
     if (tbody) tbody.innerHTML = `<tr><td colspan="6"><div class="loadingState">Loading leads…</div></td></tr>`;
@@ -179,6 +208,11 @@
     const exportBtn = qs("#exportCsvBtn");
     if (exportBtn) {
       exportBtn.addEventListener("click", exportCsv);
+    }
+
+    const refreshNamesBtn = qs("#refreshNamesBtn");
+    if (refreshNamesBtn) {
+      refreshNamesBtn.addEventListener("click", refreshNames);
     }
 
     const searchInput = qs("#searchInput");
