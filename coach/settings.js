@@ -286,14 +286,14 @@
 
   let _promptCountdownInterval = null;
 
-  function startPromptCountdown(used, max) {
+  function startPromptCountdown(remaining, max) {
     if (_promptCountdownInterval) clearInterval(_promptCountdownInterval);
     const el = qs("#promptLimitStatus");
     if (!el) return;
 
     const tick = () => {
       const countdown = getMidnightCountdown();
-      el.textContent = `${used}/${max} prompts for today. Prompt generation resets in ${countdown}`;
+      el.textContent = `${remaining}/${max} prompts for today. Prompt generation resets in ${countdown}`;
     };
     tick();
     _promptCountdownInterval = setInterval(tick, 1000);
@@ -305,7 +305,6 @@
     try {
       const data = await apiFetch(`${API}/prompt-usage`);
       const remaining = Number(data?.remaining ?? 0);
-      const used = Number(data?.used ?? 0);
       const max = Number(data?.max ?? 10);
       const btn = qs("#generatePromptBtn");
       if (btn) {
@@ -319,7 +318,7 @@
           btn.textContent = "Generate Prompt";
         }
       }
-      startPromptCountdown(used, max);
+      startPromptCountdown(remaining, max);
     } catch {
       el.textContent = "Could not load prompt usage";
       el.style.color = "#c0262d";
@@ -424,6 +423,144 @@
       } finally {
         const b = qs("#generatePromptBtn");
         if (b) { b.disabled = false; b.style.opacity = "1"; }
+      }
+    });
+  }
+
+  // ── Preview bot ───────────────────────────────────────────────────────────
+
+  function openPreviewModal() {
+    const modal = qs("#previewModal");
+    if (!modal) return;
+    modal.style.display = "flex";
+    document.body.style.overflow = "hidden";
+    // Update header name from instagram handle field
+    const handle = String(qs("#instagram_handle")?.value || "").trim().replace(/^@/, "");
+    const nameEl = qs("#previewBotName");
+    if (nameEl) nameEl.textContent = handle ? `@${handle}` : "Your bot";
+    const avatarEl = qs("#previewAvatarEl");
+    if (avatarEl) avatarEl.textContent = handle ? handle[0].toUpperCase() : "B";
+  }
+
+  function closePreviewModal() {
+    const modal = qs("#previewModal");
+    if (modal) modal.style.display = "none";
+    document.body.style.overflow = "";
+  }
+
+  function clearPreviewMessages() {
+    const container = qs("#previewMessages");
+    if (!container) return;
+    Array.from(container.children).forEach((c) => {
+      if (c.id !== "previewLoading") c.remove();
+    });
+  }
+
+  function showPreviewLoading(on) {
+    const loading = qs("#previewLoading");
+    if (loading) loading.style.display = on ? "flex" : "none";
+    if (on) clearPreviewMessages();
+  }
+
+  function renderConversation(messages) {
+    const container = qs("#previewMessages");
+    if (!container) return;
+    clearPreviewMessages();
+
+    if (!messages || !messages.length) {
+      const empty = document.createElement("div");
+      empty.style.cssText = "text-align:center; color:rgba(15,23,42,0.4); font-size:13px; padding:24px;";
+      empty.textContent = "No messages to display.";
+      container.appendChild(empty);
+      return;
+    }
+
+    const handle = String(qs("#instagram_handle")?.value || "").trim().replace(/^@/, "");
+    const avatarLetter = handle ? handle[0].toUpperCase() : "B";
+
+    messages.forEach(({ role, text }) => {
+      const isProspect = role === "prospect";
+      const row = document.createElement("div");
+      row.className = `dmRow ${isProspect ? "right" : "left"}`;
+
+      if (!isProspect) {
+        const av = document.createElement("div");
+        av.className = "dmAvatar";
+        av.textContent = avatarLetter;
+        row.appendChild(av);
+      }
+
+      const bubble = document.createElement("div");
+      bubble.className = "dmBubble";
+      bubble.textContent = text;
+      row.appendChild(bubble);
+
+      container.appendChild(row);
+    });
+
+    container.scrollTop = 0;
+  }
+
+  async function generatePreviewConversation() {
+    const regenBtn = qs("#regenerateBtn");
+    if (regenBtn) { regenBtn.disabled = true; regenBtn.style.opacity = "0.65"; regenBtn.textContent = "Generating…"; }
+
+    showPreviewLoading(true);
+
+    try {
+      const data = await apiFetch(`${API}/preview-conversation`, { method: "POST" });
+      showPreviewLoading(false);
+      if (data?.messages?.length) {
+        renderConversation(data.messages);
+      } else {
+        throw new Error("Empty conversation returned");
+      }
+    } catch (e) {
+      showPreviewLoading(false);
+      const container = qs("#previewMessages");
+      if (container) {
+        const errDiv = document.createElement("div");
+        errDiv.style.cssText = "text-align:center; color:#c0262d; font-size:13px; padding:24px;";
+        errDiv.textContent = "Failed to generate preview. " + String(e.message || "Try again.");
+        container.appendChild(errDiv);
+      }
+    } finally {
+      if (regenBtn) { regenBtn.disabled = false; regenBtn.style.opacity = "1"; regenBtn.textContent = "Regenerate"; }
+    }
+  }
+
+  function wirePreviewBtn() {
+    const btn = qs("#previewBtn");
+    if (!btn || btn.__wired) return;
+    btn.__wired = true;
+    btn.addEventListener("click", () => {
+      openPreviewModal();
+      generatePreviewConversation();
+    });
+
+    const closeBtn = qs("#previewCloseBtn");
+    if (closeBtn && !closeBtn.__wired) {
+      closeBtn.__wired = true;
+      closeBtn.addEventListener("click", closePreviewModal);
+    }
+
+    const modal = qs("#previewModal");
+    if (modal && !modal.__wired) {
+      modal.__wired = true;
+      modal.addEventListener("click", (e) => { if (e.target === modal) closePreviewModal(); });
+    }
+
+    const regenBtn = qs("#regenerateBtn");
+    if (regenBtn && !regenBtn.__wired) {
+      regenBtn.__wired = true;
+      regenBtn.addEventListener("click", generatePreviewConversation);
+    }
+
+    // Close on Escape key
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        const modal = qs("#previewModal");
+        if (modal && modal.style.display !== "none") closePreviewModal();
       }
     });
   }
@@ -580,6 +717,7 @@
     wireInstagramConnectButton();
     wireSaveButton();
     wireGeneratePromptButton();
+    wirePreviewBtn();
     wireExpandToggle();
     wireBadges(); // wire change listeners before loadConfig populates values
 

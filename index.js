@@ -4096,6 +4096,112 @@ return safeJson(res, 200, {
 
 /**
  * ===========================
+ * BOT PREVIEW CONVERSATION
+ * ===========================
+ */
+
+app.post("/coach/api/preview-conversation", requireCoach, async (req, res) => {
+  try {
+    const { data: cfg, error: cfgErr } = await supabase
+      .from("client_configs")
+      .select("*")
+      .eq("client_id", req.coach.client_id)
+      .single();
+
+    if (cfgErr) return safeJson(res, 500, { error: String(cfgErr.message || cfgErr) });
+
+    const niche = getEffectiveNiche({ niche: cfg?.niche || "generic" });
+    const bookingUrl = String(cfg?.booking_url || "https://calendly.com/yourcoach/discovery").trim();
+    const offerPrice = String(cfg?.offer_price || "").trim();
+    const systemPrompt = String(cfg?.system_prompt || "").trim();
+    const tone = String(cfg?.tone || "direct").trim();
+    const style = String(cfg?.style || "short, punchy").trim();
+    const whatYouDo = String(cfg?.what_you_do || "").trim();
+    const whatTheyGet = String(cfg?.what_they_get || "").trim();
+    const exampleMessages = String(cfg?.example_messages || "").trim();
+
+    const offerContext = [
+      whatYouDo && `What the coach does: ${whatYouDo}`,
+      whatTheyGet && `What clients get: ${whatTheyGet}`,
+      offerPrice && `Offer price: ${offerPrice}`,
+      bookingUrl && `Booking link: ${bookingUrl}`,
+    ].filter(Boolean).join("\n");
+
+    const promptContent = `You are simulating an Instagram DM conversation between a prospect and a coaching bot.
+
+COACH NICHE: ${niche}
+TONE: ${tone}
+STYLE: ${style}
+${offerContext ? `OFFER CONTEXT:\n${offerContext}` : ""}
+${systemPrompt ? `BOT INSTRUCTIONS:\n${systemPrompt}` : ""}
+${exampleMessages ? `EXAMPLE MESSAGES FROM COACH:\n${exampleMessages}` : ""}
+
+Generate a realistic 8–10 message Instagram DM conversation showing the bot working well.
+The conversation should follow this natural arc:
+1. Prospect reaches out / replies to a story (1–2 messages)
+2. Bot warms them up, qualifies them with a single question at a time (3–4 messages)
+3. Prospect shows genuine interest, asks about price or how it works (1–2 messages)
+4. Bot answers naturally, then sends the booking link at the right moment (1–2 messages)
+
+Rules for the bot messages:
+- Short, casual, human (1–2 sentences max)
+- No emojis unless it feels natural
+- No corporate language, no "certainly!" or "great question!"
+- Sound like a real person, not a chatbot
+- Ask only ONE question at a time
+
+Return ONLY valid JSON in this exact format, no other text:
+{
+  "messages": [
+    {"role": "prospect", "text": "..."},
+    {"role": "bot", "text": "..."}
+  ]
+}`;
+
+    if (!openai) {
+      // Stub if no OpenAI key
+      return safeJson(res, 200, {
+        ok: true,
+        messages: [
+          { role: "prospect", text: "hey saw your story, what do you actually do?" },
+          { role: "bot", text: "hey — i help people sort their ${niche === "fitness" ? "training and get in proper shape" : "finances and build real income"}. what's the main thing you're trying to fix right now?" },
+          { role: "prospect", text: "honestly just not seeing results, been at it for months" },
+          { role: "bot", text: "makes sense. are you training consistently or is that part of the issue too?" },
+          { role: "prospect", text: "training yeah but diet is all over the place" },
+          { role: "bot", text: "that's usually it. have you ever had a proper plan built around your schedule?" },
+          { role: "prospect", text: "no never. how much does it cost?" },
+          { role: "bot", text: offerPrice ? `it's ${offerPrice}` : "depends on what you need — what's your situation like?" },
+          { role: "prospect", text: "that sounds reasonable actually. how do i get started?" },
+          { role: "bot", text: `use this to book in and we'll go through everything — ${bookingUrl}` },
+        ],
+      });
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      messages: [{ role: "user", content: promptContent }],
+      response_format: { type: "json_object" },
+      max_tokens: 1200,
+      temperature: 0.85,
+    });
+
+    const raw = completion.choices?.[0]?.message?.content || "{}";
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch { parsed = {}; }
+
+    const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
+    if (!messages.length) {
+      return safeJson(res, 500, { error: "AI returned an empty conversation. Try again." });
+    }
+
+    return safeJson(res, 200, { ok: true, messages });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+/**
+ * ===========================
  * COACH STATS
  * ===========================
  */
