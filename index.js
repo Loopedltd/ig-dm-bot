@@ -4164,7 +4164,7 @@ Return ONLY valid JSON in this exact format, no other text:
         ok: true,
         messages: [
           { role: "prospect", text: "hey saw your story, what do you actually do?" },
-          { role: "bot", text: "hey — i help people sort their ${niche === "fitness" ? "training and get in proper shape" : "finances and build real income"}. what's the main thing you're trying to fix right now?" },
+          { role: "bot", text: `hey — i help people sort their ${niche === "fitness" ? "training and get in proper shape" : "finances and build real income"}. what's the main thing you're trying to fix right now?` },
           { role: "prospect", text: "honestly just not seeing results, been at it for months" },
           { role: "bot", text: "makes sense. are you training consistently or is that part of the issue too?" },
           { role: "prospect", text: "training yeah but diet is all over the place" },
