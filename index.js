@@ -96,6 +96,20 @@ app.get("/stats", (req, res) => {
   return res.sendFile(path.join(__dirname, "coach", "stats.html"));
 });
 
+app.get("/settings", (req, res) => {
+  if (!isAppHost(req) && process.env.NODE_ENV === "production") {
+    return res.status(404).send("Not Found");
+  }
+  return res.sendFile(path.join(__dirname, "coach", "settings.html"));
+});
+
+app.get("/leads-page", (req, res) => {
+  if (!isAppHost(req) && process.env.NODE_ENV === "production") {
+    return res.status(404).send("Not Found");
+  }
+  return res.sendFile(path.join(__dirname, "coach", "leads-page.html"));
+});
+
 app.get("/set-password", (req, res) => {
   if (!isAppHost(req) && process.env.NODE_ENV === "production") {
     return res.status(404).send("Not Found");
@@ -2503,7 +2517,35 @@ async function setClientBotPaused({ clientId, enabled, reason, actor }) {
     .single();
 
   if (error) throw error;
+
+  // Bulk-update manual_override on all leads for this client
+  try {
+    await supabase
+      .from("leads")
+      .update({
+        manual_override: !!enabled,
+        manual_override_reason: enabled ? "Global pause" : null,
+        manual_override_by: actor,
+        manual_override_at: nowIso(),
+      })
+      .eq("client_id", clientId);
+  } catch (e) {
+    console.warn("setClientBotPaused: bulk lead override failed", e?.message || e);
+  }
+
   return data;
+}
+
+async function lookupIgName(accessToken, igPsid) {
+  try {
+    const resp = await fetch(
+      `https://graph.facebook.com/v19.0/${encodeURIComponent(igPsid)}?fields=name&access_token=${encodeURIComponent(accessToken)}`
+    );
+    const data = await resp.json().catch(() => ({}));
+    return data?.name || null;
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------
@@ -3705,7 +3747,7 @@ app.get("/coach/api/leads", requireCoach, async (req, res) => {
     const { data: leads, error } = await supabase
       .from("leads")
       .select(
-        "id,created_at,ig_psid,stage,booking_sent,call_completed,manual_override,manual_override_reason,manual_override_by,manual_override_at,last_inbound_at,last_outbound_at,email,phone,followup_sent"
+        "id,created_at,ig_psid,ig_name,stage,booking_sent,call_completed,manual_override,manual_override_reason,manual_override_by,manual_override_at,last_inbound_at,last_outbound_at,email,phone,followup_sent"
       )
       .eq("client_id", req.coach.client_id)
       .order("last_inbound_at", { ascending: false, nullsFirst: false })
@@ -4912,6 +4954,21 @@ log("ig_event_debug", {
             }
 
             lead = newLead;
+
+            // Background: fetch and store lead's display name
+            void (async () => {
+              try {
+                const acc = await getIgAccountByClientId(lead.client_id).catch(() => null);
+                if (!acc?.page_access_token) return;
+                const name = await lookupIgName(acc.page_access_token, senderId);
+                if (name) {
+                  await supabase.from("leads").update({ ig_name: name }).eq("id", lead.id);
+                  lead = { ...lead, ig_name: name };
+                }
+              } catch (e) {
+                console.warn("ig_name lookup failed:", e?.message || e);
+              }
+            })();
           }
 
           const { error: insertIncomingError } = await supabase

@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Settings — Looped</title>
+    <style>
+      :root{
+        --bg: #f7f8fb;
+        --panel: #ffffff;
+        --border: rgba(15, 23, 42, 0.10);
+        --border2: rgba(15, 23, 42, 0.14);
+        --text: #0f172a;
+        --muted: rgba(15, 23, 42, 0.62);
+        --inputbg: #ffffff;
+        --primary: #2d6bff;
+        --shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+        --shadow2: 0 1px 0 rgba(15, 23, 42, 0.04);
+        --ring: rgba(45, 107, 255, 0.22);
+        --okBg: rgba(2, 122, 72, 0.08);
+        --okBorder: rgba(2, 122, 72, 0.18);
+        --okText: #027a48;
+        --warnBg: rgba(181, 71, 8, 0.08);
+        --warnBorder: rgba(181, 71, 8, 0.18);
+        --warnText: #b54708;
+      }
+      body{ margin:0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+      .topbar{ display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border); background: rgba(255,255,255,0.78); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 10; }
+      .brand{ font-weight:800; letter-spacing: .2px; }
+      .btn{ border:1px solid var(--border2); background: #fff; color: var(--text); padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:700; font-size:13px; line-height:1; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; user-select:none; box-shadow: var(--shadow2); }
+      .btn:hover{ filter: brightness(0.99); box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08); }
+      .btn:active{ transform: translateY(0.5px); }
+      .btn.primary{ background: var(--primary); border: 1px solid rgba(45, 107, 255, 0.35); color: #fff; box-shadow: 0 8px 18px rgba(45, 107, 255, 0.22); }
+      .btn.primary:hover{ filter: brightness(1.02); }
+      .btn.small{ padding:8px 10px; border-radius:12px; font-size:12px; }
+      .btn.disabled{ opacity: 0.65; cursor: default; pointer-events: none; }
+      .wrap{ max-width: 900px; margin: 0 auto; padding: 28px 22px 60px; }
+      h1{ margin: 16px 0 6px; font-size: 34px; letter-spacing: -0.4px; color: var(--text); }
+      .sub{ color: var(--muted); font-size: 15px; margin-bottom: 18px; }
+      .card{ margin-top: 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 18px; box-shadow: var(--shadow); }
+      label{ display:block; margin-top: 14px; color: var(--muted); font-size: 13px; font-weight: 650; }
+      input, textarea, select{
+        width:100%; margin-top:6px; padding:12px 12px; border-radius: 12px;
+        border: 1px solid rgba(15, 23, 42, 0.12); background: var(--inputbg); color: var(--text);
+        outline:none; box-sizing:border-box; font-family: inherit; font-size: 14px;
+        transition: box-shadow .12s ease, border-color .12s ease;
+      }
+      select{
+        appearance: none; -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%230f172a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 12px center; background-size: 16px;
+        padding-right: 38px; cursor: pointer;
+      }
+      input::placeholder, textarea::placeholder{ color: rgba(15, 23, 42, 0.40); }
+      input:focus, textarea:focus, select:focus{ border-color: rgba(45, 107, 255, 0.55); box-shadow: 0 0 0 4px var(--ring); }
+      textarea{ min-height: 240px; font-family: inherit; font-size: 13px; line-height: 1.45; }
+      .row{ display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .row3{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+      .divider{ height:1px; background: rgba(15, 23, 42, 0.10); margin: 16px 0; }
+      .helper{ color: var(--muted); font-size: 13px; margin-top: 8px; }
+      .tip{ color: var(--muted); margin-top: 10px; font-size: 13px; }
+      .actions{ display:flex; gap: 10px; margin-top: 14px; justify-content: flex-end; }
+      .err{ color:#c0262d; margin-top:10px; display:none; white-space:pre-wrap; font-size:14px; }
+      .ok{ color:#0f766e; margin-top:10px; display:none; font-size:14px; }
+      .takeoverHeader{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+      .takeoverTitle{ font-weight:850; font-size:18px; letter-spacing: -0.2px; color: var(--text); }
+      .takeoverSub{ margin-top:6px; color: var(--muted); font-size: 13px; }
+      .takeoverTopLine{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+      .badge{ display:inline-flex; align-items:center; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:850; line-height:1; border:1px solid rgba(15, 23, 42, 0.12); background: rgba(15, 23, 42, 0.04); color: rgba(15, 23, 42, 0.78); }
+      .badge.connected{ border-color: var(--okBorder); background: var(--okBg); color: var(--okText); }
+      .badge.warn{ border-color: var(--warnBorder); background: var(--warnBg); color: var(--warnText); }
+      .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:12px; color: rgba(15, 23, 42, 0.55); word-break: break-all; }
+      .connectCardRow{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-top:12px; }
+      .connectLeft{ display:flex; flex-direction:column; gap:8px; min-width:0; flex:1; }
+      .connectRight{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
+      .connectMeta{ color: var(--muted); font-size: 13px; line-height: 1.5; }
+      .sectionLabel{ font-size: 11px; font-weight: 750; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); margin: 28px 0 8px; }
+      @media (max-width: 700px){
+        .row{ grid-template-columns: 1fr; }
+        .row3{ grid-template-columns: 1fr; }
+        h1{ font-size: 28px; }
+        .connectCardRow{ flex-direction:column; }
+        .connectRight{ justify-content:flex-end; width:100%; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="brand">Looped — Settings</div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a class="btn" href="/dashboard">Dashboard</a>
+        <a class="btn" href="/leads-page">Leads</a>
+        <button class="btn" id="logoutBtn">Logout</button>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <h1>Settings</h1>
+      <div class="sub">Configure your bot, triggers, offer details, and AI behaviour.</div>
+
+      <!-- Instagram Connection -->
+      <div class="card" id="instagramConnectionCard">
+        <div class="takeoverHeader">
+          <div>
+            <div class="takeoverTitle">Instagram Connection</div>
+          </div>
+        </div>
+        <div class="connectCardRow">
+          <div class="connectLeft">
+            <div class="takeoverTopLine">
+              <span class="badge warn" id="instagramConnectionBadge">Not connected</span>
+              <span class="mono" id="instagramConnectionMeta">No Instagram account connected yet.</span>
+            </div>
+            <div class="connectMeta">After connecting, your assistant will be able to receive and reply to Instagram DMs using your saved settings.</div>
+            <div class="connectMeta"><strong>Note:</strong> Meta may ask you to create a free <strong>Business Portfolio</strong>. This takes about 60 seconds and is required for Instagram automation tools.</div>
+          </div>
+          <div class="connectRight">
+            <button class="btn primary" id="connectInstagramBtn">Connect Instagram</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DM Trigger Automations -->
+      <div class="sectionLabel">Trigger Automations</div>
+      <div class="card" id="triggerAutomationCard">
+        <div class="takeoverHeader">
+          <div>
+            <div class="takeoverTitle">DM Trigger Automations</div>
+            <div class="takeoverSub">Prewritten openers sent automatically when someone replies to a story, comment, or messages a keyword.</div>
+          </div>
+        </div>
+
+        <div class="row3" style="margin-top:14px;">
+          <div>
+            <div class="takeoverTopLine" style="margin-bottom:8px;">
+              <span class="badge" id="storyReplyToggleBadge">Story reply OFF</span>
+            </div>
+            <label style="margin-top:0;">Story reply auto-DM</label>
+            <select id="story_reply_auto_dm_enabled">
+              <option value="false">Off</option>
+              <option value="true">On</option>
+            </select>
+            <label>Outbound message</label>
+            <textarea id="story_reply_auto_dm_text" placeholder="Example:&#10;Appreciate the reply - what are you trying to sort right now?" style="min-height:110px;"></textarea>
+            <div class="helper">Fires when someone replies to your story and opens a DM thread.</div>
+          </div>
+          <div>
+            <div class="takeoverTopLine" style="margin-bottom:8px;">
+              <span class="badge" id="commentReplyToggleBadge">Comment reply OFF</span>
+            </div>
+            <label style="margin-top:0;">Comment reply auto-DM</label>
+            <select id="comment_reply_auto_dm_enabled">
+              <option value="false">Off</option>
+              <option value="true">On</option>
+            </select>
+            <label>Outbound message</label>
+            <textarea id="comment_reply_auto_dm_text" placeholder="Example:&#10;Saw your comment - what are you trying to get help with?" style="min-height:110px;"></textarea>
+            <div class="helper">Fires when someone enters DMs from a post comment.</div>
+          </div>
+          <div>
+            <div class="takeoverTopLine" style="margin-bottom:8px;">
+              <span class="badge" id="keywordToggleBadge">Keyword DM OFF</span>
+            </div>
+            <label style="margin-top:0;">Keyword auto-DM</label>
+            <select id="keyword_auto_dm_enabled">
+              <option value="false">Off</option>
+              <option value="true">On</option>
+            </select>
+            <label>Trigger keyword</label>
+            <input id="keyword_trigger_text" placeholder="Example: START" />
+            <label>Outbound message</label>
+            <textarea id="keyword_auto_dm_text" placeholder="Example:&#10;Saw your message. What's the main thing you want help with?" style="min-height:80px;"></textarea>
+            <div class="helper">If your CTA says <strong>DM me "START"</strong>, this fires when they send that keyword.</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        <div class="tip">These are not AI replies — they are fixed openers you write yourself.</div>
+      </div>
+
+      <!-- Comment Keyword DM -->
+      <div class="card" id="commentKeywordCard">
+        <div class="takeoverHeader">
+          <div>
+            <div class="takeoverTitle">Comment Keyword Auto-DM</div>
+            <div class="takeoverSub">When someone comments a specific keyword on your post, send them a DM automatically and optionally reply publicly.</div>
+          </div>
+          <span class="badge" id="commentKeywordToggleBadge">Off</span>
+        </div>
+
+        <div class="row" style="margin-top:14px;">
+          <div>
+            <label style="margin-top:0;">Comment keyword auto-DM</label>
+            <select id="comment_keyword_dm_enabled">
+              <option value="false">Off</option>
+              <option value="true">On</option>
+            </select>
+            <label>Trigger keyword</label>
+            <input id="comment_keyword_trigger" placeholder="Example: FREE" />
+            <label>DM to send</label>
+            <textarea id="comment_keyword_dm_text" placeholder="Example:&#10;Hey - just sent you the details. What are you trying to sort?" style="min-height:90px;"></textarea>
+          </div>
+          <div>
+            <label style="margin-top:0;">Public comment reply</label>
+            <select id="comment_keyword_reply_enabled">
+              <option value="false">Off</option>
+              <option value="true">On</option>
+            </select>
+            <label>Public reply text</label>
+            <input id="comment_keyword_reply_text" placeholder="Example: Sent you a DM!" />
+            <div class="helper" style="margin-top:14px;">When public reply is on, the bot will also reply to the comment publicly so other viewers can see it.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Contact Collection -->
+      <div class="card" id="contactCollectionCard">
+        <div class="takeoverHeader">
+          <div>
+            <div class="takeoverTitle">Contact Collection</div>
+            <div class="takeoverSub">When on, the bot naturally asks leads for their email and phone during conversation and saves them.</div>
+          </div>
+          <span class="badge" id="contactCollectionBadge">Off</span>
+        </div>
+        <div style="margin-top:12px; max-width:320px;">
+          <label style="margin-top:0;">Collect email &amp; phone</label>
+          <select id="contact_collection_enabled">
+            <option value="false">Off</option>
+            <option value="true">On</option>
+          </select>
+          <div class="helper">Only asks once per lead. Never on the first message.</div>
+        </div>
+      </div>
+
+      <!-- Offer & Booking -->
+      <div class="sectionLabel">Offer &amp; Booking</div>
+      <div class="card">
+        <div class="row">
+          <div>
+            <label style="margin-top:0;">Booking URL</label>
+            <input id="booking_url" placeholder="https://calendly.com/yourname/15min" />
+          </div>
+          <div>
+            <label style="margin-top:0;">Alt Booking URL (optional)</label>
+            <input id="booking_url_alt" placeholder="https://…" />
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <label>What you do</label>
+        <textarea id="offer_what" placeholder="Example:&#10;I help men build a stronger physique and improve confidence through tailored online coaching." style="min-height:90px;"></textarea>
+        <label>What they get</label>
+        <textarea id="offer_features" placeholder="Example:&#10;- Custom training plan&#10;- Nutrition guidance&#10;- Weekly check-ins&#10;- Direct support" style="min-height:110px;"></textarea>
+        <label>Who it's for</label>
+        <textarea id="offer_audience" placeholder="Example:&#10;- Men who want to build muscle&#10;- Busy people who need structure&#10;- People who want accountability" style="min-height:100px;"></textarea>
+        <label>How it works</label>
+        <textarea id="offer_process" placeholder="Example:&#10;- Book a call&#10;- We go through your goals&#10;- If it's a fit, you get onboarded" style="min-height:100px;"></textarea>
+        <div class="helper">Fill all 4 properly. This gives the bot enough context to answer questions without guessing.</div>
+      </div>
+
+      <!-- Advanced offer context -->
+      <div class="sectionLabel">Advanced Offer Context</div>
+      <div class="card">
+        <label style="margin-top:0;">Main result / core outcome</label>
+        <textarea id="main_result" placeholder="Example:&#10;Help beginners lose body fat, build confidence, and finally train with structure." style="min-height:90px;"></textarea>
+        <div class="helper">What is the main end result people are buying?</div>
+
+        <label>Best fit leads</label>
+        <textarea id="best_fit_leads" placeholder="Example:&#10;- Beginners who need structure&#10;- People who have struggled staying consistent" style="min-height:110px;"></textarea>
+        <div class="helper">Tell the bot who is a strong fit so it knows when to lean in.</div>
+
+        <label>Not a fit / red flags</label>
+        <textarea id="not_a_fit" placeholder="Example:&#10;- People wanting instant results&#10;- People not willing to follow a plan" style="min-height:100px;"></textarea>
+        <div class="helper">This stops the bot sounding desperate and helps it handle bad-fit leads properly.</div>
+
+        <label>Common objections and how to handle them</label>
+        <textarea id="common_objections" placeholder="Example:&#10;Price: Reframe around value&#10;Not sure if it's for me: Ask what they're unsure about&#10;Need to think: Ask what they need cleared up" style="min-height:160px;"></textarea>
+        <div class="helper">Give the bot your preferred way of handling hesitation, price, timing, and trust issues.</div>
+
+        <label>When the bot should send the booking link</label>
+        <textarea id="closing_triggers" placeholder="Example:&#10;Send the link when they ask how to start, ask for the link, confirm they want to proceed, or ask price and still sound interested." style="min-height:130px;"></textarea>
+        <div class="helper">One of the most important fields — tells the bot when to stop chatting and close.</div>
+
+        <label>Urgency / why now</label>
+        <textarea id="urgency_reason" placeholder="Example:&#10;People come to me because they're tired of drifting, have a holiday coming up, or know they need structure now." style="min-height:100px;"></textarea>
+
+        <label>Trust builders / proof points</label>
+        <textarea id="trust_builders" placeholder="Example:&#10;- Personal support&#10;- Proven structure&#10;- Tailored plan&#10;- Real client results" style="min-height:110px;"></textarea>
+
+        <label>FAQ / key answers the bot should know</label>
+        <textarea id="faq" placeholder="Example:&#10;Check-ins: Weekly&#10;Support: DM during the week&#10;Calls: Onboarding only&#10;Start time: This week" style="min-height:160px;"></textarea>
+        <div class="helper">Quick answers for common questions so the bot replies clearly.</div>
+
+        <div class="divider"></div>
+
+        <label>Offer price</label>
+        <input id="offer_price" placeholder="e.g. £200 one-off, £1500/month, from £99" />
+        <div class="helper">Used when someone asks "how much is it?"</div>
+      </div>
+
+      <!-- AI Customisation -->
+      <div class="sectionLabel">AI Customisation</div>
+      <div class="card">
+        <label style="margin-top:0;">Instagram handle</label>
+        <input id="instagram_handle" placeholder="looped.ltd" />
+
+        <label>Niche</label>
+        <select id="niche">
+          <option value="generic">Generic coach</option>
+          <option value="fitness">Fitness coach</option>
+          <option value="money">Money coach</option>
+        </select>
+        <div class="helper">Controls the bot's default fallback style when your examples or offer info are thin.</div>
+
+        <div class="row" style="margin-top:14px;">
+          <div>
+            <label style="margin-top:0;">Tone</label>
+            <input id="tone" placeholder="e.g. direct, calm, blunt, friendly" />
+          </div>
+          <div>
+            <label style="margin-top:0;">Style</label>
+            <input id="style" placeholder="e.g. short, punchy, concise" />
+          </div>
+        </div>
+
+        <label>Vocabulary</label>
+        <input id="vocabulary" placeholder="e.g. casual, slangy, clean, coach-like" />
+        <div class="helper">These shape how the bot speaks. Example messages still matter most.</div>
+
+        <div class="divider"></div>
+
+        <label>How your bot should reply (system prompt override)</label>
+        <textarea id="system_prompt" placeholder="Example:&#10;Sound like a real coach in Instagram DMs, not support and not a chatbot.&#10;&#10;Rules:&#10;- Keep replies short and natural&#10;- Ask only one question at a time&#10;- Answer direct questions directly&#10;- Only send the booking link when they're ready"></textarea>
+        <div class="tip">Tip: keep it specific — tone, rules, what to do when asked price, when to send booking link.</div>
+
+        <div style="margin-top:14px;">
+          <button class="btn" id="generatePromptBtn">Generate Prompt</button>
+          <div id="promptStatus" class="helper" style="margin-top:6px;"></div>
+          <div id="promptLimitStatus" class="helper"></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <label>Example messages (your real DMs)</label>
+        <textarea id="example_messages" style="min-height:320px;">user: how much is it?
+assistant: it's £200 to get started then £90 after that
+
+user: what do you actually help with?
+assistant: i help beginners get in shape properly with a plan, support and accountability
+
+user: i'm not sure if it's for me
+assistant: fair, what's making you think that
+
+user: i've never really done gym before
+assistant: that's calm, most people haven't. what are you actually trying to get out of it
+
+user: £200 is a bit much
+assistant: fair, what were you expecting to pay
+
+user: i'll think about it
+assistant: fair, what's holding you back
+
+user: not sure it'll work
+assistant: what part are you unsure about
+
+user: i don't have time
+assistant: how much time do you actually have realistically
+
+user: sounds good
+assistant: good, want me to send the link
+
+user: send me the link
+assistant: use this and get booked in
+</textarea>
+        <div class="tip">Tip: This is the fastest way to make the bot sound like you. Real messages beat prompts.</div>
+        <div class="tip">Best format: real objections, real price replies, real closing lines, real "not sure" conversations.</div>
+
+        <div class="actions">
+          <button class="btn primary" id="saveBtn">Save settings</button>
+        </div>
+        <div class="err" id="err"></div>
+        <div class="ok" id="ok">Settings saved ✅</div>
+      </div>
+    </div>
+
+    <script src="./settings.js"></script>
+  </body>
+</html>

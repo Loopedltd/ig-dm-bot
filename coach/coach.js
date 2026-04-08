@@ -658,6 +658,7 @@ function wireGlobalPauseButton() {
         });
 
         await loadGlobalPauseStatus();
+        await loadManualTakeovers(); // reload leads to reflect bulk override change
       } catch (e) {
         setErr(String(e.message || e));
       } finally {
@@ -695,9 +696,10 @@ const STAGE_LABELS = {
 };
 
 function leadDisplayName(lead) {
+  if (lead.ig_name) return lead.ig_name;
   if (lead.email) return lead.email;
   const psid = String(lead.ig_psid || "");
-  return psid ? `ID ···${psid.slice(-6)}` : "Unknown";
+  return psid ? `···${psid.slice(-6)}` : "Unknown";
 }
 
 function leadLastActivity(lead) {
@@ -722,8 +724,11 @@ function fmtRelative(iso) {
 
 function renderLeadRow(lead) {
   const name = leadDisplayName(lead);
-  const phone = lead.phone ? lead.phone : null;
-  const subLine = phone ? phone : `psid ${String(lead.ig_psid || "").slice(-8)}`;
+  const subParts = [];
+  if (lead.email) subParts.push(lead.email);
+  if (lead.phone) subParts.push(lead.phone);
+  if (!subParts.length) subParts.push(`id ···${String(lead.ig_psid || "").slice(-6)}`);
+  const subLine = subParts.join(" · ");
   const stage = lead.stage || "new";
   const stageLabel = STAGE_LABELS[stage] || stage;
   const lastMsg = fmtRelative(leadLastActivity(lead));
@@ -768,10 +773,11 @@ function applyLeadsFilters() {
 
   if (searchVal) {
     filtered = filtered.filter((l) => {
-      const name = leadDisplayName(l).toLowerCase();
+      const name = String(l.ig_name || "").toLowerCase();
+      const email = String(l.email || "").toLowerCase();
       const psid = String(l.ig_psid || "").toLowerCase();
       const phone = String(l.phone || "").toLowerCase();
-      return name.includes(searchVal) || psid.includes(searchVal) || phone.includes(searchVal);
+      return name.includes(searchVal) || email.includes(searchVal) || psid.includes(searchVal) || phone.includes(searchVal);
     });
   }
 
@@ -823,6 +829,10 @@ function wireLeadsSearchAndFilter() {
 
   if (searchEl && !searchEl.__wired) {
     searchEl.__wired = true;
+    // update placeholder to reflect ig_name usage
+    if (searchEl.placeholder && searchEl.placeholder.includes("email")) {
+      searchEl.placeholder = "Search by name, email or ID…";
+    }
     searchEl.addEventListener("input", () => renderLeadsList());
   }
 
@@ -935,6 +945,7 @@ function wireBroadcast() {
   const loadBtn = qs("#loadBroadcastLeadsBtn");
   const sendBtn = qs("#sendBroadcastBtn");
   const statusEl = qs("#broadcastStatus");
+  const stageFilter = qs("#broadcastStageFilter");
 
   if (loadBtn && !loadBtn.__wired) {
     loadBtn.__wired = true;
@@ -950,6 +961,16 @@ function wireBroadcast() {
         loadBtn.disabled = false;
         loadBtn.textContent = "Load leads";
       }
+    });
+  }
+
+  // Auto-reload when stage filter changes (fix: was not reloading before)
+  if (stageFilter && !stageFilter.__wired) {
+    stageFilter.__wired = true;
+    stageFilter.addEventListener("change", async () => {
+      const listEl = qs("#broadcastLeadList");
+      if (!listEl || listEl.style.display === "none") return; // only reload if already loaded
+      await loadBroadcastLeads().catch(() => {});
     });
   }
 
@@ -1053,483 +1074,24 @@ function wireQueueRefreshButton() {
 }
 
   async function loadDashboard() {
-const bookingEl = qs("#booking_url");
-const bookingAltEl = qs("#booking_url_alt");
-const igEl = qs("#instagram_handle");
-const nicheEl = qs("#niche");
-const toneEl = qs("#tone");
-const styleEl = qs("#style");
-const vocabularyEl = qs("#vocabulary");
-const promptEl = qs("#system_prompt");
-const saveBtn = qs("#saveBtn");
-const offerWhatEl = qs("#offer_what");
-const offerFeaturesEl = qs("#offer_features");
-const offerAudienceEl = qs("#offer_audience");
-const offerProcessEl = qs("#offer_process");
-const mainResultEl = qs("#main_result");
-const bestFitLeadsEl = qs("#best_fit_leads");
-const notAFitEl = qs("#not_a_fit");
-const commonObjectionsEl = qs("#common_objections");
-const closingTriggersEl = qs("#closing_triggers");
-const urgencyReasonEl = qs("#urgency_reason");
-const trustBuildersEl = qs("#trust_builders");
-const faqEl = qs("#faq");
-const offerPriceEl = qs("#offer_price");
-
-const storyReplyAutoDmEnabledEl = qs("#story_reply_auto_dm_enabled");
-const storyReplyAutoDmTextEl = qs("#story_reply_auto_dm_text");
-const commentReplyAutoDmEnabledEl = qs("#comment_reply_auto_dm_enabled");
-const commentReplyAutoDmTextEl = qs("#comment_reply_auto_dm_text");
-const keywordAutoDmEnabledEl = qs("#keyword_auto_dm_enabled");
-const keywordTriggerTextEl = qs("#keyword_trigger_text");
-const keywordAutoDmTextEl = qs("#keyword_auto_dm_text");
-const storyReplyToggleBadgeEl = qs("#storyReplyToggleBadge");
-const commentReplyToggleBadgeEl = qs("#commentReplyToggleBadge");
-const keywordToggleBadgeEl = qs("#keywordToggleBadge");
-// Feature 1 — comment keyword DM
-const commentKeywordDmEnabledEl = qs("#comment_keyword_dm_enabled");
-const commentKeywordTriggerEl = qs("#comment_keyword_trigger");
-const commentKeywordDmTextEl = qs("#comment_keyword_dm_text");
-const commentKeywordReplyEnabledEl = qs("#comment_keyword_reply_enabled");
-const commentKeywordReplyTextEl = qs("#comment_keyword_reply_text");
-const commentKeywordToggleBadgeEl = qs("#commentKeywordToggleBadge");
-// Feature 2 — contact collection
-const contactCollectionEnabledEl = qs("#contact_collection_enabled");
-const contactCollectionBadgeEl = qs("#contactCollectionBadge");
-
-if (!promptEl && !saveBtn) return;
-
     if (!getToken()) {
       window.location.href = "/coach/login.html";
       return;
     }
-await loadPromptUsageStatus();
 
-    const cfg = await apiFetch(`${API}/config`, { method: "GET" });
-    const config = cfg?.config || {};
+    wireTopbarButtons();
+    wireGlobalPauseButton();
+    wireManualTakeoversRefreshButton();
+    wireBroadcast();
+    wireQueueRefreshButton();
 
-if (bookingEl) bookingEl.value = config.booking_url || "";
-if (bookingAltEl) bookingAltEl.value = config.booking_url_alt || "";
-if (igEl) igEl.value = config.instagram_handle || "";
-if (nicheEl) nicheEl.value = config.niche || "generic";
-if (toneEl) toneEl.value = config.tone || "";
-if (styleEl) styleEl.value = config.style || "";
-if (vocabularyEl) vocabularyEl.value = config.vocabulary || "";
-if (promptEl) promptEl.value = config.system_prompt || "";
-
-if (storyReplyAutoDmEnabledEl) {
-  storyReplyAutoDmEnabledEl.value = config.story_reply_auto_dm_enabled ? "true" : "false";
-}
-
-if (storyReplyAutoDmTextEl) {
-  storyReplyAutoDmTextEl.value = config.story_reply_auto_dm_text || "";
-}
-
-if (commentReplyAutoDmEnabledEl) {
-  commentReplyAutoDmEnabledEl.value = config.comment_reply_auto_dm_enabled ? "true" : "false";
-}
-
-if (commentReplyAutoDmTextEl) {
-  commentReplyAutoDmTextEl.value = config.comment_reply_auto_dm_text || "";
-}
-
-if (keywordAutoDmEnabledEl) {
-  keywordAutoDmEnabledEl.value = config.keyword_auto_dm_enabled ? "true" : "false";
-}
-
-if (keywordTriggerTextEl) {
-  keywordTriggerTextEl.value = config.keyword_trigger_text || "";
-}
-
-if (keywordAutoDmTextEl) {
-  keywordAutoDmTextEl.value = config.keyword_auto_dm_text || "";
-}
-
-if (storyReplyToggleBadgeEl) {
-  const on = !!config.story_reply_auto_dm_enabled;
-  storyReplyToggleBadgeEl.className = on ? "badge connected" : "badge";
-  storyReplyToggleBadgeEl.textContent = on
-    ? "Story reply opener ON"
-    : "Story reply opener OFF";
-}
-
-if (commentReplyToggleBadgeEl) {
-  const on = !!config.comment_reply_auto_dm_enabled;
-  commentReplyToggleBadgeEl.className = on ? "badge connected" : "badge";
-  commentReplyToggleBadgeEl.textContent = on
-    ? "Comment reply opener ON"
-    : "Comment reply opener OFF";
-}
-
-if (keywordToggleBadgeEl) {
-  const on = !!config.keyword_auto_dm_enabled;
-  keywordToggleBadgeEl.className = on ? "badge connected" : "badge";
-  keywordToggleBadgeEl.textContent = on
-    ? "Keyword opener ON"
-    : "Keyword opener OFF";
-}
-
-// Feature 1 — load comment keyword DM
-if (commentKeywordDmEnabledEl) {
-  commentKeywordDmEnabledEl.value = config.comment_keyword_dm_enabled ? "true" : "false";
-}
-if (commentKeywordTriggerEl) {
-  commentKeywordTriggerEl.value = config.comment_keyword_trigger || "";
-}
-if (commentKeywordDmTextEl) {
-  commentKeywordDmTextEl.value = config.comment_keyword_dm_text || "";
-}
-if (commentKeywordReplyEnabledEl) {
-  commentKeywordReplyEnabledEl.value = config.comment_keyword_reply_enabled ? "true" : "false";
-}
-if (commentKeywordReplyTextEl) {
-  commentKeywordReplyTextEl.value = config.comment_keyword_reply_text || "";
-}
-if (commentKeywordToggleBadgeEl) {
-  const on = !!config.comment_keyword_dm_enabled;
-  commentKeywordToggleBadgeEl.className = on ? "badge connected" : "badge";
-  commentKeywordToggleBadgeEl.textContent = on ? "Comment keyword ON" : "Comment keyword OFF";
-}
-
-// Feature 2 — load contact collection
-if (contactCollectionEnabledEl) {
-  contactCollectionEnabledEl.value = config.contact_collection_enabled ? "true" : "false";
-}
-if (contactCollectionBadgeEl) {
-  const on = !!config.contact_collection_enabled;
-  contactCollectionBadgeEl.className = on ? "badge connected" : "badge";
-  contactCollectionBadgeEl.textContent = on ? "On" : "Off";
-}
-
-const savedOffer = String(config.offer_description || "");
-
-function extractSection(label, nextLabel) {
-  const regex = nextLabel
-    ? new RegExp(`${label}:\\s*([\\s\\S]*?)\\n\\n${nextLabel}:`, "i")
-    : new RegExp(`${label}:\\s*([\\s\\S]*)$`, "i");
-
-  const match = savedOffer.match(regex);
-  return match ? String(match[1] || "").trim() : "";
-}
-
-function extractSingleSection(label) {
-  const regex = new RegExp(`${label}:\\s*([\\s\\S]*?)(?=\\n\\n[A-Z][^\\n]*:|$)`, "i");
-  const match = savedOffer.match(regex);
-  return match ? String(match[1] || "").trim() : "";
-}
-
-if (offerWhatEl) {
-  offerWhatEl.value =
-    config.what_you_do || extractSection("What you do", "What they get");
-}
-
-if (offerFeaturesEl) {
-  offerFeaturesEl.value =
-    config.what_they_get || extractSection("What they get", "Who it's for");
-}
-
-if (offerAudienceEl) {
-  offerAudienceEl.value =
-    config.who_its_for || extractSection("Who it's for", "How it works");
-}
-
-if (offerProcessEl) {
-  offerProcessEl.value =
-    config.how_it_works || extractSingleSection("How it works");
-}
-if (mainResultEl) {
-  mainResultEl.value = config.main_result || extractSingleSection("Main result");
-}
-
-if (bestFitLeadsEl) {
-  bestFitLeadsEl.value =
-    config.best_fit_leads || extractSingleSection("Best fit leads");
-}
-
-if (notAFitEl) {
-  notAFitEl.value =
-    config.not_a_fit || extractSingleSection("Not a fit");
-}
-
-if (commonObjectionsEl) {
-  commonObjectionsEl.value =
-    config.common_objections || extractSingleSection("Common objections");
-}
-
-if (closingTriggersEl) {
-  closingTriggersEl.value =
-    config.closing_triggers || extractSingleSection("Closing triggers");
-}
-
-if (urgencyReasonEl) {
-  urgencyReasonEl.value =
-    config.urgency_reason || extractSingleSection("Urgency / why now");
-}
-
-if (trustBuildersEl) {
-  trustBuildersEl.value =
-    config.trust_builders || extractSingleSection("Trust builders");
-}
-
-if (faqEl) {
-  faqEl.value = config.faq || extractSingleSection("FAQ");
-}
-if (offerPriceEl) offerPriceEl.value = config.offer_price || "";
-
-const exampleEl = qs("#example_messages");
-if (exampleEl) {
-  exampleEl.value = config.example_messages || getDefaultExampleMessages();
-}
-wireInstagramConnectButton();
-wireGeneratePromptButton();
-wireGlobalPauseButton();
-wireManualTakeoversRefreshButton();
-wireBroadcast();
-wireQueueRefreshButton();
-await Promise.allSettled([
-  loadInstagramConnectionStatus(),
-  loadPromptUsageStatus(),
-  loadGlobalPauseStatus(),
-  loadManualTakeovers(),
-  loadQueueStatus(),
-]);
-
-    if (saveBtn && !saveBtn.__wired) {
-      saveBtn.__wired = true;
-
-      saveBtn.addEventListener("click", async () => {
-        try {
-          clearErr();
-
-const booking_url = bookingEl ? String(bookingEl.value || "").trim() : "";
-const booking_url_alt = bookingAltEl
-  ? String(bookingAltEl.value || "").trim()
-  : "";
-const instagram_handle = igEl ? String(igEl.value || "").trim() : "";
-const niche = nicheEl ? String(nicheEl.value || "generic").trim() : "generic";
-const tone = toneEl ? String(toneEl.value || "").trim() : "";
-const style = styleEl ? String(styleEl.value || "").trim() : "";
-const vocabulary = vocabularyEl ? String(vocabularyEl.value || "").trim() : "";
-const system_prompt = promptEl ? String(promptEl.value || "").trim() : "";
-const rawExamples = exampleEl ? String(exampleEl.value || "").trim() : "";
-const offer_what = offerWhatEl ? String(offerWhatEl.value || "").trim() : "";
-const offer_features = offerFeaturesEl ? String(offerFeaturesEl.value || "").trim() : "";
-const offer_audience = offerAudienceEl ? String(offerAudienceEl.value || "").trim() : "";
-const offer_process = offerProcessEl ? String(offerProcessEl.value || "").trim() : "";
-const main_result = mainResultEl ? String(mainResultEl.value || "").trim() : "";
-const best_fit_leads = bestFitLeadsEl ? String(bestFitLeadsEl.value || "").trim() : "";
-const not_a_fit = notAFitEl ? String(notAFitEl.value || "").trim() : "";
-const common_objections = commonObjectionsEl ? String(commonObjectionsEl.value || "").trim() : "";
-const closing_triggers = closingTriggersEl ? String(closingTriggersEl.value || "").trim() : "";
-const urgency_reason = urgencyReasonEl ? String(urgencyReasonEl.value || "").trim() : "";
-const trust_builders = trustBuildersEl ? String(trustBuildersEl.value || "").trim() : "";
-const faq = faqEl ? String(faqEl.value || "").trim() : "";
-const offer_price = offerPriceEl ? String(offerPriceEl.value || "").trim() : "";
-
-const story_reply_auto_dm_enabled =
-  storyReplyAutoDmEnabledEl
-    ? String(storyReplyAutoDmEnabledEl.value || "false") === "true"
-    : false;
-
-const story_reply_auto_dm_text =
-  storyReplyAutoDmTextEl
-    ? String(storyReplyAutoDmTextEl.value || "").trim()
-    : "";
-
-const comment_reply_auto_dm_enabled =
-  commentReplyAutoDmEnabledEl
-    ? String(commentReplyAutoDmEnabledEl.value || "false") === "true"
-    : false;
-
-const comment_reply_auto_dm_text =
-  commentReplyAutoDmTextEl
-    ? String(commentReplyAutoDmTextEl.value || "").trim()
-    : "";
-
-const keyword_auto_dm_enabled =
-  keywordAutoDmEnabledEl
-    ? String(keywordAutoDmEnabledEl.value || "false") === "true"
-    : false;
-
-const keyword_trigger_text =
-  keywordTriggerTextEl
-    ? String(keywordTriggerTextEl.value || "").trim()
-    : "";
-
-const keyword_auto_dm_text =
-  keywordAutoDmTextEl
-    ? String(keywordAutoDmTextEl.value || "").trim()
-    : "";
-
-if (!isValidUrl(booking_url)) {
-  setErr("Booking URL must be a valid http or https URL.");
-  return;
-}
-
-if (!isValidUrl(booking_url_alt)) {
-  setErr("Alt Booking URL must be a valid http or https URL.");
-  return;
-}
-
-if (!isValidIgHandle(instagram_handle)) {
-  setErr("Instagram handle format is invalid.");
-  return;
-}
-if (story_reply_auto_dm_enabled && !story_reply_auto_dm_text) {
-  setErr("Add the story reply outbound message or turn Story reply auto-DM off.");
-  return;
-}
-
-if (comment_reply_auto_dm_enabled && !comment_reply_auto_dm_text) {
-  setErr("Add the comment reply outbound message or turn Comment reply auto-DM off.");
-  return;
-}
-
-if (keyword_auto_dm_enabled && !keyword_trigger_text) {
-  setErr("Add the trigger phrase or turn Keyword auto-DM off.");
-  return;
-}
-
-if (keyword_auto_dm_enabled && !keyword_auto_dm_text) {
-  setErr("Add the keyword outbound message or turn Keyword auto-DM off.");
-  return;
-}
-
-const comment_keyword_dm_enabled = commentKeywordDmEnabledEl
-  ? String(commentKeywordDmEnabledEl.value) === "true"
-  : false;
-if (comment_keyword_dm_enabled) {
-  const ckTrigger = commentKeywordTriggerEl ? String(commentKeywordTriggerEl.value || "").trim() : "";
-  const ckDmText = commentKeywordDmTextEl ? String(commentKeywordDmTextEl.value || "").trim() : "";
-  if (!ckTrigger) {
-    setErr("Add the comment keyword trigger or turn Comment keyword auto-DM off.");
-    return;
-  }
-  if (!ckDmText) {
-    setErr("Add the comment keyword DM text or turn Comment keyword auto-DM off.");
-    return;
-  }
-  const ckReplyEnabled = commentKeywordReplyEnabledEl
-    ? String(commentKeywordReplyEnabledEl.value) === "true"
-    : false;
-  if (ckReplyEnabled) {
-    const ckReplyText = commentKeywordReplyTextEl ? String(commentKeywordReplyTextEl.value || "").trim() : "";
-    if (!ckReplyText) {
-      setErr("Add the public reply text or turn the public comment reply off.");
-      return;
-    }
-  }
-}
-
-const offer_description = buildStructuredCoachContext({
-  offer_what,
-  offer_features,
-  offer_audience,
-  offer_process,
-  main_result,
-  best_fit_leads,
-  not_a_fit,
-  common_objections,
-  closing_triggers,
-  urgency_reason,
-  trust_builders,
-  faq,
-});
-
-let example_messages = "";
-
-if (!rawExamples.trim()) {
-  // ✅ fallback to default examples
-  example_messages = getDefaultExampleMessages();
-} else {
-  const parsedExamples = parseExampleMessages(rawExamples);
-
-  if (!parsedExamples.ok) {
-    setErr(parsedExamples.error);
-    return;
+    await Promise.allSettled([
+      loadGlobalPauseStatus(),
+      loadManualTakeovers(),
+      loadQueueStatus(),
+    ]);
   }
 
-  example_messages = parsedExamples.value;
-}
-
-if (!system_prompt && !offer_description && !example_messages) {
-  setErr("Add at least some context — examples, offer details, FAQs, objections, or a prompt.");
-  return;
-}
-
-          saveBtn.disabled = true;
-          saveBtn.style.opacity = "0.75";
-
-const payload = {
-  booking_url: booking_url || null,
-  booking_url_alt: booking_url_alt || null,
-  instagram_handle: instagram_handle || null,
-  niche: niche || "generic",
-  tone: tone || null,
-  style: style || null,
-  vocabulary: vocabulary || null,
-  system_prompt,
-  example_messages,
-  offer_description: offer_description || null,
-  offer_price: offer_price || null,
-  what_you_do: offer_what || null,
-  what_they_get: offer_features || null,
-  who_its_for: offer_audience || null,
-  how_it_works: offer_process || null,
-  main_result: main_result || null,
-  best_fit_leads: best_fit_leads || null,
-  not_a_fit: not_a_fit || null,
-  common_objections: common_objections || null,
-  closing_triggers: closing_triggers || null,
-  urgency_reason: urgency_reason || null,
-  trust_builders: trust_builders || null,
-  faq: faq || null,
-
-story_reply_auto_dm_enabled,
-story_reply_auto_dm_text: story_reply_auto_dm_text || null,
-comment_reply_auto_dm_enabled,
-comment_reply_auto_dm_text: comment_reply_auto_dm_text || null,
-keyword_auto_dm_enabled,
-keyword_trigger_text: keyword_trigger_text || null,
-keyword_auto_dm_text: keyword_auto_dm_text || null,
-
-// Feature 1 — comment keyword DM
-comment_keyword_dm_enabled: commentKeywordDmEnabledEl
-  ? String(commentKeywordDmEnabledEl.value) === "true"
-  : false,
-comment_keyword_trigger: commentKeywordTriggerEl
-  ? String(commentKeywordTriggerEl.value || "").trim() || null
-  : null,
-comment_keyword_dm_text: commentKeywordDmTextEl
-  ? String(commentKeywordDmTextEl.value || "").trim() || null
-  : null,
-comment_keyword_reply_enabled: commentKeywordReplyEnabledEl
-  ? String(commentKeywordReplyEnabledEl.value) === "true"
-  : false,
-comment_keyword_reply_text: commentKeywordReplyTextEl
-  ? String(commentKeywordReplyTextEl.value || "").trim() || null
-  : null,
-
-// Feature 2 — contact collection
-contact_collection_enabled: contactCollectionEnabledEl
-  ? String(contactCollectionEnabledEl.value) === "true"
-  : false,
-};
-          await apiFetch(`${API}/config`, {
-            method: "POST",
-            body: JSON.stringify(payload),
-          });
-
-          window.location.href = "/coach/saved.html";
-        } catch (e) {
-          setErr(String(e.message || e));
-        } finally {
-          saveBtn.disabled = false;
-          saveBtn.style.opacity = "1";
-        }
-      });
-    }
-  }
 
   wireTopbarButtons();
   loadDashboard();
