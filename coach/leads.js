@@ -39,7 +39,7 @@
     if (lead.ig_name) return lead.ig_name;
     if (lead.email) return lead.email;
     const psid = String(lead.ig_psid || "");
-    return psid ? `···${psid.slice(-6)}` : "Unknown";
+    return psid ? `User ${psid.slice(-6)}` : "Unknown";
   }
 
   async function apiFetch(path, opts = {}) {

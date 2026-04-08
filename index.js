@@ -2642,7 +2642,9 @@ app.get("/coach/api/instagram/status", requireCoach, async (req, res) => {
       .select("ig_user_id, ig_username, page_id, is_active")
       .eq("client_id", req.coach.client_id)
       .eq("is_active", true)
-      .single();
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (error || !data) {
       return safeJson(res, 200, {
