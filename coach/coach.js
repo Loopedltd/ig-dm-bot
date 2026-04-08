@@ -341,10 +341,11 @@ function wireInstagramConnectButton() {
   if (!btn || btn.__wired) return;
   btn.__wired = true;
 
-  btn.addEventListener("click", async () => {
-    try {
-      clearErr();
+  const errEl = qs("#instagramConnectError");
 
+  btn.addEventListener("click", async () => {
+    if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+    try {
       btn.disabled = true;
       btn.style.opacity = "0.75";
       btn.textContent = "Opening Instagram…";
@@ -359,7 +360,9 @@ function wireInstagramConnectButton() {
 
       window.location.href = data.url;
     } catch (e) {
-      setErr(String(e.message || e));
+      const msg = String(e.message || e);
+      if (errEl) { errEl.textContent = msg; errEl.style.display = "block"; }
+      else { setErr(msg); }
       btn.disabled = false;
       btn.style.opacity = "1";
       btn.textContent = "Connect Instagram";
