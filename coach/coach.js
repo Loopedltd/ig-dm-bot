@@ -1080,12 +1080,14 @@ function wireQueueRefreshButton() {
     }
 
     wireTopbarButtons();
+    wireInstagramConnectButton();
     wireGlobalPauseButton();
     wireManualTakeoversRefreshButton();
     wireBroadcast();
     wireQueueRefreshButton();
 
     await Promise.allSettled([
+      loadInstagramConnectionStatus(),
       loadGlobalPauseStatus(),
       loadManualTakeovers(),
       loadQueueStatus(),
