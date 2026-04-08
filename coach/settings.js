@@ -517,6 +517,21 @@
     });
   }
 
+  // ── Expand/collapse optional section ─────────────────────────────────────
+
+  function wireExpandToggle() {
+    const toggle = qs("#expandToggle");
+    const body = qs("#expandBody");
+    const chevron = qs("#expandChevron");
+    if (!toggle || !body || !chevron) return;
+
+    toggle.addEventListener("click", () => {
+      const isOpen = body.classList.contains("open");
+      body.classList.toggle("open", !isOpen);
+      chevron.classList.toggle("open", !isOpen);
+    });
+  }
+
   // ── Logout ────────────────────────────────────────────────────────────────
 
   function wireLogout() {
@@ -541,6 +556,7 @@
     wireInstagramConnectButton();
     wireSaveButton();
     wireGeneratePromptButton();
+    wireExpandToggle();
     wireBadges(); // wire change listeners before loadConfig populates values
 
     await Promise.allSettled([
@@ -551,5 +567,15 @@
 
     // Sync badge display after config values are loaded into selects
     wireBadges();
+
+    // Auto-expand optional section if any optional fields are already filled
+    const optionalIds = ["offer_what","offer_features","offer_audience","offer_process","main_result","best_fit_leads","not_a_fit","common_objections","closing_triggers","urgency_reason","trust_builders","faq"];
+    const hasOptional = optionalIds.some((id) => String(qs(`#${id}`)?.value || "").trim());
+    if (hasOptional) {
+      const body = qs("#expandBody");
+      const chevron = qs("#expandChevron");
+      if (body) body.classList.add("open");
+      if (chevron) chevron.classList.add("open");
+    }
   });
 })();
