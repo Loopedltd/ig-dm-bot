@@ -363,6 +363,98 @@ input:focus, textarea:focus, select:focus{
         line-height: 1.5;
       }
 
+      /* ---- Lead toggle switch ---- */
+      .leadToggle{
+        position:relative;
+        display:inline-block;
+        width:38px;
+        height:22px;
+        flex-shrink:0;
+      }
+      .leadToggle input{ opacity:0; width:0; height:0; }
+      .leadToggleSlider{
+        position:absolute;
+        inset:0;
+        background:rgba(15,23,42,0.14);
+        border-radius:999px;
+        cursor:pointer;
+        transition:background .18s;
+      }
+      .leadToggleSlider::before{
+        content:"";
+        position:absolute;
+        width:16px;
+        height:16px;
+        left:3px;
+        top:3px;
+        background:#fff;
+        border-radius:50%;
+        transition:transform .18s;
+        box-shadow:0 1px 3px rgba(0,0,0,.2);
+      }
+      .leadToggle input:checked + .leadToggleSlider{
+        background:var(--primary);
+      }
+      .leadToggle input:checked + .leadToggleSlider::before{
+        transform:translateX(16px);
+      }
+      .leadToggle input:disabled + .leadToggleSlider{
+        opacity:0.5;
+        cursor:default;
+      }
+
+      /* ---- Stage badge colours ---- */
+      .stageBadge{ font-size:11px; }
+      .stageBadge.stage-new{ background:rgba(15,23,42,0.04); color:rgba(15,23,42,0.6); border-color:rgba(15,23,42,0.1); }
+      .stageBadge.stage-engaged{ background:rgba(45,107,255,0.07); color:#1d4ed8; border-color:rgba(45,107,255,0.18); }
+      .stageBadge.stage-high_intent{ background:rgba(124,58,237,0.07); color:#6d28d9; border-color:rgba(124,58,237,0.18); }
+      .stageBadge.stage-booking_pushed{ background:rgba(2,122,72,0.07); color:#027a48; border-color:rgba(2,122,72,0.16); }
+      .stageBadge.stage-booked{ background:rgba(2,122,72,0.12); color:#027a48; border-color:rgba(2,122,72,0.22); }
+      .stageBadge.stage-lost{ background:rgba(181,71,8,0.07); color:#b54708; border-color:rgba(181,71,8,0.18); }
+
+      /* ---- Lead row layout ---- */
+      .leadRow{
+        display:grid;
+        grid-template-columns: 1fr auto auto auto;
+        align-items:center;
+        gap:12px;
+        padding:12px 14px;
+        border:1px solid var(--border);
+        background:#fff;
+        border-radius:14px;
+      }
+      .leadRow:hover{ background:rgba(15,23,42,0.012); }
+      .leadIdent{ min-width:0; }
+      .leadName{
+        font-size:14px;
+        font-weight:700;
+        color:var(--text);
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+      }
+      .leadSub{
+        font-size:12px;
+        color:var(--muted);
+        margin-top:2px;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+      }
+      .leadToggleWrap{
+        display:flex;
+        align-items:center;
+        gap:7px;
+        flex-shrink:0;
+      }
+      .leadToggleLabel{
+        font-size:12px;
+        font-weight:650;
+        color:var(--muted);
+        width:32px;
+        text-align:right;
+      }
+
       @media (max-width: 900px){
         .row{ grid-template-columns: 1fr; }
         h1{ font-size: 28px; }
@@ -372,6 +464,7 @@ input:focus, textarea:focus, select:focus{
         .globalRight{ justify-content:flex-end; width:100%; }
         .connectCardRow{ flex-direction:column; }
         .connectRight{ justify-content:flex-end; width:100%; }
+        .leadRow{ grid-template-columns: 1fr auto auto; }
       }
       @media (max-width: 1080px) and (min-width: 901px){
         .row[style*="1fr 1fr 1fr 1fr"]{ grid-template-columns: 1fr 1fr !important; }
@@ -1015,23 +1108,37 @@ Hey — just checking in. If you're still thinking about it, happy to answer any
         </div>
       </div>
 
-      <div class="card" id="manualTakeoversCard">
+      <div class="card" id="leadsCard">
         <div class="takeoverHeader">
           <div>
-            <div class="takeoverTitle">Manual Takeovers</div>
+            <div class="takeoverTitle">Leads</div>
             <div class="takeoverSub">
-              If you reply manually on Instagram, the bot pauses for that lead. You can resume it here.
+              All leads for your account. Toggle the bot on or off per lead. If you reply manually on Instagram, the bot pauses automatically and resumes after 24 hours.
             </div>
           </div>
-          <button class="btn small" id="refreshTakeoversBtn">Refresh list</button>
+          <button class="btn small" id="refreshTakeoversBtn">Refresh</button>
         </div>
 
-        <div class="takeoverList" id="takeoverList">
+        <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+          <input
+            id="leadsSearch"
+            placeholder="Search by email or ID…"
+            style="max-width:240px; margin-top:0; padding:9px 12px; font-size:13px;"
+          />
+          <select id="leadsFilter" style="max-width:160px; margin-top:0; padding:9px 12px; font-size:13px;">
+            <option value="all">All leads</option>
+            <option value="active">Bot active</option>
+            <option value="paused">Bot paused</option>
+          </select>
+          <span class="takeoverMeta" id="leadsCount" style="margin-left:4px;"></span>
+        </div>
+
+        <div class="takeoverList" id="takeoverList" style="margin-top:12px;">
           <div class="takeoverMeta" id="takeoverLoading">Loading…</div>
         </div>
 
         <div class="takeoverMeta" style="margin-top:10px;" id="takeoverHint">
-          Auto-resume: if you stop replying, the bot will start replying again after 24 hours.
+          Auto-resume: if you stop replying manually, the bot restarts for that lead after 24 hours.
         </div>
       </div>
     </div>

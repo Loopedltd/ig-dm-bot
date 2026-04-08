@@ -681,77 +681,187 @@ function wireGlobalPauseButton() {
   }
 }
 
+// ---- All leads (replaces manual takeovers) ----
+
+let allLeads = [];
+
+const STAGE_LABELS = {
+  new: "New",
+  engaged: "Engaged",
+  high_intent: "High intent",
+  booking_pushed: "Link sent",
+  booked: "Booked",
+  lost: "Lost",
+};
+
+function leadDisplayName(lead) {
+  if (lead.email) return lead.email;
+  const psid = String(lead.ig_psid || "");
+  return psid ? `ID ···${psid.slice(-6)}` : "Unknown";
+}
+
+function leadLastActivity(lead) {
+  const dates = [lead.last_inbound_at, lead.last_outbound_at].filter(Boolean);
+  if (!dates.length) return null;
+  return dates.sort().pop();
+}
+
+function fmtRelative(iso) {
+  if (!iso) return "—";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 0) return "just now";
+  const mins = Math.floor(ms / 60000);
+  if (mins < 2) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return fmtTime(iso).split(",")[0];
+}
+
+function renderLeadRow(lead) {
+  const name = leadDisplayName(lead);
+  const phone = lead.phone ? lead.phone : null;
+  const subLine = phone ? phone : `psid ${String(lead.ig_psid || "").slice(-8)}`;
+  const stage = lead.stage || "new";
+  const stageLabel = STAGE_LABELS[stage] || stage;
+  const lastMsg = fmtRelative(leadLastActivity(lead));
+  const botOn = !lead.manual_override;
+  const toggleId = `toggle_${lead.id}`;
+
+  return `<div class="leadRow" data-id="${lead.id}" data-paused="${lead.manual_override ? "1" : "0"}">
+    <div class="leadIdent">
+      <div class="leadName">${escHtml(name)}</div>
+      <div class="leadSub">${escHtml(subLine)} · ${lastMsg}</div>
+    </div>
+    <span class="badge stageBadge stage-${escHtml(stage)}">${escHtml(stageLabel)}</span>
+    <div class="leadToggleWrap">
+      <span class="leadToggleLabel">${botOn ? "On" : "Off"}</span>
+      <label class="leadToggle" title="${botOn ? "Bot active — click to pause" : "Bot paused — click to resume"}">
+        <input type="checkbox" class="leadBotToggle" data-id="${lead.id}" ${botOn ? "checked" : ""}>
+        <span class="leadToggleSlider"></span>
+      </label>
+    </div>
+  </div>`;
+}
+
+function escHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function applyLeadsFilters() {
+  const searchVal = (qs("#leadsSearch")?.value || "").toLowerCase().trim();
+  const filterVal = qs("#leadsFilter")?.value || "all";
+
+  let filtered = allLeads;
+
+  if (filterVal === "active") {
+    filtered = filtered.filter((l) => !l.manual_override);
+  } else if (filterVal === "paused") {
+    filtered = filtered.filter((l) => !!l.manual_override);
+  }
+
+  if (searchVal) {
+    filtered = filtered.filter((l) => {
+      const name = leadDisplayName(l).toLowerCase();
+      const psid = String(l.ig_psid || "").toLowerCase();
+      const phone = String(l.phone || "").toLowerCase();
+      return name.includes(searchVal) || psid.includes(searchVal) || phone.includes(searchVal);
+    });
+  }
+
+  return filtered;
+}
+
+function renderLeadsList() {
+  const list = qs("#takeoverList");
+  const countEl = qs("#leadsCount");
+  if (!list) return;
+
+  const filtered = applyLeadsFilters();
+
+  if (countEl) {
+    countEl.textContent = `${filtered.length} of ${allLeads.length} lead${allLeads.length !== 1 ? "s" : ""}`;
+  }
+
+  if (!filtered.length) {
+    list.innerHTML = allLeads.length
+      ? `<div class="takeoverMeta">No leads match your search or filter.</div>`
+      : `<div class="takeoverMeta">No leads yet. When someone messages your Instagram, they appear here.</div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(renderLeadRow).join("");
+  wireLeadToggles();
+}
+
 async function loadManualTakeovers() {
   const list = qs("#takeoverList");
   if (!list) return;
 
-  list.innerHTML = `<div class="takeoverMeta">Loading...</div>`;
+  list.innerHTML = `<div class="takeoverMeta">Loading…</div>`;
 
-  const data = await apiFetch(`${API}/leads`, { method: "GET" });
-  const leads = Array.isArray(data?.leads) ? data.leads : [];
-
-  const overridden = leads.filter((l) => !!l.manual_override);
-
-  if (!overridden.length) {
-    list.innerHTML = `<div class="takeoverMeta">No manual takeovers right now.</div>`;
-    return;
+  try {
+    const data = await apiFetch(`${API}/leads`, { method: "GET" });
+    allLeads = Array.isArray(data?.leads) ? data.leads : [];
+    renderLeadsList();
+    wireLeadsSearchAndFilter();
+  } catch (e) {
+    list.innerHTML = `<div class="takeoverMeta">Failed to load leads.</div>`;
+    throw e;
   }
-
-list.innerHTML = overridden
-  .map((lead) => {
-const name = `Lead ${String(lead.ig_psid || "").slice(-4)}`;
-
-    return `
-      <div class="takeoverRow">
-        <div class="takeoverLeft">
-          <div class="takeoverName">${name}</div>
-          <div class="takeoverMeta">
-            ${lead.manual_override_reason || "Manual reply detected"}
-          </div>
-          <div class="takeoverMeta">
-            ${fmtTime(lead.manual_override_at)}
-          </div>
-        </div>
-
-        <div class="takeoverRight">
-          <button data-id="${lead.id}" class="btn small resumeTakeoverBtn">
-            Resume bot
-          </button>
-        </div>
-      </div>
-    `;
-  })
-  .join("");
-  wireResumeTakeoverButtons();
 }
 
-function wireResumeTakeoverButtons() {
-  document.querySelectorAll(".resumeTakeoverBtn").forEach((btn) => {
-    if (btn.__wired) return;
-    btn.__wired = true;
+function wireLeadsSearchAndFilter() {
+  const searchEl = qs("#leadsSearch");
+  const filterEl = qs("#leadsFilter");
 
-    btn.addEventListener("click", async () => {
-      const id = btn.getAttribute("data-id");
+  if (searchEl && !searchEl.__wired) {
+    searchEl.__wired = true;
+    searchEl.addEventListener("input", () => renderLeadsList());
+  }
+
+  if (filterEl && !filterEl.__wired) {
+    filterEl.__wired = true;
+    filterEl.addEventListener("change", () => renderLeadsList());
+  }
+}
+
+function wireLeadToggles() {
+  document.querySelectorAll(".leadBotToggle").forEach((input) => {
+    if (input.__wired) return;
+    input.__wired = true;
+
+    input.addEventListener("change", async () => {
+      const id = input.getAttribute("data-id");
+      const botOn = input.checked;
+
+      input.disabled = true;
 
       try {
-        clearErr();
-
-        btn.disabled = true;
-        btn.textContent = "Resuming...";
-
         await apiFetch(`${API}/leads/${id}/manual-override`, {
           method: "POST",
           body: JSON.stringify({
-            enabled: false,
-            reason: "Resumed by coach",
+            enabled: !botOn,
+            reason: botOn ? "Resumed by coach" : "Paused by coach",
           }),
         });
 
-        await loadManualTakeovers();
+        // Update local data so re-renders stay consistent
+        const lead = allLeads.find((l) => l.id === id);
+        if (lead) lead.manual_override = !botOn;
+
+        renderLeadsList();
       } catch (e) {
+        // Revert toggle on error
+        input.checked = !botOn;
+        input.disabled = false;
         setErr(String(e.message || e));
-        btn.disabled = false;
-        btn.textContent = "Resume";
       }
     });
   });
@@ -772,6 +882,9 @@ function wireManualTakeoversRefreshButton() {
     }
   });
 }
+
+// Keep alias so broadcast reload can call it too
+const loadLeads = loadManualTakeovers;
 
 // ---- Feature 3: Broadcast ----
 let broadcastLeads = [];
