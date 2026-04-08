@@ -55,16 +55,14 @@
     return /^[a-zA-Z0-9._]{1,30}$/.test(h);
   }
 
-  function getTimeUntilTomorrow() {
+  function getMidnightCountdown() {
     const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setHours(24, 0, 0, 0);
-    const diffMs = tomorrow.getTime() - now.getTime();
-    const totalMinutes = Math.max(0, Math.floor(diffMs / 60000));
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    if (hours <= 0) return `${minutes}m`;
-    return `${hours}h ${minutes}m`;
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    const diffSecs = Math.max(0, Math.floor((midnight - now) / 1000));
+    const h = Math.floor(diffSecs / 3600);
+    const m = Math.floor((diffSecs % 3600) / 60);
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
   }
 
   function parseExampleMessages(raw) {
@@ -286,12 +284,28 @@
 
   // ── Generate prompt ───────────────────────────────────────────────────────
 
+  let _promptCountdownInterval = null;
+
+  function startPromptCountdown(used, max) {
+    if (_promptCountdownInterval) clearInterval(_promptCountdownInterval);
+    const el = qs("#promptLimitStatus");
+    if (!el) return;
+
+    const tick = () => {
+      const countdown = getMidnightCountdown();
+      el.textContent = `${used}/${max} prompts for today. Prompt generation resets in ${countdown}`;
+    };
+    tick();
+    _promptCountdownInterval = setInterval(tick, 1000);
+  }
+
   async function loadPromptUsageStatus() {
     const el = qs("#promptLimitStatus");
     if (!el) return;
     try {
       const data = await apiFetch(`${API}/prompt-usage`);
       const remaining = Number(data?.remaining ?? 0);
+      const used = Number(data?.used ?? 0);
       const max = Number(data?.max ?? 10);
       const btn = qs("#generatePromptBtn");
       if (btn) {
@@ -305,11 +319,7 @@
           btn.textContent = "Generate Prompt";
         }
       }
-      const resetTime = getTimeUntilTomorrow();
-      el.textContent = remaining > 0
-        ? `${remaining} / ${max} prompt generations left today (resets in ${resetTime})`
-        : `Limit reached — resets in ${resetTime}`;
-      el.style.color = remaining <= 2 ? "#b54708" : "var(--muted)";
+      startPromptCountdown(used, max);
     } catch {
       el.textContent = "Could not load prompt usage";
       el.style.color = "#c0262d";
@@ -420,6 +430,8 @@
 
   // ── Save settings ─────────────────────────────────────────────────────────
 
+  const _isOnboarding = new URLSearchParams(window.location.search).get("instagram_connected") === "1";
+
   function wireSaveButton() {
     const btn = qs("#saveBtn");
     if (!btn || btn.__wired) return;
@@ -507,12 +519,16 @@
           }),
         });
 
+        if (_isOnboarding) {
+          window.location.href = "/dashboard";
+          return;
+        }
         showOk("Settings saved ✓");
       } catch (e) {
         setErr(String(e.message || e));
       } finally {
         const b = qs("#saveBtn");
-        if (b) { b.disabled = false; b.style.opacity = "1"; b.textContent = "Save settings"; }
+        if (b && !_isOnboarding) { b.disabled = false; b.style.opacity = "1"; b.textContent = "Save settings"; }
       }
     });
   }
@@ -550,6 +566,14 @@
     if (!getToken()) {
       window.location.href = "/coach/login.html";
       return;
+    }
+
+    // Show onboarding banner if arriving from Instagram OAuth
+    if (_isOnboarding) {
+      const banner = qs("#igConnectedBanner");
+      if (banner) banner.style.display = "block";
+      const saveBtn = qs("#saveBtn");
+      if (saveBtn) saveBtn.textContent = "Save & go to Dashboard";
     }
 
     wireLogout();

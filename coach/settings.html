@@ -115,6 +115,22 @@
       <h1>Settings</h1>
       <div class="sub">Configure your bot, triggers, and offer details.</div>
 
+      <!-- ── Onboarding success banner (shown after Instagram connect) -->
+      <div id="igConnectedBanner" style="display:none; background:var(--okBg); border:1px solid var(--okBorder); color:var(--okText); border-radius:14px; padding:14px 16px; font-size:14px; font-weight:600; margin-bottom:4px;">
+        Instagram connected! Fill in your settings below and click Save to finish setup.
+      </div>
+
+      <!-- ── Niche — first field, always visible ─────────────────────── -->
+      <div class="card" style="margin-top:16px;">
+        <label style="margin-top:0; font-size:14px; font-weight:700; color:var(--text);">Your niche</label>
+        <select id="niche" style="max-width:320px; margin-top:8px;">
+          <option value="generic">Generic coach</option>
+          <option value="fitness">Fitness coach</option>
+          <option value="money">Money / Business coach</option>
+        </select>
+        <div class="helper">The most important setting — drives all presets, tone, and fallback knowledge. Set this first.</div>
+      </div>
+
       <!-- Instagram Connection -->
       <div class="card" id="instagramConnectionCard">
         <div class="takeoverHeader">
@@ -257,15 +273,7 @@
         <div class="takeoverTitle" style="font-size:16px;">Get your bot working in minutes</div>
         <div class="takeoverSub" style="margin-top:4px;">Fill these in and your bot is ready. Everything else has smart defaults.</div>
 
-        <label style="margin-top:18px;">Niche</label>
-        <select id="niche">
-          <option value="generic">Generic coach</option>
-          <option value="fitness">Fitness coach</option>
-          <option value="money">Money coach</option>
-        </select>
-        <div class="helper">The most important setting — drives all presets, tone, and fallback knowledge.</div>
-
-        <div class="row" style="margin-top:14px;">
+        <div class="row" style="margin-top:4px;">
           <div>
             <label style="margin-top:0;">Booking URL</label>
             <input id="booking_url" placeholder="https://calendly.com/yourname/15min" />
@@ -412,6 +420,6 @@ assistant: use this and get booked in
       </div>
     </div>
 
-    <script src="./settings.js"></script>
+    <script src="/coach/settings.js"></script>
   </body>
 </html>

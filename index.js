@@ -5552,7 +5552,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
 
     if (error) {
       return res.redirect(
-        `/coach/dashboard.html?instagram_connected=0&error=${encodeURIComponent(
+        `/settings?instagram_connected=0&error=${encodeURIComponent(
           errorDescription || errorReason || error
         )}`
       );
@@ -5577,6 +5577,15 @@ app.get("/auth/instagram/callback", async (req, res) => {
     }
 
     const clientId = decoded.client_id;
+
+    // Check if this coach already has an active Instagram connection
+    const { data: existingIgAccount } = await supabase
+      .from("ig_accounts")
+      .select("id")
+      .eq("client_id", clientId)
+      .eq("is_active", true)
+      .maybeSingle();
+    const isFirstConnection = !existingIgAccount;
 
 const tokenResp = await fetch(
   `https://graph.facebook.com/v23.0/oauth/access_token?client_id=${encodeURIComponent(
@@ -5650,6 +5659,9 @@ const { error: upsertErr } = await supabase.from("ig_accounts").upsert(
         .send(`Failed to save Instagram account: ${upsertErr.message}`);
     }
 
+    if (isFirstConnection) {
+      return res.redirect("/settings?instagram_connected=1");
+    }
     return res.redirect("/coach/dashboard.html?instagram_connected=1");
   } catch (e) {
     return res.status(500).send(String(e?.message || e));
