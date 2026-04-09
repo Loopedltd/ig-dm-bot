@@ -3557,6 +3557,10 @@ if (typeof patch.comment_keyword_reply_enabled === "boolean") {
 if (typeof patch.comment_keyword_reply_text === "string" || patch.comment_keyword_reply_text === null) {
   allowed.comment_keyword_reply_text = patch.comment_keyword_reply_text;
 }
+// New follower auto-DM
+if (typeof patch.new_follower_dm_text === "string" || patch.new_follower_dm_text === null) {
+  allowed.new_follower_dm_text = patch.new_follower_dm_text;
+}
 // Feature 2 — contact collection
 if (typeof patch.contact_collection_enabled === "boolean") {
   allowed.contact_collection_enabled = patch.contact_collection_enabled;
@@ -4824,19 +4828,64 @@ async function handleNewFollowerDm(igAccountId, followerId) {
       return;
     }
 
-    const FOLLOW_DM_TEXT =
+    const clientId = igAccount.client_id;
+
+    // Duplicate check — skip if this follower already has a lead record
+    const { data: existingLead } = await supabase
+      .from("leads")
+      .select("id")
+      .eq("client_id", clientId)
+      .eq("ig_psid", followerId)
+      .maybeSingle();
+
+    if (existingLead) {
+      log("follow_dm_skipped_duplicate", { igAccountId, followerId, clientId });
+      return;
+    }
+
+    // Load coach's custom new-follower message, fall back to default
+    const DEFAULT_FOLLOW_DM =
       "Hey - appreciate the follow! Was it an ad or a reel that brought you here?";
+    let followDmText = DEFAULT_FOLLOW_DM;
+    try {
+      const cfg = await getClientConfig(clientId);
+      const custom = String(cfg?.new_follower_dm_text || "").trim();
+      if (custom) followDmText = custom;
+    } catch {
+      // keep default
+    }
+
+    // Create lead — try with source column first, fall back if column missing
+    const { error: leadInsertErr } = await supabase
+      .from("leads")
+      .insert({
+        client_id: clientId,
+        ig_psid: followerId,
+        stage: "new",
+        source: "new_follower",
+      });
+
+    if (leadInsertErr) {
+      // source column may not exist yet — retry without it
+      const { error: retryErr } = await supabase
+        .from("leads")
+        .insert({ client_id: clientId, ig_psid: followerId, stage: "new" });
+      if (retryErr) {
+        console.error("follow_dm: lead insert failed", retryErr.message);
+        // Don't return — still attempt to send the DM even if lead creation fails
+      }
+    }
 
     const { sendResp, sendData } = await sendInstagramTextMessage({
       accessToken: igAccount.page_access_token,
       recipientId: followerId,
-      text: FOLLOW_DM_TEXT,
+      text: followDmText,
     });
 
     log("ig_follow_dm_sent", {
       igAccountId,
       followerId,
-      clientId: igAccount.client_id,
+      clientId,
       sendOk: sendResp.ok,
       sendData,
     });
