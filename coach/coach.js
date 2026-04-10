@@ -70,6 +70,51 @@ localStorage.setItem("coach_token", j.token);
   });
 });
 
+// ✅ Set-password form handler (set-password.html has #setPasswordForm)
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("setPasswordForm");
+  if (!form) return;
+
+  const token = new URLSearchParams(window.location.search).get("token") || "";
+  const errEl = document.getElementById("setPasswordError");
+  const okEl = document.getElementById("setPasswordOk");
+  const btn = document.getElementById("setPasswordBtn");
+
+  function showErr(msg) {
+    if (errEl) { errEl.textContent = msg; errEl.style.display = "block"; }
+    if (okEl) okEl.style.display = "none";
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (errEl) errEl.style.display = "none";
+    if (okEl) okEl.style.display = "none";
+
+    const password = document.getElementById("newPassword")?.value || "";
+    const confirm = document.getElementById("confirmPassword")?.value || "";
+
+    if (!token) { showErr("Invalid or missing setup token. Please use the link from your payment confirmation."); return; }
+    if (password.length < 8) { showErr("Password must be at least 8 characters."); return; }
+    if (password !== confirm) { showErr("Passwords do not match."); return; }
+
+    if (btn) btn.disabled = true;
+    try {
+      const r = await fetch("/coach/api/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, password }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { showErr(j?.error || "Failed to set password. Please try again."); return; }
+      window.location.href = "/coach/login.html?password_set=1";
+    } catch {
+      showErr("Network error. Please check your connection and try again.");
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+});
+
 (function () {
   const API = "/coach/api";
   const TOKEN_KEY = "coach_token";
