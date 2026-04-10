@@ -2742,6 +2742,11 @@ app.post("/admin/api/login", async (req, res) => {
     if (!ok) return safeJson(res, 401, { error: "invalid credentials" });
 
     const token = signAdminToken();
+    if (!token) {
+      return safeJson(res, 500, {
+        error: "Server auth not configured — DASHBOARD_JWT_SECRET environment variable is missing.",
+      });
+    }
 
     return safeJson(res, 200, { ok: true, token });
   } catch (e) {

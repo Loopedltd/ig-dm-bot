@@ -69,9 +69,11 @@ const AdminDashboard = {
   async apiFetch(path, opts = {}) {
     const r = await fetch(path, { ...opts, headers: { ...this.authHeaders(), ...(opts.headers || {}) } });
     if (r.status === 401) {
+      // Clear the invalid token so the next page load redirects to login.
+      // Do NOT auto-redirect here — that creates an infinite loop if the
+      // server consistently rejects tokens (e.g. missing DASHBOARD_JWT_SECRET).
       localStorage.removeItem("admin_token");
-      window.location.href = "/admin/login.html";
-      return null;
+      throw new Error("Session expired — please refresh the page to log in again.");
     }
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j?.error || j?.message || `Request failed (${r.status})`);
