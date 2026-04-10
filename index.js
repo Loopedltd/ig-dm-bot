@@ -5359,6 +5359,7 @@ log("ig_event_debug", {
             .from("messages")
             .insert({
               lead_id: lead.id,
+              client_id: lead.client_id,
               direction: isEcho ? "out" : "in",
               text: text || "[non-text message]",
               created_at: new Date().toISOString(),
@@ -5499,6 +5500,7 @@ log("ig_trigger_opener_sent", {
                 .from("messages")
                 .insert({
                   lead_id: lead.id,
+                  client_id: lead.client_id,
                   direction: "out",
                   text: opener,
                   created_at: new Date().toISOString(),
@@ -5827,6 +5829,7 @@ log("ig_trigger_opener_sent", {
               .from("messages")
               .insert({
                 lead_id: lead.id,
+                client_id: lead.client_id,
                 direction: "out",
                 text: msg,
                 created_at: new Date().toISOString(),
@@ -6213,6 +6216,7 @@ async function runFollowUpJob() {
 
         await supabase.from("messages").insert({
           lead_id: lead.id,
+          client_id: lead.client_id,
           direction: "out",
           text,
           created_at: new Date().toISOString(),
