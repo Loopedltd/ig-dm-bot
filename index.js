@@ -5216,6 +5216,32 @@ const BROADCAST_MAX_PER_HOUR = 50;
 
 /**
  * ===========================
+ * DM DEBOUNCE BUFFER
+ * ===========================
+ * Buffers incoming DMs per sender for 3 seconds. If a second message
+ * arrives within the window the timer resets. After 3s of silence all
+ * buffered texts are joined and processed as one combined message.
+ * Echoes, story replies, comment triggers and keyword triggers bypass
+ * the buffer and process immediately.
+ */
+
+const DM_DEBOUNCE_MS = 3000;
+// Map key: "clientId:senderId" → { texts: string[], timer: TimeoutHandle, messaging, igAccount }
+const dmDebounceBuffer = new Map();
+
+function flushDmBuffer(bufferKey) {
+  const entry = dmDebounceBuffer.get(bufferKey);
+  if (!entry) return;
+  dmDebounceBuffer.delete(bufferKey);
+
+  const combinedText = entry.texts.filter(Boolean).join("\n");
+  console.log("dm_debounce: flushing", { bufferKey, messageCount: entry.texts.length, combinedText: combinedText.slice(0, 120) });
+
+  void processDmEvent(entry.messaging, entry.igAccount, combinedText);
+}
+
+/**
+ * ===========================
  * INSTAGRAM WEBHOOK (POST)
  * ===========================
  */
@@ -5309,7 +5335,51 @@ log("ig_event_debug", {
             return;
           }
 
-          let { data: lead, error: leadLookupError } = await supabase
+          // Echoes and trigger messages bypass debounce — process immediately
+          const isTriggerMessage =
+            isStoryReplyTrigger(messaging) ||
+            isCommentReplyTrigger(messaging);
+
+          if (!isEcho && !isTriggerMessage && text) {
+            const bufferKey = `${igAccount.client_id}:${senderId}`;
+            const existing = dmDebounceBuffer.get(bufferKey);
+
+            if (existing) {
+              // Another message already buffered — append text and reset timer
+              clearTimeout(existing.timer);
+              existing.texts.push(text);
+              existing.timer = setTimeout(() => flushDmBuffer(bufferKey), DM_DEBOUNCE_MS);
+              console.log("dm_debounce: buffered additional message", { bufferKey, total: existing.texts.length });
+            } else {
+              // First message from this sender — start the debounce window
+              const timer = setTimeout(() => flushDmBuffer(bufferKey), DM_DEBOUNCE_MS);
+              dmDebounceBuffer.set(bufferKey, { texts: [text], timer, messaging, igAccount });
+              console.log("dm_debounce: started buffer", { bufferKey });
+            }
+            return; // will be processed when timer fires
+          }
+
+          // Immediate path: echo, trigger, or non-text message
+          await processDmEvent(messaging, igAccount, text);
+        } catch (err) {
+          log("webhook_async_error", { error: err?.message || String(err) });
+        }
+      })();
+    }
+  } catch (err) {
+    console.error("Webhook error:", err);
+    return res.sendStatus(200);
+  }
+});
+
+// ─── DM processing (called either directly or after debounce flush) ───────────
+async function processDmEvent(messaging, igAccount, overrideText) {
+  try {
+  const senderId = messaging.sender?.id;
+  const text = overrideText !== undefined ? overrideText : extractIgText(messaging);
+  const isEcho = isIgEcho(messaging);
+
+  let { data: lead, error: leadLookupError } = await supabase
             .from("leads")
             .select("*")
             .eq("client_id", igAccount.client_id)
@@ -5906,17 +5976,9 @@ log("ig_trigger_opener_sent", {
             }
           }
         } catch (err) {
-          log("webhook_async_error", {
-            error: err?.message || String(err),
-          });
+          log("webhook_async_error", { error: err?.message || String(err) });
         }
-      })();
-    }
-  } catch (err) {
-    console.error("Webhook error:", err);
-    return res.sendStatus(200);
-  }
-});
+}
 /**
  * ===========================
  * START SERVER
