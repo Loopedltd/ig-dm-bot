@@ -3256,6 +3256,44 @@ app.post("/admin/api/leads/mark-call-complete", requireAdmin, async (req, res) =
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
 });
+
+app.get("/admin/api/resubscribe-all", requireAdmin, async (req, res) => {
+  try {
+    const { data: accounts, error: fetchErr } = await supabase
+      .from("ig_accounts")
+      .select("id, client_id, page_id, ig_user_id, page_access_token")
+      .eq("is_active", true);
+
+    if (fetchErr) return safeJson(res, 500, { error: String(fetchErr.message || fetchErr) });
+
+    const results = [];
+
+    for (const acc of accounts || []) {
+      if (!acc.page_id || !acc.page_access_token) {
+        results.push({ client_id: acc.client_id, page_id: acc.page_id, ok: false, reason: "missing page_id or token" });
+        continue;
+      }
+      try {
+        const subResp = await fetch(
+          `https://graph.facebook.com/v21.0/${encodeURIComponent(acc.page_id)}/subscribed_apps?subscribed_fields=messages,comments,follows,messaging_postbacks&access_token=${encodeURIComponent(acc.page_access_token)}`,
+          { method: "POST" }
+        );
+        const subData = await subResp.json().catch(() => ({}));
+        const ok = subResp.ok && subData?.success === true;
+        console.log(`resubscribe-all: page ${acc.page_id} client ${acc.client_id}`, { ok, status: subResp.status, subData });
+        results.push({ client_id: acc.client_id, page_id: acc.page_id, ok, status: subResp.status, response: subData });
+      } catch (e) {
+        console.error(`resubscribe-all: page ${acc.page_id} threw`, e?.message || e);
+        results.push({ client_id: acc.client_id, page_id: acc.page_id, ok: false, error: e?.message || String(e) });
+      }
+    }
+
+    return safeJson(res, 200, { ok: true, total: (accounts || []).length, results });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
 /**
  * ===========================
  * COACH AUTH + SUBSCRIPTION PROTECTION
@@ -6065,6 +6103,24 @@ if (existingByIg) {
         .status(500)
         .send(`Failed to save Instagram account: ${upsertErr.message}`);
     }
+
+    // Subscribe the page to webhook fields — non-blocking, errors are logged only
+    void (async () => {
+      try {
+        const subResp = await fetch(
+          `https://graph.facebook.com/v21.0/${encodeURIComponent(page.id)}/subscribed_apps?subscribed_fields=messages,comments,follows,messaging_postbacks&access_token=${encodeURIComponent(page.access_token)}`,
+          { method: "POST" }
+        );
+        const subData = await subResp.json().catch(() => ({}));
+        if (subResp.ok && subData?.success) {
+          console.log(`Page webhook subscription successful for page ${page.id}`, { igUserId: ig.id, clientId });
+        } else {
+          console.error(`Page webhook subscription FAILED for page ${page.id}`, { status: subResp.status, subData, clientId });
+        }
+      } catch (subErr) {
+        console.error(`Page webhook subscription threw for page ${page.id}`, { error: subErr?.message || subErr, clientId });
+      }
+    })();
 
     if (isFirstConnection) {
       return res.redirect("/settings?instagram_connected=1");
