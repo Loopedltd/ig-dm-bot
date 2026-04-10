@@ -70,10 +70,8 @@ const AdminDashboard = {
     const r = await fetch(path, { ...opts, headers: { ...this.authHeaders(), ...(opts.headers || {}) } });
     const j = await r.json().catch(() => ({}));
     if (r.status === 401) {
-      // Clear the invalid/expired token so the next page load redirects to login.
-      localStorage.removeItem("admin_token");
       const serverMsg = j?.error || "session invalid";
-      throw new Error(`${serverMsg} — please refresh the page to log in again.`);
+      throw new Error(`Auth error: ${serverMsg}`);
     }
     if (!r.ok) throw new Error(j?.error || j?.message || `Request failed (${r.status})`);
     return j;
