@@ -5471,6 +5471,34 @@ async function processDmEvent(messaging, igAccount, overrideText) {
             return;
           }
 
+          // Voice note / audio attachment — send fixed reply, skip AI
+          const attachments = messaging?.message?.attachments || [];
+          const isVoiceNote = attachments.some((a) => {
+            const t = String(a?.type || "").toLowerCase();
+            // Meta sends audio attachments as type "audio"; voice notes may also
+            // arrive with payload.url containing "audio" or mime type hints
+            return (
+              t === "audio" ||
+              t === "voice_clip" ||
+              String(a?.payload?.mime_type || "").startsWith("audio/")
+            );
+          });
+
+          if (isVoiceNote) {
+            console.log("ig_voice_note_received", { senderId, leadId: lead.id, clientId: lead.client_id });
+            log("ig_voice_note_received", { senderId, leadId: lead.id, clientId: lead.client_id });
+
+            const voiceAcc = await getIgAccountByClientId(lead.client_id).catch(() => null);
+            if (voiceAcc?.page_access_token) {
+              await sendInstagramTextMessage({
+                accessToken: voiceAcc.page_access_token,
+                recipientId: senderId,
+                text: "Hey, I can't listen to voice notes right now — what's on your mind? Just type it out and I'll get back to you! 💬",
+              });
+            }
+            return;
+          }
+
           if (lead.manual_override) {
             const H24 = 24 * 60 * 60 * 1000;
             const idleMs = msSince(lead.manual_override_at);
