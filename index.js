@@ -325,18 +325,21 @@ function extractPostCommentEvents(reqBody) {
     for (const change of changes) {
       if (change?.field === "comments" && change?.value) {
         const v = change.value;
-        // v.from.id is the commenter, v.id is the comment id, v.message is the comment text
-        if (v?.from?.id && v?.id && v?.message) {
+        // Instagram sends comment text in "text" field (feed webhook); some older
+        // integrations used "message". Accept either.
+        const commentText = v?.text || v?.message || "";
+        if (v?.from?.id && v?.id && commentText) {
           commentEvents.push({
             igAccountId: entry.id,
             commentId: String(v.id),
             commenterId: String(v.from.id),
-            commentText: String(v.message),
+            commentText: String(commentText),
           });
         } else {
           console.log("extractPostCommentEvents: comment dropped — missing field(s)", {
             hasFromId: !!v?.from?.id,
             hasId: !!v?.id,
+            hasText: !!v?.text,
             hasMessage: !!v?.message,
             raw: JSON.stringify(v).slice(0, 200),
           });
