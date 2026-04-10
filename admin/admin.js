@@ -28,7 +28,12 @@ const AdminLogin = {
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j?.error || "Login failed");
 
-        localStorage.setItem("admin_token", j.token);
+        const tok = j.token || j.access_token || "";
+        console.log("[AdminLogin] server response keys:", Object.keys(j), "token present:", !!tok);
+        if (!tok) throw new Error(`Login succeeded but no token in response. Keys: ${Object.keys(j).join(", ")}`);
+
+        localStorage.setItem("admin_token", tok);
+        console.log("[AdminLogin] token saved, redirecting to dashboard");
         if (ok) {
           ok.textContent = "Logged in. Redirecting…";
           ok.style.display = "block";
@@ -101,7 +106,9 @@ const AdminDashboard = {
 
   requireTokenOrRedirect() {
     const token = localStorage.getItem("admin_token");
+    console.log("[AdminDashboard] requireTokenOrRedirect: token =", JSON.stringify(token));
     if (!token) {
+      console.warn("[AdminDashboard] No token found — redirecting to login");
       window.location.href = "/admin/login.html";
       return false;
     }
