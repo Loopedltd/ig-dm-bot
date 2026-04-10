@@ -3257,7 +3257,13 @@ app.post("/admin/api/leads/mark-call-complete", requireAdmin, async (req, res) =
   }
 });
 
-app.get("/admin/api/resubscribe-all", requireAdmin, async (req, res) => {
+app.get("/admin/api/resubscribe-all", (req, res, next) => {
+  // Allow token via ?token= query param so the endpoint can be called directly in the browser
+  if (!req.headers.authorization && req.query.token) {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  next();
+}, requireAdmin, async (req, res) => {
   try {
     const { data: accounts, error: fetchErr } = await supabase
       .from("ig_accounts")
