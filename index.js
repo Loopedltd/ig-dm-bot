@@ -43,6 +43,13 @@ app.use("/coach", express.static(path.join(__dirname, "coach")));
 app.get("/admin", (req, res) => res.redirect("/admin/login.html"));
 app.get("/coach", (req, res) => res.redirect("/coach/login.html"));
 
+// robots.txt — allow all crawlers including Meta's link previewer
+app.get("/robots.txt", (req, res) => {
+  res.type("text/plain").send(
+    "User-agent: *\nAllow: /\n\nUser-agent: facebookexternalhit\nAllow: /\n"
+  );
+});
+
 // Privacy + Terms pages
 app.get("/privacy", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "privacy.html"));
