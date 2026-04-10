@@ -66,6 +66,18 @@ const AdminDashboard = {
     };
   },
 
+  async apiFetch(path, opts = {}) {
+    const r = await fetch(path, { ...opts, headers: { ...this.authHeaders(), ...(opts.headers || {}) } });
+    if (r.status === 401) {
+      localStorage.removeItem("admin_token");
+      window.location.href = "/admin/login.html";
+      return null;
+    }
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j?.error || j?.message || `Request failed (${r.status})`);
+    return j;
+  },
+
   fmtDate(s) {
     try {
       return s ? new Date(s).toLocaleString("en-GB") : "";
@@ -272,14 +284,11 @@ const AdminDashboard = {
     };
 
     try {
-      const r = await fetch(`/admin/api/clients/${client.id}/config`, {
+      const j = await this.apiFetch(`/admin/api/clients/${client.id}/config`, {
         method: "POST",
-        headers: this.authHeaders(),
         body: JSON.stringify(payload),
       });
-
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j?.error || j?.message || "Save failed");
+      if (!j) return;
 
       await this.loadClients();
       this.closeModal();
@@ -306,18 +315,11 @@ const AdminDashboard = {
     }
 
     try {
-      const r = await fetch("/admin/api/clients/create", {
+      const j = await this.apiFetch("/admin/api/clients/create", {
         method: "POST",
-        headers: this.authHeaders(),
-        body: JSON.stringify({
-          name,
-          email,
-          timezone,
-        }),
+        body: JSON.stringify({ name, email, timezone }),
       });
-
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j?.error || j?.message || "Failed to create client");
+      if (!j) return;
 
       await this.loadClients();
       this.closeCreateClientModal();
@@ -328,31 +330,20 @@ const AdminDashboard = {
   },
 
   async setBotPaused(clientId, enabled) {
-    const r = await fetch(`/admin/api/clients/${clientId}/bot-paused`, {
+    const j = await this.apiFetch(`/admin/api/clients/${clientId}/bot-paused`, {
       method: "POST",
-      headers: this.authHeaders(),
-      body: JSON.stringify({
-        enabled: !!enabled,
-        reason: enabled ? "Paused by admin" : "Resumed by admin",
-      }),
+      body: JSON.stringify({ enabled: !!enabled, reason: enabled ? "Paused by admin" : "Resumed by admin" }),
     });
-
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j?.error || "Failed to update bot status");
+    if (!j) return null;
     return j;
   },
 
 async createPaymentLink(clientId, email) {
-  const r = await fetch(`/admin/api/create-payment-link/${clientId}`, {
+  const j = await this.apiFetch(`/admin/api/create-payment-link/${clientId}`, {
     method: "POST",
-    headers: this.authHeaders(),
     body: JSON.stringify({ email }),
   });
-
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    throw new Error(j?.error || j?.message || "Failed to create payment link");
-  }
+  if (!j) return null;
   return j;
 },
 
@@ -390,9 +381,8 @@ async createPaymentLink(clientId, email) {
     if (body) body.innerHTML = "";
 
     try {
-      const r = await fetch("/admin/api/clients", { headers: this.authHeaders() });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j?.error || "Failed to load clients");
+      const j = await this.apiFetch("/admin/api/clients");
+      if (!j) return;
 
       this.state.clients = j.clients || [];
       this.state.clientNameById = new Map(this.state.clients.map((c) => [c.id, c.name]));
@@ -503,9 +493,8 @@ tdAct.appendChild(payBtn);
     if (body) body.innerHTML = "";
 
     try {
-      const r = await fetch("/admin/api/leads", { headers: this.authHeaders() });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j?.error || "Failed to load leads");
+      const j = await this.apiFetch("/admin/api/leads");
+      if (!j) return;
 
       const leads = j.leads || [];
       if (!body) return;
