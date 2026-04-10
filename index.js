@@ -945,7 +945,7 @@ async function sendInstagramTextMessage({
 
   return sendWithRetry(async () => {
     const sendResp = await fetch(
-      `https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(accessToken)}`,
+      `https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(accessToken)}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2550,7 +2550,7 @@ async function setClientBotPaused({ clientId, enabled, reason, actor }) {
 async function lookupIgName(accessToken, igPsid) {
   try {
     const resp = await fetch(
-      `https://graph.facebook.com/v19.0/${encodeURIComponent(igPsid)}?fields=name&access_token=${encodeURIComponent(accessToken)}`
+      `https://graph.facebook.com/v21.0/${encodeURIComponent(igPsid)}?fields=name&access_token=${encodeURIComponent(accessToken)}`
     );
     const data = await resp.json().catch(() => ({}));
     return data?.name || null;
@@ -4920,7 +4920,7 @@ async function handleNewFollowerDm(igAccountId, followerId) {
 
 async function postPublicCommentReply(accessToken, commentId, replyText) {
   const resp = await fetch(
-    `https://graph.facebook.com/v19.0/${encodeURIComponent(commentId)}/replies?access_token=${encodeURIComponent(accessToken)}`,
+    `https://graph.facebook.com/v21.0/${encodeURIComponent(commentId)}/replies?access_token=${encodeURIComponent(accessToken)}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4965,6 +4965,15 @@ async function handlePostCommentKeyword(igAccountId, commentId, commenterId, com
 
     const dmText = String(cfg.comment_keyword_dm_text || "").trim();
     if (!dmText) return;
+
+    // Duplicate guard — skip if we already DM'd for this comment
+    const dedupKey = `${igAccount.client_id}:kw:${commentId}`;
+    if (sentCommentDmKeys.has(dedupKey)) {
+      console.log("comment_keyword: duplicate guard — already sent DM for comment", commentId);
+      return;
+    }
+    if (sentCommentDmKeys.size >= 5000) sentCommentDmKeys.clear();
+    sentCommentDmKeys.add(dedupKey);
 
     // Send DM to commenter
     const { sendResp, sendData } = await sendInstagramTextMessage({
@@ -5041,6 +5050,15 @@ async function handlePostCommentAutoDm(igAccountId, commentId, commenterId, comm
       return;
     }
 
+    // Duplicate guard — skip if we already DM'd for this comment
+    const dedupKey = `${igAccount.client_id}:auto:${commentId}`;
+    if (sentCommentDmKeys.has(dedupKey)) {
+      console.log("comment_auto_dm: duplicate guard — already sent DM for comment", commentId);
+      return;
+    }
+    if (sentCommentDmKeys.size >= 5000) sentCommentDmKeys.clear();
+    sentCommentDmKeys.add(dedupKey);
+
     const { sendResp, sendData } = await sendInstagramTextMessage({
       accessToken: igAccount.page_access_token,
       recipientId: commenterId,
@@ -5077,6 +5095,11 @@ async function handlePostCommentAutoDm(igAccountId, commentId, commenterId, comm
 // Rate tracker: { igAccountId: { count: N, windowStart: Date } }
 const dmQueueRateTracker = new Map();
 const DM_QUEUE_MAX_PER_HOUR = 200;
+
+// Comment DM dedup: prevents sending multiple DMs for the same comment
+// if Meta retries the webhook. Keyed as "clientId:commentId".
+// Max 5000 entries to avoid unbounded memory growth.
+const sentCommentDmKeys = new Set();
 
 async function queueDm({ clientId, igPsid, text }) {
   const { error } = await supabase.from("dm_queue").insert({
@@ -5186,11 +5209,17 @@ const BROADCAST_MAX_PER_HOUR = 50;
 
 app.post("/webhook", async (req, res) => {
   try {
-    const events = getAllIgMessagingEvents(req.body);
-    const followEvents = extractFollowEvents(req.body);
-    const commentEvents = extractPostCommentEvents(req.body);
+    const body = req.body || {};
+    const entryCount = Array.isArray(body.entry) ? body.entry.length : 0;
+    const fields = (body.entry || []).flatMap((e) => (e.changes || []).map((c) => c.field)).filter(Boolean);
+    console.log("webhook: received", { object: body.object || null, entryCount, fields, hasMessaging: (body.entry || []).some((e) => Array.isArray(e.messaging) && e.messaging.length > 0) });
+
+    const events = getAllIgMessagingEvents(body);
+    const followEvents = extractFollowEvents(body);
+    const commentEvents = extractPostCommentEvents(body);
 
     if (!events.length && !followEvents.length && !commentEvents.length) {
+      console.log("webhook: no actionable events found — returning 200");
       return res.sendStatus(200);
     }
 
@@ -5930,7 +5959,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
     const isFirstConnection = !existingIgAccount;
 
 const tokenResp = await fetch(
-  `https://graph.facebook.com/v23.0/oauth/access_token?client_id=${encodeURIComponent(
+  `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${encodeURIComponent(
     META_APP_ID
   )}&redirect_uri=${encodeURIComponent(
     META_REDIRECT_URI
@@ -5950,7 +5979,7 @@ if (!tokenResp.ok || !tokenData?.access_token) {
 const userAccessToken = tokenData.access_token;
 
 const pagesResp = await fetch(
-  `https://graph.facebook.com/v23.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}&access_token=${encodeURIComponent(
+  `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}&access_token=${encodeURIComponent(
     userAccessToken
   )}`
 );
@@ -5983,17 +6012,46 @@ const ig =
   page.instagram_business_account ||
   page.connected_instagram_account;
 
-const { error: upsertErr } = await supabase.from("ig_accounts").upsert(
-  {
-    client_id: clientId,
-    ig_user_id: ig.id,
-    ig_username: ig.username || null,
-    page_id: page.id,
-    page_access_token: page.access_token,
-    is_active: true,
-  },
-  { onConflict: "client_id" }
-);
+// Check if a row already exists for this IG account (by ig_user_id OR page_id).
+// If so, update it in place — keeping whichever client_id was already on that row.
+// This prevents a second row being created with a different client_id when
+// a coach reconnects, which would cause leads to become invisible on the dashboard.
+const { data: existingByIg } = await supabase
+  .from("ig_accounts")
+  .select("id, client_id")
+  .or(`ig_user_id.eq.${ig.id},page_id.eq.${page.id}`)
+  .maybeSingle();
+
+let upsertErr;
+if (existingByIg) {
+  // Row exists for this IG account — update it, preserving its client_id
+  const preservedClientId = existingByIg.client_id;
+  console.log("ig_connect: updating existing ig_accounts row", { id: existingByIg.id, preservedClientId, requestingClientId: clientId });
+  ({ error: upsertErr } = await supabase
+    .from("ig_accounts")
+    .update({
+      client_id: preservedClientId,
+      ig_user_id: ig.id,
+      ig_username: ig.username || null,
+      page_id: page.id,
+      page_access_token: page.access_token,
+      is_active: true,
+    })
+    .eq("id", existingByIg.id));
+} else {
+  // No row for this IG account yet — insert fresh
+  console.log("ig_connect: inserting new ig_accounts row", { clientId, igUserId: ig.id });
+  ({ error: upsertErr } = await supabase
+    .from("ig_accounts")
+    .insert({
+      client_id: clientId,
+      ig_user_id: ig.id,
+      ig_username: ig.username || null,
+      page_id: page.id,
+      page_access_token: page.access_token,
+      is_active: true,
+    }));
+}
 
     if (upsertErr) {
       return res
