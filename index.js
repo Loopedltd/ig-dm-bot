@@ -6022,34 +6022,47 @@ const ig =
   page.instagram_business_account ||
   page.connected_instagram_account;
 
-// Check if a row already exists for this IG account (by ig_user_id OR page_id).
-// If so, update it in place — keeping whichever client_id was already on that row.
-// This prevents a second row being created with a different client_id when
-// a coach reconnects, which would cause leads to become invisible on the dashboard.
+// On reconnect, ONLY the tokens in ig_accounts should change.
+// client_configs and leads are NEVER touched — they stay exactly as they were.
+//
+// Strategy:
+//  1. Look for an existing row matching this ig_user_id OR page_id.
+//     If found: update it in place, preserving its client_id.
+//  2. If not found by IG identity, look for the coach's own existing row by client_id.
+//     If found: update it in place (coach changed their connected IG account).
+//  3. If truly no row exists: insert fresh.
+//  In all cases: deactivate any other stale rows for this client_id so
+//  there is never more than one active row per client.
+
 const { data: existingByIg } = await supabase
   .from("ig_accounts")
   .select("id, client_id")
   .or(`ig_user_id.eq.${ig.id},page_id.eq.${page.id}`)
   .maybeSingle();
 
+const { data: existingByClient } = existingByIg ? { data: null } : await supabase
+  .from("ig_accounts")
+  .select("id, client_id")
+  .eq("client_id", clientId)
+  .maybeSingle();
+
+const rowToUpdate = existingByIg || existingByClient;
+const activeClientId = rowToUpdate ? rowToUpdate.client_id : clientId;
+
 let upsertErr;
-if (existingByIg) {
-  // Row exists for this IG account — update it, preserving its client_id
-  const preservedClientId = existingByIg.client_id;
-  console.log("ig_connect: updating existing ig_accounts row", { id: existingByIg.id, preservedClientId, requestingClientId: clientId });
+if (rowToUpdate) {
+  console.log("ig_connect: updating existing ig_accounts row", { id: rowToUpdate.id, activeClientId, requestingClientId: clientId });
   ({ error: upsertErr } = await supabase
     .from("ig_accounts")
     .update({
-      client_id: preservedClientId,
       ig_user_id: ig.id,
       ig_username: ig.username || null,
       page_id: page.id,
       page_access_token: page.access_token,
       is_active: true,
     })
-    .eq("id", existingByIg.id));
+    .eq("id", rowToUpdate.id));
 } else {
-  // No row for this IG account yet — insert fresh
   console.log("ig_connect: inserting new ig_accounts row", { clientId, igUserId: ig.id });
   ({ error: upsertErr } = await supabase
     .from("ig_accounts")
@@ -6062,6 +6075,13 @@ if (existingByIg) {
       is_active: true,
     }));
 }
+
+// Deactivate any other stale rows for this client so there is exactly one active row
+await supabase
+  .from("ig_accounts")
+  .update({ is_active: false })
+  .eq("client_id", activeClientId)
+  .neq("ig_user_id", ig.id);
 
     if (upsertErr) {
       return res
