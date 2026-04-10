@@ -2711,8 +2711,14 @@ function requireAdmin(req, res, next) {
 
     req.admin = decoded;
     return next();
-  } catch {
-    return safeJson(res, 401, { error: "invalid token" });
+  } catch (e) {
+    const msg =
+      e?.name === "TokenExpiredError"
+        ? "token expired"
+        : e?.name === "JsonWebTokenError"
+        ? `invalid token (${e.message})`
+        : "invalid token";
+    return safeJson(res, 401, { error: msg });
   }
 }
 
