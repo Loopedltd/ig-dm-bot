@@ -2877,7 +2877,7 @@ const { data: config, error: configErr } = await supabase
   .insert({
     client_id: client.id,
     stripe_subscription_status: null,
-    system_prompt: null,
+    system_prompt: "You are a helpful assistant that qualifies leads and books sales calls on behalf of this coach. Keep replies short, casual and conversational. Ask one question at a time to understand the lead's goals and situation before moving towards booking a call.",
     tone: "direct",
     style: "short, punchy",
     vocabulary: "casual UK coach",
