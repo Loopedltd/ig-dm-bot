@@ -326,6 +326,13 @@ function extractPostCommentEvents(reqBody) {
             commenterId: String(v.from.id),
             commentText: String(v.message),
           });
+        } else {
+          console.log("extractPostCommentEvents: comment dropped — missing field(s)", {
+            hasFromId: !!v?.from?.id,
+            hasId: !!v?.id,
+            hasMessage: !!v?.message,
+            raw: JSON.stringify(v).slice(0, 200),
+          });
         }
       }
     }
@@ -4997,6 +5004,70 @@ async function handlePostCommentKeyword(igAccountId, commentId, commenterId, com
   }
 }
 
+async function handlePostCommentAutoDm(igAccountId, commentId, commenterId, commentText) {
+  try {
+    const { data: igAccount, error: igLookupError } = await supabase
+      .from("ig_accounts")
+      .select("client_id, ig_user_id, page_id, page_access_token")
+      .eq("is_active", true)
+      .or(`page_id.eq.${igAccountId},ig_user_id.eq.${igAccountId}`)
+      .maybeSingle();
+
+    if (igLookupError || !igAccount?.page_access_token) {
+      console.error("comment_auto_dm: no active IG account found", { igAccountId, error: igLookupError?.message || null });
+      return;
+    }
+
+    const { data: cfg } = await supabase
+      .from("client_configs")
+      .select("comment_reply_auto_dm_enabled, comment_reply_auto_dm_text")
+      .eq("client_id", igAccount.client_id)
+      .maybeSingle();
+
+    if (!cfg?.comment_reply_auto_dm_enabled) {
+      console.log("comment_auto_dm: feature disabled for client", igAccount.client_id);
+      return;
+    }
+
+    const dmText = String(cfg.comment_reply_auto_dm_text || "").trim();
+    if (!dmText) {
+      console.log("comment_auto_dm: no DM text configured for client", igAccount.client_id);
+      return;
+    }
+
+    // Skip if commenter is the account owner (own comments on own posts)
+    if (commenterId === igAccount.ig_user_id || commenterId === igAccount.page_id) {
+      console.log("comment_auto_dm: skipping own comment", { commenterId });
+      return;
+    }
+
+    const { sendResp, sendData } = await sendInstagramTextMessage({
+      accessToken: igAccount.page_access_token,
+      recipientId: commenterId,
+      text: dmText,
+    });
+
+    console.log("comment_auto_dm: DM sent", {
+      igAccountId,
+      commentId,
+      commenterId,
+      clientId: igAccount.client_id,
+      sendOk: sendResp.ok,
+      sendData,
+    });
+
+    log("ig_comment_auto_dm_sent", {
+      igAccountId,
+      commentId,
+      commenterId,
+      clientId: igAccount.client_id,
+      sendOk: sendResp.ok,
+    });
+  } catch (e) {
+    console.error("handlePostCommentAutoDm failed:", e?.message || e);
+  }
+}
+
 /**
  * ===========================
  * FEATURE 4: DM SAFETY QUEUE
@@ -5130,7 +5201,9 @@ app.post("/webhook", async (req, res) => {
     }
 
     for (const { igAccountId, commentId, commenterId, commentText } of commentEvents) {
+      console.log("webhook: comment event received", { igAccountId, commentId, commenterId, commentText: commentText?.slice(0, 80) });
       void handlePostCommentKeyword(igAccountId, commentId, commenterId, commentText);
+      void handlePostCommentAutoDm(igAccountId, commentId, commenterId, commentText);
     }
 
     for (const { messaging } of events) {
