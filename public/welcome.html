@@ -406,15 +406,15 @@
         </div>
       </div>
       <div class="section-body">
-        <!-- EDIT: Replace src with your YouTube embed URL e.g. https://www.youtube.com/embed/VIDEO_ID -->
+        <!-- EDIT: Replace src with your direct video URL -->
         <div class="video-wrap">
-          <!-- <iframe src="https://www.youtube.com/embed/YOUR_VIDEO_ID_HERE" allowfullscreen></iframe> -->
-          <div class="video-placeholder">
+          <video src="" controls style="position:absolute;inset:0;width:100%;height:100%;border-radius:12px;background:#000;"></video>
+          <div class="video-placeholder" id="placeholder1">
             <div class="icon">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
             </div>
-            <strong>Watch This First - paste YouTube embed URL here</strong>
-            <span>Edit /welcome route in the codebase to add the iframe src</span>
+            <strong>Watch This First - add video URL to src attribute</strong>
+            <span>Edit /welcome route in the codebase to set the video src</span>
           </div>
         </div>
       </div>
@@ -429,15 +429,15 @@
         </div>
       </div>
       <div class="section-body">
-        <!-- EDIT: Replace src with your YouTube embed URL -->
+        <!-- EDIT: Replace src with your direct video URL -->
         <div class="video-wrap">
-          <!-- <iframe src="https://www.youtube.com/embed/YOUR_VIDEO_ID_HERE" allowfullscreen></iframe> -->
-          <div class="video-placeholder">
+          <video src="" controls style="position:absolute;inset:0;width:100%;height:100%;border-radius:12px;background:#000;"></video>
+          <div class="video-placeholder" id="placeholder2">
             <div class="icon">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
             </div>
-            <strong>Offer Breakdown - paste YouTube embed URL here</strong>
-            <span>Edit /welcome route in the codebase to add the iframe src</span>
+            <strong>Offer Breakdown - add video URL to src attribute</strong>
+            <span>Edit /welcome route in the codebase to set the video src</span>
           </div>
         </div>
       </div>
@@ -586,6 +586,14 @@
   </div>
 
   <script>
+    // Hide placeholder when video has a src set
+    document.querySelectorAll(".video-wrap video").forEach((v, i) => {
+      if (v.getAttribute("src")) {
+        const p = v.parentElement.querySelector(".video-placeholder");
+        if (p) p.style.display = "none";
+      }
+    });
+
     function toggleAccordion(btn) {
       const item = btn.closest(".accordion-item");
       const isOpen = item.classList.contains("open");
