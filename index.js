@@ -59,6 +59,10 @@ app.get("/terms", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "terms.html"));
 });
 
+app.get("/welcome", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "welcome.html"));
+});
+
 // Clean SaaS routes
 app.get("/checkout", (req, res) => {
   if (!isPayHost(req) && process.env.NODE_ENV === "production") {

@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Before Our Call — Looped</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --border: rgba(15,23,42,0.09);
+      --text: #0f172a;
+      --muted: rgba(15,23,42,0.52);
+      --accent: #2d6bff;
+      --accent-bg: rgba(45,107,255,0.07);
+      --shadow: 0 8px 28px rgba(15,23,42,0.07);
+      --radius: 18px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo {
+      width: 38px;
+      height: 38px;
+      background: #0f172a;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .logo svg { display: block; }
+
+    .header-text h1 {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      line-height: 1.2;
+    }
+
+    .header-text p {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+      color: #fff;
+      text-align: center;
+      padding: 64px 24px 56px;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      padding: 4px 14px;
+      margin-bottom: 18px;
+      color: rgba(255,255,255,0.85);
+    }
+
+    .hero h2 {
+      font-size: clamp(28px, 5vw, 44px);
+      font-weight: 900;
+      letter-spacing: -0.8px;
+      line-height: 1.15;
+      margin-bottom: 14px;
+    }
+
+    .hero p {
+      font-size: 16px;
+      color: rgba(255,255,255,0.72);
+      max-width: 500px;
+      margin: 0 auto;
+      line-height: 1.55;
+    }
+
+    /* ── Main content ── */
+    .main {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 48px 20px 80px;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    /* ── Section card ── */
+    .section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 22px 24px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .step-badge {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent-bg);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+    }
+
+    .section-body {
+      padding: 24px;
+    }
+
+    /* ── Video placeholder ── */
+    .video-wrap {
+      position: relative;
+      width: 100%;
+      padding-top: 56.25%; /* 16:9 */
+      background: #f1f4f9;
+      border: 2px dashed rgba(45,107,255,0.25);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .video-wrap iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      border-radius: 12px;
+    }
+
+    .video-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 14px;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .video-placeholder .icon {
+      width: 48px;
+      height: 48px;
+      background: rgba(45,107,255,0.1);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+    }
+
+    .video-placeholder strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    /* ── Calendar steps ── */
+    .calendar-group {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .calendar-block h4 {
+      font-size: 14px;
+      font-weight: 800;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .cal-icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+    }
+
+    .cal-steps {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      counter-reset: steps;
+    }
+
+    .cal-steps li {
+      counter-increment: steps;
+      display: flex;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .cal-steps li::before {
+      content: counter(steps);
+      min-width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #f1f4f9;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 4px 0;
+    }
+
+    /* ── Accordion ── */
+    .accordion {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .accordion-item {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .accordion-item:last-child {
+      border-bottom: none;
+    }
+
+    .accordion-trigger {
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 18px 0;
+      text-align: left;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      font-family: inherit;
+    }
+
+    .accordion-trigger:hover { color: var(--accent); }
+
+    .accordion-chevron {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      color: var(--muted);
+      transition: transform 0.2s ease;
+    }
+
+    .accordion-item.open .accordion-chevron {
+      transform: rotate(180deg);
+    }
+
+    .accordion-body {
+      display: none;
+      padding-bottom: 18px;
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .accordion-item.open .accordion-body {
+      display: block;
+    }
+
+    /* ── Results cards ── */
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .result-card {
+      background: #f7f8fb;
+      border: 1px dashed rgba(15,23,42,0.15);
+      border-radius: 14px;
+      padding: 28px 20px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .result-card .avatar {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: #e2e6ef;
+    }
+
+    .result-card .coming-soon {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: #e9ecf4;
+      border-radius: 999px;
+      padding: 3px 10px;
+    }
+
+    /* ── Footer note ── */
+    .footer-note {
+      text-align: center;
+      font-size: 11px;
+      color: rgba(15,23,42,0.28);
+      padding: 0 20px 40px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 600px) {
+      .section-body { padding: 18px; }
+      .section-header { padding: 18px 18px 14px; }
+      .hero { padding: 44px 20px 40px; }
+      .main { padding: 28px 16px 60px; gap: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <circle cx="10" cy="10" r="7" stroke="white" stroke-width="2.2"/>
+        <circle cx="10" cy="10" r="3" fill="white"/>
+      </svg>
+    </div>
+    <div class="header-text">
+      <h1>Looped</h1>
+      <p>Pre-Call Prep Page</p>
+    </div>
+  </div>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge">Before Our Call</div>
+    <h2>You're Booked In —<br>Here's What to Do Next</h2>
+    <p>Watch the videos below and follow the steps before we speak. It'll make our conversation way more valuable.</p>
+  </div>
+
+  <div class="main">
+
+    <!-- Step 1: Confirmation Video -->
+    <div class="section">
+      <div class="section-header">
+        <div class="step-badge">1</div>
+        <div>
+          <div class="section-title">Watch This First — Confirmation Video</div>
+        </div>
+      </div>
+      <div class="section-body">
+        <!-- EDIT: Replace src with your YouTube embed URL e.g. https://www.youtube.com/embed/VIDEO_ID -->
+        <div class="video-wrap">
+          <!-- <iframe src="https://www.youtube.com/embed/YOUR_VIDEO_ID_HERE" allowfullscreen></iframe> -->
+          <div class="video-placeholder">
+            <div class="icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </div>
+            <strong>Watch This First — paste YouTube embed URL here</strong>
+            <span>Edit /welcome route in the codebase to add the iframe src</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Offer Breakdown Video -->
+    <div class="section">
+      <div class="section-header">
+        <div class="step-badge">2</div>
+        <div>
+          <div class="section-title">Offer Breakdown Video</div>
+        </div>
+      </div>
+      <div class="section-body">
+        <!-- EDIT: Replace src with your YouTube embed URL -->
+        <div class="video-wrap">
+          <!-- <iframe src="https://www.youtube.com/embed/YOUR_VIDEO_ID_HERE" allowfullscreen></iframe> -->
+          <div class="video-placeholder">
+            <div class="icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </div>
+            <strong>Offer Breakdown — paste YouTube embed URL here</strong>
+            <span>Edit /welcome route in the codebase to add the iframe src</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Calendar -->
+    <div class="section">
+      <div class="section-header">
+        <div class="step-badge">3</div>
+        <div>
+          <div class="section-title">Add the Call to Your Calendar</div>
+        </div>
+      </div>
+      <div class="section-body">
+        <p style="font-size:14px;color:var(--muted);margin-bottom:20px;">After booking on Calendly, add the event to your personal calendar so you don't miss it.</p>
+        <div class="calendar-group">
+
+          <div class="calendar-block">
+            <h4><span class="cal-icon">📅</span> Google Calendar</h4>
+            <ol class="cal-steps">
+              <li>Open the confirmation email you received from Calendly after booking.</li>
+              <li>Click the <strong>"Add to Google Calendar"</strong> link in the email — it opens Google Calendar automatically.</li>
+              <li>Review the event details and click <strong>"Save"</strong> to add it to your calendar.</li>
+              <li>Make sure notifications are turned on so you get a reminder before the call.</li>
+            </ol>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="calendar-block">
+            <h4><span class="cal-icon">🍎</span> Apple Calendar (iPhone / Mac)</h4>
+            <ol class="cal-steps">
+              <li>Open the confirmation email from Calendly on your iPhone or Mac.</li>
+              <li>Tap or click the <strong>"Add to Apple Calendar"</strong> link — your Calendar app will open.</li>
+              <li>Tap <strong>"Add"</strong> to confirm. The event will appear in your calendar immediately.</li>
+              <li>Alternatively, open the <strong>.ics file</strong> attached to the email and tap "Add to Calendar" when prompted.</li>
+            </ol>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4: Q&A Accordion -->
+    <div class="section">
+      <div class="section-header">
+        <div class="step-badge">4</div>
+        <div>
+          <div class="section-title">Common Questions</div>
+        </div>
+      </div>
+      <div class="section-body" style="padding-top:8px;padding-bottom:8px;">
+        <div class="accordion">
+
+          <div class="accordion-item">
+            <button class="accordion-trigger" onclick="toggleAccordion(this)">
+              What should I prepare before the call?
+              <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div class="accordion-body">
+              Placeholder answer — edit this text directly in the codebase at the /welcome route. Describe what the prospect should have ready, think about, or bring to the call.
+            </div>
+          </div>
+
+          <div class="accordion-item">
+            <button class="accordion-trigger" onclick="toggleAccordion(this)">
+              How long will the call be?
+              <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div class="accordion-body">
+              Placeholder answer — edit this text directly in the codebase. Typical answer: around 30–45 minutes. We'll go through your situation, see if there's a fit, and if so, walk through what working together looks like.
+            </div>
+          </div>
+
+          <div class="accordion-item">
+            <button class="accordion-trigger" onclick="toggleAccordion(this)">
+              Is there anything I need to buy or sign up for before the call?
+              <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div class="accordion-body">
+              Placeholder answer — edit this text. Typical answer: No, nothing at all. Just show up and be ready to talk openly about where you're at and what you want to achieve.
+            </div>
+          </div>
+
+          <div class="accordion-item">
+            <button class="accordion-trigger" onclick="toggleAccordion(this)">
+              What happens after the call?
+              <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div class="accordion-body">
+              Placeholder answer — edit this text. Describe your post-call process: follow-up email, proposal, onboarding steps, etc.
+            </div>
+          </div>
+
+          <div class="accordion-item">
+            <button class="accordion-trigger" onclick="toggleAccordion(this)">
+              I need to reschedule — what do I do?
+              <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div class="accordion-body">
+              Placeholder answer — edit this text. Direct them to the reschedule link in the Calendly confirmation email, or give them your preferred contact method.
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 5: Client Results -->
+    <div class="section">
+      <div class="section-header">
+        <div class="step-badge">5</div>
+        <div>
+          <div class="section-title">Client Results</div>
+        </div>
+      </div>
+      <div class="section-body">
+        <p style="font-size:14px;color:var(--muted);margin-bottom:20px;">Real people, real outcomes. Here's what others have achieved.</p>
+        <div class="results-grid">
+
+          <div class="result-card">
+            <div class="avatar"></div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);">Client Name</div>
+            <div style="font-size:12px;color:var(--muted);">Result placeholder</div>
+            <span class="coming-soon">Coming Soon</span>
+          </div>
+
+          <div class="result-card">
+            <div class="avatar"></div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);">Client Name</div>
+            <div style="font-size:12px;color:var(--muted);">Result placeholder</div>
+            <span class="coming-soon">Coming Soon</span>
+          </div>
+
+          <div class="result-card">
+            <div class="avatar"></div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);">Client Name</div>
+            <div style="font-size:12px;color:var(--muted);">Result placeholder</div>
+            <span class="coming-soon">Coming Soon</span>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer note -->
+  <p class="footer-note">
+    Looped Developers Only — to update video content, edit the /welcome route directly in the codebase.
+  </p>
+
+  <script>
+    function toggleAccordion(btn) {
+      const item = btn.closest(".accordion-item");
+      const isOpen = item.classList.contains("open");
+      // Close all
+      document.querySelectorAll(".accordion-item.open").forEach((el) => el.classList.remove("open"));
+      // Open clicked if it was closed
+      if (!isOpen) item.classList.add("open");
+    }
+  </script>
+
+</body>
+</html>
