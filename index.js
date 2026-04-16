@@ -6281,7 +6281,7 @@ async function runFollowUpJob() {
         leadMemory = await getLeadMemory(lead.id);
       } catch {}
 
-      const text = buildFollowUpText(leadMemory);
+      const text = buildFollowUpText(leadMemory).replace(/—|–|--/g, "");
 
       const { sendResp, sendData } = await sendInstagramTextMessage({
         accessToken: igAccount.page_access_token,
