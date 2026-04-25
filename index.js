@@ -2664,7 +2664,7 @@ app.get("/coach/api/instagram/status", requireCoach, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("ig_accounts")
-      .select("ig_user_id, ig_username, page_id, is_active")
+      .select("ig_user_id, ig_username, page_id, page_access_token, is_active")
       .eq("client_id", req.coach.client_id)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
@@ -2672,14 +2672,37 @@ app.get("/coach/api/instagram/status", requireCoach, async (req, res) => {
       .maybeSingle();
 
     if (error || !data) {
-      return safeJson(res, 200, {
-        connected: false,
-      });
+      return safeJson(res, 200, { connected: false });
+    }
+
+    // Auto-sync ig_username from Meta — connection is always ig_user_id based.
+    // If the coach renamed their Instagram account, this updates the stored name
+    // silently without any disconnection or error.
+    let currentUsername = data.ig_username || null;
+    if (data.ig_user_id && data.page_access_token) {
+      try {
+        const meResp = await fetch(
+          `https://graph.facebook.com/v21.0/${encodeURIComponent(data.ig_user_id)}?fields=username&access_token=${encodeURIComponent(data.page_access_token)}`
+        );
+        if (meResp.ok) {
+          const meData = await meResp.json();
+          if (meData?.username && meData.username !== data.ig_username) {
+            console.log(`ig_status: username changed from ${data.ig_username} to ${meData.username} for client ${req.coach.client_id} — updating DB`);
+            await supabase
+              .from("ig_accounts")
+              .update({ ig_username: meData.username })
+              .eq("ig_user_id", data.ig_user_id);
+            currentUsername = meData.username;
+          }
+        }
+      } catch {
+        // Graph API call failed — use stored username, never fail the status check
+      }
     }
 
     return safeJson(res, 200, {
       connected: true,
-      username: data.ig_username || null,
+      username: currentUsername,
       ig_user_id: data.ig_user_id || null,
       page_id: data.page_id || null,
     });
@@ -2694,10 +2717,12 @@ async function getIgAccountByClientId(clientId) {
     .select("*")
     .eq("client_id", clientId)
     .eq("is_active", true)
-    .single();
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (error) throw error;
-  return data;
+  return data; // null if no active row
 }
 
 /**
