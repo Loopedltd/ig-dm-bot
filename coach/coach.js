@@ -371,11 +371,15 @@ badgeEl.className = "badge connected";
       btn.style.opacity = "1";
     }
   } catch (e) {
+    // Real auth failure — send back to login
+    if (e?.status === 401) {
+      window.location.href = "/coach/login.html";
+      return;
+    }
+    // Any other error (DB, network, subscription): show clean "not connected" state
     badgeEl.className = "badge warn";
-    badgeEl.textContent = "Error";
-
-    metaEl.textContent = "Failed to load Instagram status.";
-
+    badgeEl.textContent = "Not connected";
+    metaEl.textContent = "No Instagram account connected yet.";
     btn.disabled = false;
     btn.style.opacity = "1";
   }

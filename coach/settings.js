@@ -252,10 +252,14 @@
         metaEl.textContent = "No Instagram account connected yet.";
         btn.textContent = "Connect Instagram";
       }
-    } catch {
+    } catch (e) {
+      if (e?.status === 401) {
+        window.location.href = "/coach/login.html";
+        return;
+      }
       badgeEl.className = "badge warn";
-      badgeEl.textContent = "Error";
-      metaEl.textContent = "Failed to load Instagram status.";
+      badgeEl.textContent = "Not connected";
+      metaEl.textContent = "No Instagram account connected yet.";
     }
   }
 

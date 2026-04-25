@@ -2611,10 +2611,10 @@ async function getClientConfig(clientId) {
     .from("client_configs")
     .select("*")
     .eq("client_id", clientId)
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return data;
+  return data; // null if no config row exists
 }
 
 function signInstagramState(clientId) {
@@ -3280,18 +3280,27 @@ function signCoachToken(client_id) {
 }
 
 async function requireCoach(req, res, next) {
+  const hdr = req.headers.authorization || "";
+  const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
+
+  if (!token) return safeJson(res, 401, { error: "missing token" });
+
+  // Verify JWT first — only JWT errors should return "invalid token"
+  let decoded;
   try {
-    const hdr = req.headers.authorization || "";
-    const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
+    decoded = jwt.verify(token, COACH_JWT_SECRET);
+  } catch (e) {
+    const msg =
+      e?.name === "TokenExpiredError" ? "token expired" : "invalid token";
+    return safeJson(res, 401, { error: msg });
+  }
 
-    if (!token) return safeJson(res, 401, { error: "missing token" });
+  if (!decoded || decoded.role !== "coach" || !decoded.client_id) {
+    return safeJson(res, 403, { error: "forbidden" });
+  }
 
-    const decoded = jwt.verify(token, COACH_JWT_SECRET);
-
-    if (!decoded || decoded.role !== "coach" || !decoded.client_id) {
-      return safeJson(res, 403, { error: "forbidden" });
-    }
-
+  // Load config separately — DB errors should not surface as "invalid token"
+  try {
     const cfg = await getClientConfig(decoded.client_id);
     const status = cfg?.stripe_subscription_status || null;
 
@@ -3307,8 +3316,9 @@ async function requireCoach(req, res, next) {
     req.coach = decoded;
     req.coachConfig = cfg;
     return next();
-  } catch {
-    return safeJson(res, 401, { error: "invalid token" });
+  } catch (e) {
+    console.error("[requireCoach] config load error:", e?.message);
+    return safeJson(res, 500, { error: "Failed to load coach config" });
   }
 }
 
