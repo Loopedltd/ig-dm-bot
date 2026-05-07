@@ -3620,6 +3620,10 @@ app.get("/coach/api/prompt-usage", requireCoach, async (req, res) => {
 app.post("/coach/api/config", requireCoach, async (req, res) => {
   try {
     const patch = req.body || {};
+    console.log("[config save] received patch keys:", Object.keys(patch));
+    console.log("[config save] comment_keyword_dm_enabled:", patch.comment_keyword_dm_enabled, "(type:", typeof patch.comment_keyword_dm_enabled, ")");
+    console.log("[config save] comment_keyword_trigger:", patch.comment_keyword_trigger);
+    console.log("[config save] comment_keyword_dm_text:", patch.comment_keyword_dm_text);
     const allowed = {};
 if (typeof patch.example_messages === "string") {
   allowed.example_messages = patch.example_messages;
@@ -3641,8 +3645,8 @@ if (typeof patch.vocabulary === "string" || patch.vocabulary === null) {
     if (typeof patch.booking_url === "string" || patch.booking_url === null) {
       allowed.booking_url = patch.booking_url;
     }
-if (typeof patch.story_reply_auto_dm_enabled === "boolean") {
-  allowed.story_reply_auto_dm_enabled = patch.story_reply_auto_dm_enabled;
+if (patch.story_reply_auto_dm_enabled !== undefined && patch.story_reply_auto_dm_enabled !== null) {
+  allowed.story_reply_auto_dm_enabled = patch.story_reply_auto_dm_enabled === true || String(patch.story_reply_auto_dm_enabled) === "true";
 }
 
 if (
@@ -3651,8 +3655,8 @@ if (
 ) {
   allowed.story_reply_auto_dm_text = patch.story_reply_auto_dm_text;
 }
-if (typeof patch.comment_reply_auto_dm_enabled === "boolean") {
-  allowed.comment_reply_auto_dm_enabled = patch.comment_reply_auto_dm_enabled;
+if (patch.comment_reply_auto_dm_enabled !== undefined && patch.comment_reply_auto_dm_enabled !== null) {
+  allowed.comment_reply_auto_dm_enabled = patch.comment_reply_auto_dm_enabled === true || String(patch.comment_reply_auto_dm_enabled) === "true";
 }
 
 if (
@@ -3661,8 +3665,8 @@ if (
 ) {
   allowed.comment_reply_auto_dm_text = patch.comment_reply_auto_dm_text;
 }
-if (typeof patch.keyword_auto_dm_enabled === "boolean") {
-  allowed.keyword_auto_dm_enabled = patch.keyword_auto_dm_enabled;
+if (patch.keyword_auto_dm_enabled !== undefined && patch.keyword_auto_dm_enabled !== null) {
+  allowed.keyword_auto_dm_enabled = patch.keyword_auto_dm_enabled === true || String(patch.keyword_auto_dm_enabled) === "true";
 }
 
 if (
@@ -3678,9 +3682,9 @@ if (
 ) {
   allowed.keyword_auto_dm_text = patch.keyword_auto_dm_text;
 }
-// Feature 1 — comment keyword DM
-if (typeof patch.comment_keyword_dm_enabled === "boolean") {
-  allowed.comment_keyword_dm_enabled = patch.comment_keyword_dm_enabled;
+// Feature 1 — comment keyword DM (accept both boolean and string "true"/"false")
+if (patch.comment_keyword_dm_enabled !== undefined && patch.comment_keyword_dm_enabled !== null) {
+  allowed.comment_keyword_dm_enabled = patch.comment_keyword_dm_enabled === true || String(patch.comment_keyword_dm_enabled) === "true";
 }
 if (typeof patch.comment_keyword_trigger === "string" || patch.comment_keyword_trigger === null) {
   allowed.comment_keyword_trigger = patch.comment_keyword_trigger;
@@ -3688,8 +3692,8 @@ if (typeof patch.comment_keyword_trigger === "string" || patch.comment_keyword_t
 if (typeof patch.comment_keyword_dm_text === "string" || patch.comment_keyword_dm_text === null) {
   allowed.comment_keyword_dm_text = patch.comment_keyword_dm_text;
 }
-if (typeof patch.comment_keyword_reply_enabled === "boolean") {
-  allowed.comment_keyword_reply_enabled = patch.comment_keyword_reply_enabled;
+if (patch.comment_keyword_reply_enabled !== undefined && patch.comment_keyword_reply_enabled !== null) {
+  allowed.comment_keyword_reply_enabled = patch.comment_keyword_reply_enabled === true || String(patch.comment_keyword_reply_enabled) === "true";
 }
 if (typeof patch.comment_keyword_reply_text === "string" || patch.comment_keyword_reply_text === null) {
   allowed.comment_keyword_reply_text = patch.comment_keyword_reply_text;
@@ -3699,8 +3703,8 @@ if (typeof patch.new_follower_dm_text === "string" || patch.new_follower_dm_text
   allowed.new_follower_dm_text = patch.new_follower_dm_text;
 }
 // Feature 2 — contact collection
-if (typeof patch.contact_collection_enabled === "boolean") {
-  allowed.contact_collection_enabled = patch.contact_collection_enabled;
+if (patch.contact_collection_enabled !== undefined && patch.contact_collection_enabled !== null) {
+  allowed.contact_collection_enabled = patch.contact_collection_enabled === true || String(patch.contact_collection_enabled) === "true";
 }
     if (
       typeof patch.booking_url_alt === "string" ||
@@ -3810,6 +3814,8 @@ if (
 ) {
   allowed.faq = patch.faq;
 }
+    console.log("[config save] allowed keys being written:", Object.keys(allowed));
+    console.log("[config save] comment_keyword_dm_enabled in allowed:", allowed.comment_keyword_dm_enabled);
     const { data, error } = await supabase
       .from("client_configs")
       .update(allowed)
@@ -3817,10 +3823,15 @@ if (
       .select()
       .single();
 
-    if (error) return safeJson(res, 500, error);
+    if (error) {
+      console.error("[config save] supabase update error:", error?.message, error?.code, error?.details);
+      return safeJson(res, 500, { error: error?.message || String(error) });
+    }
 
+    console.log("[config save] success - comment_keyword_dm_enabled now:", data?.comment_keyword_dm_enabled);
     return safeJson(res, 200, { ok: true, config: data });
   } catch (e) {
+    console.error("[config save] caught exception:", e?.message);
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
 });
