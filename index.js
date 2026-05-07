@@ -5067,23 +5067,40 @@ async function handlePostCommentKeyword(igAccountId, commentId, commenterId, com
       return;
     }
 
-    const { data: cfg } = await supabase
+    const { data: cfg, error: cfgError } = await supabase
       .from("client_configs")
       .select("comment_keyword_dm_enabled, comment_keyword_trigger, comment_keyword_dm_text, comment_keyword_reply_enabled, comment_keyword_reply_text")
       .eq("client_id", igAccount.client_id)
       .maybeSingle();
 
-    if (!cfg?.comment_keyword_dm_enabled) return;
+    if (cfgError) {
+      console.error("comment_keyword: failed to load config", { clientId: igAccount.client_id, error: cfgError?.message });
+      return;
+    }
+
+    if (!cfg?.comment_keyword_dm_enabled) {
+      console.log("comment_keyword: feature disabled for client", igAccount.client_id);
+      return;
+    }
 
     const trigger = normaliseTriggerText(cfg.comment_keyword_trigger || "");
-    if (!trigger) return;
+    if (!trigger) {
+      console.log("comment_keyword: no trigger keyword configured for client", igAccount.client_id);
+      return;
+    }
 
     const incoming = normaliseTriggerText(commentText);
     // Match if comment contains the keyword (more permissive than exact match for comments)
-    if (!incoming.includes(trigger)) return;
+    if (!incoming.includes(trigger)) {
+      console.log("comment_keyword: keyword not matched", { trigger, incoming: incoming.slice(0, 80) });
+      return;
+    }
 
     const dmText = String(cfg.comment_keyword_dm_text || "").trim();
-    if (!dmText) return;
+    if (!dmText) {
+      console.log("comment_keyword: no DM text configured for client", igAccount.client_id);
+      return;
+    }
 
     // Duplicate guard — skip if we already DM'd for this comment
     const dedupKey = `${igAccount.client_id}:kw:${commentId}`;

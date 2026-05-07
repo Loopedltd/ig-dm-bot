@@ -611,6 +611,16 @@
           setErr("Add the keyword outbound message or turn Keyword auto-DM off."); return;
         }
 
+        const comment_keyword_dm_enabled = String(qs("#comment_keyword_dm_enabled")?.value || "false") === "true";
+        const comment_keyword_trigger = String(qs("#comment_keyword_trigger")?.value || "").trim();
+        const comment_keyword_dm_text = String(qs("#comment_keyword_dm_text")?.value || "").trim();
+        if (comment_keyword_dm_enabled && !comment_keyword_trigger) {
+          setErr("Add a trigger keyword for Comment Keyword Auto-DM or turn it off."); return;
+        }
+        if (comment_keyword_dm_enabled && !comment_keyword_dm_text) {
+          setErr("Add the DM text for Comment Keyword Auto-DM or turn it off."); return;
+        }
+
         const examplesRaw = String(qs("#example_messages")?.value || "").trim();
         const exParsed = parseExampleMessages(examplesRaw);
         if (!exParsed.ok) { setErr(exParsed.error); return; }
@@ -632,9 +642,9 @@
             keyword_auto_dm_enabled,
             keyword_trigger_text: keyword_trigger_text || null,
             keyword_auto_dm_text: keyword_auto_dm_text || null,
-            comment_keyword_dm_enabled: String(qs("#comment_keyword_dm_enabled")?.value || "false") === "true",
-            comment_keyword_trigger: String(qs("#comment_keyword_trigger")?.value || "").trim() || null,
-            comment_keyword_dm_text: String(qs("#comment_keyword_dm_text")?.value || "").trim() || null,
+            comment_keyword_dm_enabled,
+            comment_keyword_trigger: comment_keyword_trigger || null,
+            comment_keyword_dm_text: comment_keyword_dm_text || null,
             comment_keyword_reply_enabled: String(qs("#comment_keyword_reply_enabled")?.value || "false") === "true",
             comment_keyword_reply_text: String(qs("#comment_keyword_reply_text")?.value || "").trim() || null,
             contact_collection_enabled: String(qs("#contact_collection_enabled")?.value || "false") === "true",
