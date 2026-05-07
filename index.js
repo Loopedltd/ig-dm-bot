@@ -2711,6 +2711,56 @@ app.get("/coach/api/instagram/status", requireCoach, async (req, res) => {
   }
 });
 
+app.get("/coach/api/instagram/profile", requireCoach, async (req, res) => {
+  try {
+    const { data: igAcc } = await supabase
+      .from("ig_accounts")
+      .select("ig_user_id, page_access_token")
+      .eq("client_id", req.coach.client_id)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!igAcc?.ig_user_id || !igAcc?.page_access_token) {
+      return safeJson(res, 200, { connected: false });
+    }
+
+    const token = encodeURIComponent(igAcc.page_access_token);
+    const igId  = encodeURIComponent(igAcc.ig_user_id);
+
+    const [profileResp, mediaResp] = await Promise.all([
+      fetch(`https://graph.facebook.com/v21.0/${igId}?fields=username,name,biography,followers_count,profile_picture_url&access_token=${token}`),
+      fetch(`https://graph.facebook.com/v21.0/${igId}/media?fields=id,media_type,thumbnail_url,media_url,permalink&limit=9&access_token=${token}`),
+    ]);
+
+    const [profileData, mediaData] = await Promise.all([
+      profileResp.json(),
+      mediaResp.json(),
+    ]);
+
+    return safeJson(res, 200, {
+      connected: true,
+      profile: {
+        username:            profileData.username            || null,
+        name:                profileData.name                || null,
+        biography:           profileData.biography           || null,
+        followers_count:     profileData.followers_count     ?? null,
+        profile_picture_url: profileData.profile_picture_url || null,
+      },
+      media: (mediaData.data || []).slice(0, 9).map((m) => ({
+        id:            m.id,
+        type:          m.media_type,
+        // Videos expose thumbnail_url; images expose media_url
+        thumbnail_url: m.thumbnail_url || m.media_url || null,
+        permalink:     m.permalink     || null,
+      })),
+    });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
 async function getIgAccountByClientId(clientId) {
   const { data, error } = await supabase
     .from("ig_accounts")

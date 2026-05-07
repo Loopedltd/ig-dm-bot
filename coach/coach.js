@@ -385,6 +385,73 @@ badgeEl.className = "badge connected";
   }
 }
 
+async function loadInstagramProfile() {
+  const profileCard = qs("#igProfileCard");
+  const mediaCard   = qs("#igMediaCard");
+  if (!profileCard || !mediaCard) return;
+
+  try {
+    const data = await apiFetch(`${API}/instagram/profile`, { method: "GET" });
+
+    if (!data?.connected) {
+      profileCard.style.display = "none";
+      mediaCard.style.display   = "none";
+      return;
+    }
+
+    // ── Profile card ──────────────────────────────────────────────────────
+    const p = data.profile || {};
+    const contentEl = qs("#igProfileContent");
+    if (contentEl) {
+      const avatarHtml = p.profile_picture_url
+        ? `<img class="igAvatar" src="${p.profile_picture_url}" alt="Profile picture"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+           <div class="igAvatarFallback" style="display:none;">${(p.username || "?")[0].toUpperCase()}</div>`
+        : `<div class="igAvatarFallback">${(p.username || "?")[0].toUpperCase()}</div>`;
+
+      const followersHtml = p.followers_count !== null && p.followers_count !== undefined
+        ? `<div class="igFollowers"><span class="igFollowersNum">${Number(p.followers_count).toLocaleString()}</span> followers</div>`
+        : "";
+
+      const bioHtml = p.biography
+        ? `<div class="igProfileBio">${p.biography.replace(/</g, "&lt;")}</div>`
+        : "";
+
+      contentEl.innerHTML = `
+        ${avatarHtml}
+        <div class="igProfileInfo">
+          <div class="igProfileName">${(p.name || "").replace(/</g, "&lt;")}</div>
+          <div class="igProfileHandle">@${(p.username || "").replace(/</g, "&lt;")}</div>
+          ${bioHtml}
+          ${followersHtml}
+        </div>`;
+    }
+    profileCard.style.display = "block";
+
+    // ── Media grid ────────────────────────────────────────────────────────
+    const gridEl = qs("#igMediaGrid");
+    if (gridEl && Array.isArray(data.media) && data.media.length) {
+      gridEl.innerHTML = data.media.map((m) => {
+        const imgSrc = m.thumbnail_url || "";
+        const href   = m.permalink    || "#";
+        return `<div class="igMediaItem">
+          <a href="${href}" target="_blank" rel="noopener noreferrer">
+            <img src="${imgSrc}" alt="Instagram post" loading="lazy">
+          </a>
+        </div>`;
+      }).join("");
+      mediaCard.style.display = "block";
+    } else {
+      mediaCard.style.display = "none";
+    }
+
+  } catch {
+    // Non-critical — hide both sections silently on any error
+    profileCard.style.display = "none";
+    mediaCard.style.display   = "none";
+  }
+}
+
 function wireInstagramConnectButton() {
   const btn = qs("#connectInstagramBtn");
   if (!btn || btn.__wired) return;
@@ -1140,6 +1207,7 @@ function wireQueueRefreshButton() {
 
     await Promise.allSettled([
       loadInstagramConnectionStatus(),
+      loadInstagramProfile(),
       loadGlobalPauseStatus(),
       loadManualTakeovers(),
       loadQueueStatus(),

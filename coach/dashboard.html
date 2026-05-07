@@ -468,6 +468,95 @@ input:focus, textarea:focus, select:focus{
         text-align:right;
       }
 
+      /* ---- Instagram profile card ---- */
+      .igProfileRow{
+        display:flex;
+        align-items:flex-start;
+        gap:16px;
+        margin-top:14px;
+        flex-wrap:wrap;
+      }
+      .igAvatar{
+        width:64px;
+        height:64px;
+        border-radius:50%;
+        object-fit:cover;
+        flex-shrink:0;
+        background:rgba(15,23,42,0.08);
+        border:1px solid var(--border);
+      }
+      .igAvatarFallback{
+        width:64px;
+        height:64px;
+        border-radius:50%;
+        background:var(--primary);
+        color:#fff;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:24px;
+        font-weight:800;
+        flex-shrink:0;
+      }
+      .igProfileInfo{
+        display:flex;
+        flex-direction:column;
+        gap:3px;
+        min-width:0;
+        flex:1;
+      }
+      .igProfileName{
+        font-size:16px;
+        font-weight:800;
+        letter-spacing:-0.2px;
+      }
+      .igProfileHandle{
+        font-size:13px;
+        color:var(--muted);
+      }
+      .igProfileBio{
+        font-size:13px;
+        color:var(--text);
+        line-height:1.45;
+        margin-top:6px;
+        white-space:pre-wrap;
+      }
+      .igFollowers{
+        font-size:13px;
+        font-weight:700;
+        margin-top:6px;
+      }
+      .igFollowersNum{
+        color:var(--primary);
+      }
+
+      /* ---- Recent media grid ---- */
+      .igMediaGrid{
+        display:grid;
+        grid-template-columns:repeat(3,1fr);
+        gap:8px;
+        margin-top:14px;
+      }
+      .igMediaItem{
+        aspect-ratio:1;
+        border-radius:10px;
+        overflow:hidden;
+        background:rgba(15,23,42,0.06);
+      }
+      .igMediaItem a{
+        display:block;
+        width:100%;
+        height:100%;
+      }
+      .igMediaItem img{
+        width:100%;
+        height:100%;
+        object-fit:cover;
+        display:block;
+        transition:opacity .15s;
+      }
+      .igMediaItem:hover img{ opacity:0.82; }
+
       @media (max-width: 900px){
         .row{ grid-template-columns: 1fr; }
         h1{ font-size: 28px; }
@@ -525,6 +614,24 @@ input:focus, textarea:focus, select:focus{
             <button class="btn primary" id="connectInstagramBtn">Connect Instagram</button>
           </div>
         </div>
+      </div>
+
+      <!-- Connected Instagram Profile — hidden until connected -->
+      <div class="card" id="igProfileCard" style="display:none;">
+        <div class="takeoverHeader">
+          <div class="takeoverTitle">Connected Instagram Profile</div>
+        </div>
+        <div class="igProfileRow" id="igProfileContent">
+          <div class="takeoverMeta">Loading profile…</div>
+        </div>
+      </div>
+
+      <!-- Recent Media — hidden until connected -->
+      <div class="card" id="igMediaCard" style="display:none;">
+        <div class="takeoverHeader">
+          <div class="takeoverTitle">Recent Media</div>
+        </div>
+        <div class="igMediaGrid" id="igMediaGrid"></div>
       </div>
 
       <div class="card" id="broadcastCard">
