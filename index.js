@@ -337,6 +337,7 @@ function extractPostCommentEvents(reqBody) {
             igAccountId: entry.id,
             commentId: String(v.id),
             commenterId: String(v.from.id),
+            commenterUsername: v?.from?.username ? String(v.from.username) : null,
             commentText: String(commentText),
           });
         } else {
@@ -2761,6 +2762,22 @@ app.get("/coach/api/instagram/profile", requireCoach, async (req, res) => {
   }
 });
 
+app.get("/coach/api/comment-activity", requireCoach, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("comment_activity_log")
+      .select("id, ig_username, trigger_type, keyword, status, created_at")
+      .eq("client_id", req.coach.client_id)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (error) return safeJson(res, 500, { error: error.message });
+    return safeJson(res, 200, { rows: data || [] });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
 async function getIgAccountByClientId(clientId) {
   const { data, error } = await supabase
     .from("ig_accounts")
@@ -5033,7 +5050,7 @@ async function postPublicCommentReply(accessToken, commentId, replyText) {
   return { ok: resp.ok, data };
 }
 
-async function handlePostCommentKeyword(igAccountId, commentId, commenterId, commentText) {
+async function handlePostCommentKeyword(igAccountId, commentId, commenterId, commenterUsername, commentText) {
   try {
     const { data: igAccount, error: igLookupError } = await supabase
       .from("ig_accounts")
@@ -5093,6 +5110,15 @@ async function handlePostCommentKeyword(igAccountId, commentId, commenterId, com
       sendData,
     });
 
+    // Log to comment_activity_log for dashboard display
+    void supabase.from("comment_activity_log").insert({
+      client_id:   igAccount.client_id,
+      ig_username: commenterUsername || commenterId,
+      trigger_type: "comment_keyword",
+      keyword:     trigger,
+      status:      sendResp.ok ? "dm_sent" : "dm_failed",
+    });
+
     // Optionally post a public reply to the comment
     if (cfg.comment_keyword_reply_enabled) {
       const replyText = String(cfg.comment_keyword_reply_text || "").trim();
@@ -5115,7 +5141,7 @@ async function handlePostCommentKeyword(igAccountId, commentId, commenterId, com
   }
 }
 
-async function handlePostCommentAutoDm(igAccountId, commentId, commenterId, commentText) {
+async function handlePostCommentAutoDm(igAccountId, commentId, commenterId, commenterUsername, commentText) {
   try {
     const { data: igAccount, error: igLookupError } = await supabase
       .from("ig_accounts")
@@ -5182,6 +5208,15 @@ async function handlePostCommentAutoDm(igAccountId, commentId, commenterId, comm
       commenterId,
       clientId: igAccount.client_id,
       sendOk: sendResp.ok,
+    });
+
+    // Log to comment_activity_log for dashboard display
+    void supabase.from("comment_activity_log").insert({
+      client_id:   igAccount.client_id,
+      ig_username: commenterUsername || commenterId,
+      trigger_type: "comment_auto_dm",
+      keyword:     null,
+      status:      sendResp.ok ? "dm_sent" : "dm_failed",
     });
   } catch (e) {
     console.error("handlePostCommentAutoDm failed:", e?.message || e);
@@ -5357,10 +5392,10 @@ app.post("/webhook", async (req, res) => {
       void handleNewFollowerDm(igAccountId, followerId);
     }
 
-    for (const { igAccountId, commentId, commenterId, commentText } of commentEvents) {
+    for (const { igAccountId, commentId, commenterId, commenterUsername, commentText } of commentEvents) {
       console.log("webhook: comment event received", { igAccountId, commentId, commenterId, commentText: commentText?.slice(0, 80) });
-      void handlePostCommentKeyword(igAccountId, commentId, commenterId, commentText);
-      void handlePostCommentAutoDm(igAccountId, commentId, commenterId, commentText);
+      void handlePostCommentKeyword(igAccountId, commentId, commenterId, commenterUsername, commentText);
+      void handlePostCommentAutoDm(igAccountId, commentId, commenterId, commenterUsername, commentText);
     }
 
     for (const { messaging } of events) {

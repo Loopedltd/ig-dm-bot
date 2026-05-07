@@ -468,6 +468,67 @@ input:focus, textarea:focus, select:focus{
         text-align:right;
       }
 
+      /* ---- Comment activity table ---- */
+      .activityTable{
+        width:100%;
+        border-collapse:collapse;
+        margin-top:14px;
+        font-size:13px;
+      }
+      .activityTable th{
+        text-align:left;
+        padding:8px 10px;
+        color:var(--muted);
+        font-weight:700;
+        border-bottom:1px solid var(--border);
+        white-space:nowrap;
+      }
+      .activityTable td{
+        padding:10px 10px;
+        border-bottom:1px solid var(--border);
+        vertical-align:middle;
+        color:var(--text);
+      }
+      .activityTable tr:last-child td{ border-bottom:none; }
+      .activityTable tr:hover td{ background:rgba(15,23,42,0.015); }
+      .triggerBadge{
+        display:inline-flex;
+        align-items:center;
+        padding:3px 8px;
+        border-radius:999px;
+        font-size:11px;
+        font-weight:700;
+        white-space:nowrap;
+      }
+      .triggerBadge.keyword{
+        background:rgba(45,107,255,0.08);
+        color:#1d4ed8;
+        border:1px solid rgba(45,107,255,0.18);
+      }
+      .triggerBadge.auto{
+        background:rgba(124,58,237,0.08);
+        color:#6d28d9;
+        border:1px solid rgba(124,58,237,0.18);
+      }
+      .statusBadge{
+        display:inline-flex;
+        align-items:center;
+        padding:3px 8px;
+        border-radius:999px;
+        font-size:11px;
+        font-weight:700;
+      }
+      .statusBadge.sent{
+        background:var(--okBg);
+        color:var(--okText);
+        border:1px solid var(--okBorder);
+      }
+      .statusBadge.failed{
+        background:rgba(192,38,45,0.08);
+        color:#9b1c1c;
+        border:1px solid rgba(192,38,45,0.2);
+      }
+
       /* ---- Instagram profile card ---- */
       .igProfileRow{
         display:flex;
@@ -702,6 +763,19 @@ Hey — just checking in. If you're still thinking about it, happy to answer any
 
         <div class="takeoverList" id="queueStatusList" style="margin-top:12px;">
           <div class="takeoverMeta" id="queueStatusLoading">Loading…</div>
+        </div>
+      </div>
+
+      <div class="card" id="commentActivityCard">
+        <div class="takeoverHeader">
+          <div>
+            <div class="takeoverTitle">Recent Comment Activity</div>
+            <div class="takeoverSub">Last 10 DMs sent via comment triggers.</div>
+          </div>
+          <button class="btn small" id="refreshCommentActivityBtn">Refresh</button>
+        </div>
+        <div id="commentActivityBody">
+          <div class="takeoverMeta" style="margin-top:12px;">Loading…</div>
         </div>
       </div>
 

@@ -385,6 +385,74 @@ badgeEl.className = "badge connected";
   }
 }
 
+async function loadCommentActivity() {
+  const bodyEl = qs("#commentActivityBody");
+  if (!bodyEl) return;
+
+  try {
+    const data = await apiFetch(`${API}/comment-activity`, { method: "GET" });
+    const rows = data?.rows || [];
+
+    if (!rows.length) {
+      bodyEl.innerHTML = `<div class="takeoverMeta" style="margin-top:12px;">No activity yet.</div>`;
+      return;
+    }
+
+    const fmtDate = (iso) => {
+      try {
+        return new Date(iso).toLocaleString(undefined, {
+          month: "short", day: "numeric",
+          hour: "2-digit", minute: "2-digit",
+        });
+      } catch { return iso; }
+    };
+
+    const rowsHtml = rows.map((r) => {
+      const triggerClass = r.trigger_type === "comment_keyword" ? "keyword" : "auto";
+      const triggerLabel = r.trigger_type === "comment_keyword" ? "Comment Keyword" : "Comment Reply";
+      const statusClass  = r.status === "dm_sent" ? "sent" : "failed";
+      const statusLabel  = r.status === "dm_sent" ? "DM Sent" : "DM Failed";
+      const keyword      = r.keyword ? `<span class="mono">${r.keyword.replace(/</g, "&lt;")}</span>` : `<span style="color:var(--muted)">—</span>`;
+      const username     = r.ig_username ? `@${r.ig_username.replace(/</g, "&lt;")}` : `<span style="color:var(--muted)">unknown</span>`;
+
+      return `<tr>
+        <td style="white-space:nowrap;">${fmtDate(r.created_at)}</td>
+        <td>${username}</td>
+        <td><span class="triggerBadge ${triggerClass}">${triggerLabel}</span></td>
+        <td>${keyword}</td>
+        <td><span class="statusBadge ${statusClass}">${statusLabel}</span></td>
+      </tr>`;
+    }).join("");
+
+    bodyEl.innerHTML = `
+      <table class="activityTable">
+        <thead>
+          <tr>
+            <th>Date / Time</th>
+            <th>Instagram Username</th>
+            <th>Trigger Type</th>
+            <th>Keyword Used</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>`;
+  } catch {
+    bodyEl.innerHTML = `<div class="takeoverMeta" style="margin-top:12px;">Failed to load activity.</div>`;
+  }
+}
+
+function wireCommentActivityRefresh() {
+  const btn = qs("#refreshCommentActivityBtn");
+  if (!btn || btn.__wired) return;
+  btn.__wired = true;
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    await loadCommentActivity();
+    btn.disabled = false;
+  });
+}
+
 async function loadInstagramProfile() {
   const profileCard = qs("#igProfileCard");
   const mediaCard   = qs("#igMediaCard");
@@ -1204,10 +1272,12 @@ function wireQueueRefreshButton() {
     wireManualTakeoversRefreshButton();
     wireBroadcast();
     wireQueueRefreshButton();
+    wireCommentActivityRefresh();
 
     await Promise.allSettled([
       loadInstagramConnectionStatus(),
       loadInstagramProfile(),
+      loadCommentActivity(),
       loadGlobalPauseStatus(),
       loadManualTakeovers(),
       loadQueueStatus(),
