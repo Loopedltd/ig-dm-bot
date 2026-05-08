@@ -5139,12 +5139,14 @@ async function handlePostCommentKeyword(igAccountId, commentId, commenterId, com
     });
 
     // Log to comment_activity_log for dashboard display
-    void supabase.from("comment_activity_log").insert({
-      coach_id:    igAccount.client_id,
-      ig_username: commenterUsername || commenterId,
+    await supabase.from("comment_activity_log").insert({
+      coach_id:     igAccount.client_id,
+      ig_username:  commenterUsername || commenterId,
       trigger_type: "Comment Keyword",
-      keyword:     trigger,
-      status:      "dm_sent",
+      keyword:      trigger,
+      status:       "DM Sent",
+    }).then(({ error }) => {
+      if (error) console.error("comment_activity_log insert failed:", error.message, error.code);
     });
 
     // Optionally post a public reply to the comment
