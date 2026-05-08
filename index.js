@@ -2767,7 +2767,7 @@ app.get("/coach/api/comment-activity", requireCoach, async (req, res) => {
     const { data, error } = await supabase
       .from("comment_activity_log")
       .select("id, ig_username, trigger_type, keyword, status, created_at")
-      .eq("client_id", req.coach.client_id)
+      .eq("coach_id", req.coach.client_id)
       .order("created_at", { ascending: false })
       .limit(10);
 
@@ -5140,11 +5140,11 @@ async function handlePostCommentKeyword(igAccountId, commentId, commenterId, com
 
     // Log to comment_activity_log for dashboard display
     void supabase.from("comment_activity_log").insert({
-      client_id:   igAccount.client_id,
+      coach_id:    igAccount.client_id,
       ig_username: commenterUsername || commenterId,
-      trigger_type: "comment_keyword",
+      trigger_type: "Comment Keyword",
       keyword:     trigger,
-      status:      sendResp.ok ? "dm_sent" : "dm_failed",
+      status:      "dm_sent",
     });
 
     // Optionally post a public reply to the comment
@@ -5240,11 +5240,11 @@ async function handlePostCommentAutoDm(igAccountId, commentId, commenterId, comm
 
     // Log to comment_activity_log for dashboard display
     void supabase.from("comment_activity_log").insert({
-      client_id:   igAccount.client_id,
+      coach_id:    igAccount.client_id,
       ig_username: commenterUsername || commenterId,
-      trigger_type: "comment_auto_dm",
+      trigger_type: "Comment Auto-DM",
       keyword:     null,
-      status:      sendResp.ok ? "dm_sent" : "dm_failed",
+      status:      "dm_sent",
     });
   } catch (e) {
     console.error("handlePostCommentAutoDm failed:", e?.message || e);
