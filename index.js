@@ -27,6 +27,7 @@ const app = express();
  */
 app.use(
   express.json({
+    limit: "10mb",
     verify: (req, res, buf) => {
       req.rawBody = buf;
     },
@@ -6475,6 +6476,236 @@ async function runFollowUpJob() {
     }
   }
 }
+
+// ─── Pipeline CRM ────────────────────────────────────────────────────────────
+
+const PIPELINE_PASSWORD   = "Looped2024!";
+const PIPELINE_COOKIE_NAME = "pipeline_auth";
+const PIPELINE_AUTH_TOKEN  = crypto
+  .createHmac("sha256", process.env.DASHBOARD_JWT_SECRET || "pipeline_secret")
+  .update(PIPELINE_PASSWORD)
+  .digest("hex");
+
+function parsePipelineCookie(req) {
+  const raw = req.headers.cookie || "";
+  for (const part of raw.split(";")) {
+    const [k, ...rest] = part.trim().split("=");
+    if (k === PIPELINE_COOKIE_NAME) return rest.join("=");
+  }
+  return null;
+}
+
+function isPipelineAuthed(req) {
+  return parsePipelineCookie(req) === PIPELINE_AUTH_TOKEN;
+}
+
+function requirePipeline(req, res, next) {
+  if (isPipelineAuthed(req)) return next();
+  res.status(401).json({ error: "Unauthorized" });
+}
+
+// Serve login page or CRM depending on auth
+app.get("/pipeline", (req, res) => {
+  if (isPipelineAuthed(req)) {
+    res.sendFile(path.join(__dirname, "pipeline", "pipeline.html"));
+  } else {
+    res.sendFile(path.join(__dirname, "pipeline", "login.html"));
+  }
+});
+
+// Login
+app.post("/pipeline/login", (req, res) => {
+  const { password } = req.body || {};
+  if (password !== PIPELINE_PASSWORD) {
+    return res.status(401).json({ error: "Incorrect password" });
+  }
+  const maxAge = 30 * 24 * 60 * 60; // 30 days in seconds
+  res.setHeader(
+    "Set-Cookie",
+    `${PIPELINE_COOKIE_NAME}=${PIPELINE_AUTH_TOKEN}; Path=/pipeline; Max-Age=${maxAge}; HttpOnly; SameSite=Lax`
+  );
+  res.json({ ok: true });
+});
+
+// GET leads
+app.get("/pipeline/api/leads", requirePipeline, async (req, res) => {
+  const { data, error } = await supabase
+    .from("pipeline_leads")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ leads: data || [] });
+});
+
+// POST lead (create)
+app.post("/pipeline/api/leads", requirePipeline, async (req, res) => {
+  const {
+    handle, followers, follower_count, category,
+    stage, stage_reasoning, notes, next_steps,
+  } = req.body || {};
+  if (!handle) return res.status(400).json({ error: "handle required" });
+  const { data, error } = await supabase
+    .from("pipeline_leads")
+    .insert({
+      handle,
+      followers:      followers      || null,
+      follower_count: follower_count || null,
+      category:       category       || null,
+      stage:          stage          || "convo_cold",
+      stage_reasoning: stage_reasoning || null,
+      notes:          notes          || null,
+      next_steps:     next_steps     || [],
+    })
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ lead: data });
+});
+
+// PATCH lead (update)
+app.patch("/pipeline/api/leads/:id", requirePipeline, async (req, res) => {
+  const { id } = req.params;
+  const allowed = {};
+  const body = req.body || {};
+  const fields = [
+    "handle","followers","follower_count","category",
+    "stage","stage_reasoning","notes","next_steps",
+  ];
+  for (const f of fields) {
+    if (body[f] !== undefined) allowed[f] = body[f];
+  }
+  if (!Object.keys(allowed).length) return res.status(400).json({ error: "Nothing to update" });
+  const { data, error } = await supabase
+    .from("pipeline_leads")
+    .update(allowed)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ lead: data });
+});
+
+// DELETE lead
+app.delete("/pipeline/api/leads/:id", requirePipeline, async (req, res) => {
+  const { id } = req.params;
+  const { error } = await supabase.from("pipeline_leads").delete().eq("id", id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
+});
+
+// POST /pipeline/analyse — call Anthropic API with 2 images, return structured data
+app.post("/pipeline/analyse", requirePipeline, async (req, res) => {
+  const { profileImage, conversationImage } = req.body || {};
+  if (!profileImage || !conversationImage) {
+    return res.status(400).json({ error: "profileImage and conversationImage required" });
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
+
+  // Extract media_type and base64 data from data URL
+  function parseDataUrl(dataUrl) {
+    const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/s);
+    if (!m) throw new Error("Invalid image data URL");
+    return { media_type: m[1], data: m[2] };
+  }
+
+  let profile, conversation;
+  try {
+    profile      = parseDataUrl(profileImage);
+    conversation = parseDataUrl(conversationImage);
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
+
+  const prompt = `You are analysing an Instagram coach's profile for a sales pipeline CRM.
+
+Image 1 is the coach's Instagram profile screenshot.
+Image 2 is a screenshot of the conversation or DM thread with this coach.
+
+Extract and return ONLY a JSON object with these exact keys:
+{
+  "handle": "instagram username without @",
+  "followers": "display string e.g. '142K'",
+  "follower_count": 142000,
+  "category": "niche/category e.g. 'Fitness Coach', 'Business Coach', 'Life Coach'",
+  "stage": "one of: convo_cold, convo_warm, loom_created, loom_sent, interested, not_interested",
+  "stage_reasoning": "1-2 sentence explanation of why this stage",
+  "notes": "any other relevant notes about the coach or conversation",
+  "next_steps": ["array", "of", "actionable", "next steps"]
+}
+
+Base the stage on the conversation tone:
+- convo_cold: no reply or very generic/cold response
+- convo_warm: engaged, asked questions, showed some interest
+- loom_created/loom_sent: loom video was mentioned or sent
+- interested: expressed clear interest in working together
+- not_interested: explicitly declined or clearly uninterested
+
+Return ONLY the JSON object, no other text.`;
+
+  let anthropicRes;
+  try {
+    anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key":         apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type":      "application/json",
+      },
+      body: JSON.stringify({
+        model:      "claude-opus-4-6",
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type:   "image",
+                source: { type: "base64", media_type: profile.media_type, data: profile.data },
+              },
+              {
+                type:   "image",
+                source: { type: "base64", media_type: conversation.media_type, data: conversation.data },
+              },
+              { type: "text", text: prompt },
+            ],
+          },
+        ],
+      }),
+    });
+  } catch (e) {
+    return res.status(500).json({ error: "Anthropic API request failed: " + e.message });
+  }
+
+  if (!anthropicRes.ok) {
+    const errText = await anthropicRes.text().catch(() => "");
+    console.error("[pipeline/analyse] Anthropic error:", anthropicRes.status, errText);
+    return res.status(502).json({ error: "Anthropic API error: " + anthropicRes.status });
+  }
+
+  const payload = await anthropicRes.json();
+  const text = payload?.content?.[0]?.text || "";
+
+  // Extract JSON from response
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) {
+    console.error("[pipeline/analyse] No JSON in Anthropic response:", text);
+    return res.status(502).json({ error: "Could not parse AI response" });
+  }
+
+  let result;
+  try {
+    result = JSON.parse(match[0]);
+  } catch (e) {
+    console.error("[pipeline/analyse] JSON parse error:", e.message, match[0]);
+    return res.status(502).json({ error: "Could not parse AI response" });
+  }
+
+  res.json(result);
+});
+
+// ─── End Pipeline CRM ─────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

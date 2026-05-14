@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pipeline CRM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f0f2f5;
+      --card: #ffffff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --subtle: #9ca3af;
+      --primary: #4f46e5;
+      --primary-h: #4338ca;
+      --radius: 12px;
+      --shadow: 0 1px 6px rgba(0,0,0,0.07), 0 2px 12px rgba(0,0,0,0.04);
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ─────────────────────────────────────── */
+    .header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header-left { display: flex; align-items: baseline; gap: 10px; }
+    .logo {
+      font-family: 'Syne', sans-serif;
+      font-size: 19px;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .logo-tag {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--subtle);
+      letter-spacing: 0.02em;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 18px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-primary:hover { background: var(--primary-h); }
+
+    /* ── Stats bar ───────────────────────────────────── */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      padding: 20px 32px;
+    }
+    .stat-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 18px 22px;
+      box-shadow: var(--shadow);
+    }
+    .stat-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      font-family: 'Syne', sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .stat-value.total   { color: #4f46e5; }
+    .stat-value.warm    { color: #ea580c; }
+    .stat-value.interested { color: #16a34a; }
+    .stat-value.cold    { color: #2563eb; }
+
+    /* ── Tier sections ───────────────────────────────── */
+    .main { padding: 0 32px 48px; }
+    .tier-block { margin-bottom: 28px; }
+    .tier-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      padding-left: 2px;
+    }
+    .tier-label {
+      font-family: 'Syne', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .tier-count {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      background: #f3f4f6;
+      border-radius: 99px;
+      padding: 2px 9px;
+    }
+    .tier-empty {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      color: var(--subtle);
+      font-size: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    /* ── Table ───────────────────────────────────────── */
+    .table-wrap {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--subtle);
+      border-bottom: 1px solid #f3f4f6;
+      background: #fafafa;
+    }
+    thead th:first-child { width: 40px; }
+    thead th:last-child  { width: 48px; text-align: center; }
+
+    /* ── Lead rows ───────────────────────────────────── */
+    .lead-row {
+      border-bottom: 1px solid #f3f4f6;
+      border-left: 3px solid transparent;
+      transition: background 0.1s;
+      cursor: pointer;
+    }
+    .lead-row:last-of-type:not(.exp-row) { border-bottom: none; }
+    .lead-row:hover { background: #fafafa; }
+
+    .lead-row[data-stage="convo_cold"]     { border-left-color: #3b82f6; }
+    .lead-row[data-stage="convo_warm"]     { border-left-color: #f97316; }
+    .lead-row[data-stage="loom_created"]   { border-left-color: #eab308; }
+    .lead-row[data-stage="loom_sent"]      { border-left-color: #8b5cf6; }
+    .lead-row[data-stage="interested"]     { border-left-color: #22c55e; }
+    .lead-row[data-stage="not_interested"] { border-left-color: #ef4444; }
+
+    .lead-row td {
+      padding: 12px 14px;
+      font-size: 14px;
+      vertical-align: middle;
+    }
+    .lead-row td:first-child { padding-left: 12px; }
+
+    .expand-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--subtle);
+      font-size: 11px;
+      padding: 4px;
+      border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
+      line-height: 1;
+    }
+    .expand-btn:hover { color: var(--text); background: #f3f4f6; }
+
+    .handle { font-weight: 600; color: var(--text); }
+    .followers { font-weight: 500; color: var(--muted); font-size: 13px; }
+    .category {
+      font-size: 12px;
+      background: #f3f4f6;
+      border-radius: 99px;
+      padding: 3px 10px;
+      display: inline-block;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    /* Stage select */
+    .stage-select {
+      border-radius: 6px;
+      border-width: 1.5px;
+      border-style: solid;
+      padding: 4px 28px 4px 10px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      outline: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+    }
+    .stage-select:focus { outline: 2px solid #a5b4fc; outline-offset: 1px; }
+
+    .delete-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #d1d5db;
+      font-size: 16px;
+      line-height: 1;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .delete-btn:hover { color: #ef4444; background: #fef2f2; }
+
+    /* ── Expanded row ────────────────────────────────── */
+    .exp-row { border-bottom: 1px solid #f3f4f6; }
+    .exp-row:last-child { border-bottom: none; }
+    .exp-body {
+      padding: 16px 16px 20px 55px;
+      background: #fafbfc;
+    }
+    .exp-section { margin-bottom: 14px; }
+    .exp-section:last-child { margin-bottom: 0; }
+    .exp-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--subtle);
+      margin-bottom: 5px;
+    }
+    .exp-text {
+      font-size: 13.5px;
+      color: var(--muted);
+      line-height: 1.55;
+      font-style: italic;
+    }
+    .next-steps-ta {
+      width: 100%;
+      border: 1.5px solid var(--border);
+      border-radius: 7px;
+      padding: 10px 12px;
+      font-family: inherit;
+      font-size: 13.5px;
+      color: var(--text);
+      resize: vertical;
+      min-height: 72px;
+      outline: none;
+      transition: border-color 0.15s;
+      line-height: 1.5;
+      background: #fff;
+    }
+    .next-steps-ta:focus { border-color: var(--primary); }
+    .save-hint {
+      font-size: 11px;
+      color: var(--subtle);
+      margin-top: 4px;
+    }
+
+    /* ── Empty / loading state ───────────────────────── */
+    .state-msg {
+      padding: 60px 32px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    /* ── Modal overlay ───────────────────────────────── */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+    }
+    .modal {
+      background: var(--card);
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      width: 100%;
+      max-width: 560px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 32px;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+    .modal-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 19px;
+      font-weight: 700;
+    }
+    .modal-sub { font-size: 13px; color: var(--muted); margin-top: 3px; }
+    .close-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--subtle);
+      font-size: 22px;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 6px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .close-btn:hover { color: var(--text); background: #f3f4f6; }
+
+    /* Upload area */
+    .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .upload-box {
+      border: 2px dashed #d1d5db;
+      border-radius: 10px;
+      padding: 20px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+    .upload-box:hover, .upload-box.dragover { border-color: var(--primary); background: #eef2ff; }
+    .upload-box.has-image { border-color: #22c55e; border-style: solid; }
+    .upload-box input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .upload-icon { font-size: 24px; margin-bottom: 6px; }
+    .upload-label { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+    .upload-hint { font-size: 11px; color: var(--muted); }
+    .upload-preview {
+      width: 100%;
+      height: 100px;
+      object-fit: cover;
+      border-radius: 6px;
+      display: none;
+      margin-bottom: 6px;
+    }
+
+    /* Modal form fields */
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 5px;
+    }
+    .field input, .field select, .field textarea {
+      width: 100%;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+      background: #fff;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--primary); }
+    .field textarea { resize: vertical; min-height: 80px; }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* Loading spinner */
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid #e5e7eb;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      justify-content: flex-end;
+    }
+    .btn-ghost {
+      background: none;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 18px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-ghost:hover { border-color: #9ca3af; color: var(--text); }
+    .btn-primary-sm {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 20px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-primary-sm:hover { background: var(--primary-h); }
+    .btn-primary-sm:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+    .modal-err { color: #dc2626; font-size: 13px; margin-top: 10px; }
+    .divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+    @media (max-width: 700px) {
+      .stats-bar { grid-template-columns: repeat(2, 1fr); }
+      .main, .header { padding-left: 16px; padding-right: 16px; }
+      .upload-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo">Pipeline CRM</div>
+    <div class="logo-tag">Outreach tracker</div>
+  </div>
+  <button class="btn-primary" onclick="openModal()">+ Add Coach</button>
+</header>
+
+<!-- Stats bar -->
+<div class="stats-bar" id="statsBar">
+  <div class="stat-card">
+    <div class="stat-label">Total Coaches</div>
+    <div class="stat-value total" id="statTotal">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Warm Leads</div>
+    <div class="stat-value warm" id="statWarm">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Interested</div>
+    <div class="stat-value interested" id="statInterested">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Not Interested</div>
+    <div class="stat-value cold" id="statNot">—</div>
+  </div>
+</div>
+
+<!-- Main content -->
+<main class="main" id="main">
+  <div class="state-msg">Loading pipeline…</div>
+</main>
+
+<!-- Add Coach Modal -->
+<div class="overlay" id="overlay" style="display:none" onclick="overlayClick(event)">
+  <div class="modal" id="modal">
+
+    <!-- Step 1: Upload images -->
+    <div id="step1">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Add Coach</div>
+          <div class="modal-sub">Upload screenshots to analyse automatically.</div>
+        </div>
+        <button class="close-btn" onclick="closeModal()">×</button>
+      </div>
+
+      <div class="upload-grid">
+        <div class="upload-box" id="profileBox" ondragover="dragOver(event,'profileBox')" ondragleave="dragLeave(event,'profileBox')" ondrop="drop(event,'profile')">
+          <input type="file" accept="image/*" onchange="handleFile(event,'profile')" id="profileInput">
+          <img class="upload-preview" id="profilePreview">
+          <div class="upload-icon">📸</div>
+          <div class="upload-label">Profile Screenshot</div>
+          <div class="upload-hint">Their IG profile page</div>
+        </div>
+        <div class="upload-box" id="convoBox" ondragover="dragOver(event,'convoBox')" ondragleave="dragLeave(event,'convoBox')" ondrop="drop(event,'convo')">
+          <input type="file" accept="image/*" onchange="handleFile(event,'convo')" id="convoInput">
+          <img class="upload-preview" id="convoPreview">
+          <div class="upload-icon">💬</div>
+          <div class="upload-label">Conversation Screenshot</div>
+          <div class="upload-hint">Your DM thread with them</div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn-primary-sm" id="analyseBtn" onclick="analyse()" disabled>Analyse ✦</button>
+      </div>
+      <div class="modal-err" id="step1Err"></div>
+    </div>
+
+    <!-- Step 2: Loading -->
+    <div id="step2" style="display:none">
+      <div style="text-align:center; padding: 40px 0 32px;">
+        <div class="spinner"></div>
+        <div style="font-weight:600; font-size:15px; margin-bottom:6px;">Analysing screenshots…</div>
+        <div style="color:var(--muted); font-size:13px;">Claude is reading the profile and conversation.</div>
+      </div>
+    </div>
+
+    <!-- Step 3: Review & Save -->
+    <div id="step3" style="display:none">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Review & Save</div>
+          <div class="modal-sub">Edit any field before saving.</div>
+        </div>
+        <button class="close-btn" onclick="closeModal()">×</button>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>Handle</label>
+          <input type="text" id="fHandle" placeholder="@username">
+        </div>
+        <div class="field">
+          <label>Category / Niche</label>
+          <input type="text" id="fCategory" placeholder="e.g. fitness">
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>Followers (display)</label>
+          <input type="text" id="fFollowers" placeholder="e.g. 125K">
+        </div>
+        <div class="field">
+          <label>Follower Count (number)</label>
+          <input type="number" id="fFollowerCount" placeholder="125000">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Stage</label>
+        <select id="fStage">
+          <option value="convo_cold">Cold</option>
+          <option value="convo_warm">Warm</option>
+          <option value="loom_created">Loom Created</option>
+          <option value="loom_sent">Loom Sent</option>
+          <option value="interested">Interested</option>
+          <option value="not_interested">Not Interested</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Stage Reasoning</label>
+        <textarea id="fReasoning" rows="2"></textarea>
+      </div>
+
+      <div class="field">
+        <label>Notes</label>
+        <textarea id="fNotes" rows="2"></textarea>
+      </div>
+
+      <div class="field">
+        <label>Next Steps (one per line)</label>
+        <textarea id="fNextSteps" rows="3"></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="backToStep1()">← Back</button>
+        <button class="btn-primary-sm" id="saveBtn" onclick="saveLead()">Save to Pipeline</button>
+      </div>
+      <div class="modal-err" id="step3Err"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── Constants ──────────────────────────────────────────────────
+  const STAGES = {
+    convo_cold:     { label: 'Cold',          bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
+    convo_warm:     { label: 'Warm',          bg: '#fff7ed', text: '#c2410c', border: '#fed7aa' },
+    loom_created:   { label: 'Loom Created',  bg: '#fefce8', text: '#854d0e', border: '#fde68a' },
+    loom_sent:      { label: 'Loom Sent',     bg: '#f5f3ff', text: '#6d28d9', border: '#ddd6fe' },
+    interested:     { label: 'Interested',    bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' },
+    not_interested: { label: 'Not Interested',bg: '#fef2f2', text: '#b91c1c', border: '#fecaca' },
+  };
+
+  const TIERS = [
+    { id: 'top',    label: '100K+',        min: 100000, max: Infinity },
+    { id: 'mid',    label: '50K – 100K',   min: 50000,  max: 99999   },
+    { id: 'entry',  label: 'Under 50K',    min: 0,      max: 49999   },
+  ];
+
+  // ── State ──────────────────────────────────────────────────────
+  let leads = [];
+  let expandedIds = new Set();
+  let profileB64 = null;
+  let convoB64   = null;
+
+  // ── API ────────────────────────────────────────────────────────
+  async function api(method, path, body) {
+    const opts = {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+    };
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    const r = await fetch(path, opts);
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    return data;
+  }
+
+  // ── Load leads ─────────────────────────────────────────────────
+  async function loadLeads() {
+    try {
+      const data = await api('GET', '/pipeline/api/leads');
+      leads = data.leads || [];
+      render();
+    } catch (e) {
+      document.getElementById('main').innerHTML =
+        `<div class="state-msg">Failed to load pipeline: ${e.message}</div>`;
+    }
+  }
+
+  // ── Render ─────────────────────────────────────────────────────
+  function render() {
+    renderStats();
+    renderTiers();
+  }
+
+  function renderStats() {
+    document.getElementById('statTotal').textContent = leads.length;
+    document.getElementById('statWarm').textContent =
+      leads.filter(l => l.stage === 'convo_warm' || l.stage === 'loom_sent' || l.stage === 'loom_created').length;
+    document.getElementById('statInterested').textContent =
+      leads.filter(l => l.stage === 'interested').length;
+    document.getElementById('statNot').textContent =
+      leads.filter(l => l.stage === 'not_interested').length;
+  }
+
+  function getTier(lead) {
+    const n = Number(lead.follower_count) || 0;
+    if (n >= 100000) return 'top';
+    if (n >= 50000)  return 'mid';
+    return 'entry';
+  }
+
+  function renderTiers() {
+    const main = document.getElementById('main');
+    if (!leads.length) {
+      main.innerHTML = '<div class="state-msg">No coaches in the pipeline yet. Click <strong>+ Add Coach</strong> to get started.</div>';
+      return;
+    }
+
+    const html = TIERS.map(tier => {
+      const tierLeads = leads.filter(l => getTier(l) === tier.id);
+      return `
+        <div class="tier-block">
+          <div class="tier-header">
+            <div class="tier-label">${tier.label}</div>
+            <div class="tier-count">${tierLeads.length}</div>
+          </div>
+          ${tierLeads.length === 0
+            ? '<div class="tier-empty">No coaches in this tier.</div>'
+            : `<div class="table-wrap">${buildTable(tierLeads)}</div>`
+          }
+        </div>`;
+    }).join('');
+
+    main.innerHTML = html;
+    // Re-attach event listeners
+    attachListeners();
+  }
+
+  function buildTable(tierLeads) {
+    const header = `
+      <thead>
+        <tr>
+          <th></th>
+          <th>Handle</th>
+          <th>Followers</th>
+          <th>Category</th>
+          <th>Stage</th>
+          <th style="text-align:center">Del</th>
+        </tr>
+      </thead>`;
+
+    const rows = tierLeads.map(lead => {
+      const sc = STAGES[lead.stage] || STAGES.convo_cold;
+      const nextStepsText = Array.isArray(lead.next_steps)
+        ? lead.next_steps.join('\n')
+        : (lead.next_steps || '');
+      const isExp = expandedIds.has(lead.id);
+
+      return `
+        <tr class="lead-row" data-id="${lead.id}" data-stage="${lead.stage}">
+          <td>
+            <button class="expand-btn" data-id="${lead.id}" title="${isExp ? 'Collapse' : 'Expand'}">
+              ${isExp ? '▼' : '▶'}
+            </button>
+          </td>
+          <td><span class="handle">${esc(lead.handle)}</span></td>
+          <td><span class="followers">${esc(lead.followers || '—')}</span></td>
+          <td><span class="category">${esc(lead.category || '—')}</span></td>
+          <td>
+            <select class="stage-select" data-id="${lead.id}"
+              style="background:${sc.bg};color:${sc.text};border-color:${sc.border}">
+              ${Object.entries(STAGES).map(([val, cfg]) =>
+                `<option value="${val}"${val === lead.stage ? ' selected' : ''}>${cfg.label}</option>`
+              ).join('')}
+            </select>
+          </td>
+          <td style="text-align:center">
+            <button class="delete-btn" data-id="${lead.id}" title="Delete">×</button>
+          </td>
+        </tr>
+        ${isExp ? `
+        <tr class="exp-row">
+          <td colspan="6">
+            <div class="exp-body">
+              ${lead.stage_reasoning ? `
+                <div class="exp-section">
+                  <div class="exp-label">Stage Reasoning</div>
+                  <div class="exp-text">${esc(lead.stage_reasoning)}</div>
+                </div>` : ''}
+              ${lead.notes ? `
+                <div class="exp-section">
+                  <div class="exp-label">Notes</div>
+                  <div class="exp-text">${esc(lead.notes)}</div>
+                </div>` : ''}
+              <div class="exp-section">
+                <div class="exp-label">Next Steps</div>
+                <textarea class="next-steps-ta" data-id="${lead.id}" rows="3">${esc(nextStepsText)}</textarea>
+                <div class="save-hint">Edits save automatically on blur.</div>
+              </div>
+            </div>
+          </td>
+        </tr>` : ''}`;
+    }).join('');
+
+    return `<table>${header}<tbody>${rows}</tbody></table>`;
+  }
+
+  // ── Event delegation ───────────────────────────────────────────
+  function attachListeners() {
+    document.getElementById('main').addEventListener('click', handleMainClick);
+    document.getElementById('main').addEventListener('change', handleMainChange);
+    document.getElementById('main').addEventListener('blur', handleMainBlur, true);
+  }
+
+  function handleMainClick(e) {
+    // Expand/collapse
+    const expBtn = e.target.closest('.expand-btn');
+    if (expBtn) {
+      const id = expBtn.dataset.id;
+      if (expandedIds.has(id)) expandedIds.delete(id);
+      else expandedIds.add(id);
+      renderTiers();
+      return;
+    }
+    // Delete
+    const delBtn = e.target.closest('.delete-btn');
+    if (delBtn) {
+      deleteLead(delBtn.dataset.id);
+    }
+  }
+
+  async function handleMainChange(e) {
+    if (e.target.classList.contains('stage-select')) {
+      const id = e.target.dataset.id;
+      const stage = e.target.value;
+      await changeStage(id, stage);
+    }
+  }
+
+  async function handleMainBlur(e) {
+    if (e.target.classList.contains('next-steps-ta')) {
+      const id = e.target.dataset.id;
+      const text = e.target.value;
+      await saveNextSteps(id, text);
+    }
+  }
+
+  // ── Actions ────────────────────────────────────────────────────
+  async function changeStage(id, stage) {
+    try {
+      await api('PATCH', `/pipeline/api/leads/${id}`, { stage });
+      const lead = leads.find(l => l.id === id);
+      if (lead) lead.stage = stage;
+      // Update row styling without full re-render
+      const row = document.querySelector(`.lead-row[data-id="${id}"]`);
+      const sel = document.querySelector(`.stage-select[data-id="${id}"]`);
+      if (row) row.dataset.stage = stage;
+      if (sel) {
+        const sc = STAGES[stage] || STAGES.convo_cold;
+        sel.style.background   = sc.bg;
+        sel.style.color        = sc.text;
+        sel.style.borderColor  = sc.border;
+      }
+      renderStats();
+    } catch (e) {
+      alert('Failed to update stage: ' + e.message);
+    }
+  }
+
+  async function saveNextSteps(id, text) {
+    const next_steps = text.split('\n').map(s => s.trim()).filter(Boolean);
+    try {
+      await api('PATCH', `/pipeline/api/leads/${id}`, { next_steps });
+      const lead = leads.find(l => l.id === id);
+      if (lead) lead.next_steps = next_steps;
+    } catch (e) {
+      console.error('Failed to save next steps:', e.message);
+    }
+  }
+
+  async function deleteLead(id) {
+    if (!confirm('Delete this coach from the pipeline?')) return;
+    try {
+      await api('DELETE', `/pipeline/api/leads/${id}`);
+      leads = leads.filter(l => l.id !== id);
+      expandedIds.delete(id);
+      render();
+    } catch (e) {
+      alert('Failed to delete: ' + e.message);
+    }
+  }
+
+  // ── Modal ──────────────────────────────────────────────────────
+  function openModal() {
+    resetModal();
+    document.getElementById('overlay').style.display = 'flex';
+  }
+
+  function closeModal() {
+    document.getElementById('overlay').style.display = 'none';
+    resetModal();
+  }
+
+  function overlayClick(e) {
+    if (e.target === document.getElementById('overlay')) closeModal();
+  }
+
+  function resetModal() {
+    profileB64 = null;
+    convoB64   = null;
+    showStep(1);
+    // Reset upload boxes
+    ['profile','convo'].forEach(k => {
+      const box  = document.getElementById(k + 'Box');
+      const prev = document.getElementById(k + 'Preview');
+      const inp  = document.getElementById(k + 'Input');
+      box.classList.remove('has-image');
+      prev.style.display = 'none';
+      prev.src = '';
+      inp.value = '';
+      box.querySelector('.upload-icon').style.display = '';
+      box.querySelector('.upload-label').style.display = '';
+      box.querySelector('.upload-hint').style.display = '';
+    });
+    document.getElementById('analyseBtn').disabled = true;
+    document.getElementById('step1Err').textContent = '';
+    document.getElementById('step3Err').textContent = '';
+  }
+
+  function showStep(n) {
+    [1, 2, 3].forEach(i => {
+      document.getElementById('step' + i).style.display = i === n ? '' : 'none';
+    });
+  }
+
+  function backToStep1() { showStep(1); }
+
+  // ── Image handling ─────────────────────────────────────────────
+  function dragOver(e, boxId) {
+    e.preventDefault();
+    document.getElementById(boxId).classList.add('dragover');
+  }
+  function dragLeave(e, boxId) {
+    document.getElementById(boxId).classList.remove('dragover');
+  }
+  function drop(e, key) {
+    e.preventDefault();
+    const boxId = key === 'profile' ? 'profileBox' : 'convoBox';
+    document.getElementById(boxId).classList.remove('dragover');
+    const file = e.dataTransfer?.files?.[0];
+    if (file) processFile(file, key);
+  }
+  function handleFile(e, key) {
+    const file = e.target.files?.[0];
+    if (file) processFile(file, key);
+  }
+
+  async function processFile(file, key) {
+    const b64 = await resizeAndEncode(file, 1100);
+    const prevId  = key + 'Preview';
+    const boxId   = key + 'Box';
+    const preview = document.getElementById(prevId);
+    const box     = document.getElementById(boxId);
+
+    preview.src = b64;
+    preview.style.display = 'block';
+    box.classList.add('has-image');
+    box.querySelector('.upload-icon').style.display  = 'none';
+    box.querySelector('.upload-label').style.display = 'none';
+    box.querySelector('.upload-hint').style.display  = 'none';
+
+    if (key === 'profile') profileB64 = b64;
+    else                   convoB64   = b64;
+
+    document.getElementById('analyseBtn').disabled = !(profileB64 && convoB64);
+  }
+
+  function resizeAndEncode(file, maxPx) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width: w, height: h } = img;
+          if (w > maxPx || h > maxPx) {
+            if (w >= h) { h = Math.round(h * maxPx / w); w = maxPx; }
+            else        { w = Math.round(w * maxPx / h); h = maxPx; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width  = w;
+          canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.82));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // ── Analyse ────────────────────────────────────────────────────
+  async function analyse() {
+    if (!profileB64 || !convoB64) return;
+    document.getElementById('step1Err').textContent = '';
+    showStep(2);
+    try {
+      const result = await api('POST', '/pipeline/analyse', {
+        profileImage:      profileB64,
+        conversationImage: convoB64,
+      });
+      populateStep3(result);
+      showStep(3);
+    } catch (e) {
+      showStep(1);
+      document.getElementById('step1Err').textContent = 'Analysis failed: ' + e.message;
+    }
+  }
+
+  function populateStep3(r) {
+    document.getElementById('fHandle').value       = r.handle       || '';
+    document.getElementById('fFollowers').value    = r.followers    || '';
+    document.getElementById('fFollowerCount').value= r.follower_count || '';
+    document.getElementById('fCategory').value     = r.category     || '';
+    document.getElementById('fReasoning').value    = r.stage_reasoning || '';
+    document.getElementById('fNotes').value        = r.notes        || '';
+    const ns = Array.isArray(r.next_steps) ? r.next_steps.join('\n') : (r.next_steps || '');
+    document.getElementById('fNextSteps').value    = ns;
+    const stageEl = document.getElementById('fStage');
+    if (r.stage && STAGES[r.stage]) stageEl.value = r.stage;
+  }
+
+  // ── Save lead ──────────────────────────────────────────────────
+  async function saveLead() {
+    const handle = document.getElementById('fHandle').value.trim();
+    if (!handle) {
+      document.getElementById('step3Err').textContent = 'Handle is required.';
+      return;
+    }
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    document.getElementById('step3Err').textContent = '';
+    try {
+      const nsText  = document.getElementById('fNextSteps').value;
+      const next_steps = nsText.split('\n').map(s => s.trim()).filter(Boolean);
+      const payload = {
+        handle,
+        followers:      document.getElementById('fFollowers').value.trim() || null,
+        follower_count: Number(document.getElementById('fFollowerCount').value) || null,
+        category:       document.getElementById('fCategory').value.trim() || null,
+        stage:          document.getElementById('fStage').value,
+        stage_reasoning:document.getElementById('fReasoning').value.trim() || null,
+        notes:          document.getElementById('fNotes').value.trim() || null,
+        next_steps,
+      };
+      const data = await api('POST', '/pipeline/api/leads', payload);
+      leads.unshift(data.lead);
+      render();
+      closeModal();
+    } catch (e) {
+      document.getElementById('step3Err').textContent = 'Save failed: ' + e.message;
+      btn.disabled = false;
+      btn.textContent = 'Save to Pipeline';
+    }
+  }
+
+  // ── Utilities ──────────────────────────────────────────────────
+  function esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Init ───────────────────────────────────────────────────────
+  loadLeads();
+</script>
+</body>
+</html>
