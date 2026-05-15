@@ -6593,30 +6593,15 @@ app.delete("/pipeline/api/leads/:id", requirePipeline, async (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /pipeline/analyse — call Anthropic API with 2 images, return structured data
+// POST /pipeline/analyse — call OpenAI API with 2 images, return structured data
 app.post("/pipeline/analyse", requirePipeline, async (req, res) => {
   const { profileImage, conversationImage } = req.body || {};
   if (!profileImage || !conversationImage) {
     return res.status(400).json({ error: "profileImage and conversationImage required" });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
-
-  // Extract media_type and base64 data from data URL
-  function parseDataUrl(dataUrl) {
-    const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/s);
-    if (!m) throw new Error("Invalid image data URL");
-    return { media_type: m[1], data: m[2] };
-  }
-
-  let profile, conversation;
-  try {
-    profile      = parseDataUrl(profileImage);
-    conversation = parseDataUrl(conversationImage);
-  } catch (e) {
-    return res.status(400).json({ error: e.message });
-  }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "OPENAI_API_KEY not configured" });
 
   const prompt = `You are analysing an Instagram coach's profile for a sales pipeline CRM.
 
@@ -6644,29 +6629,28 @@ Base the stage on the conversation tone:
 
 Return ONLY the JSON object, no other text.`;
 
-  let anthropicRes;
+  let openaiRes;
   try {
-    anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+    openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        "x-api-key":         apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type":      "application/json",
+        "Authorization": "Bearer " + apiKey,
+        "Content-Type":  "application/json",
       },
       body: JSON.stringify({
-        model:      "claude-opus-4-6",
+        model:      "gpt-4o",
         max_tokens: 1024,
         messages: [
           {
             role: "user",
             content: [
               {
-                type:   "image",
-                source: { type: "base64", media_type: profile.media_type, data: profile.data },
+                type:      "image_url",
+                image_url: { url: profileImage },
               },
               {
-                type:   "image",
-                source: { type: "base64", media_type: conversation.media_type, data: conversation.data },
+                type:      "image_url",
+                image_url: { url: conversationImage },
               },
               { type: "text", text: prompt },
             ],
@@ -6675,22 +6659,22 @@ Return ONLY the JSON object, no other text.`;
       }),
     });
   } catch (e) {
-    return res.status(500).json({ error: "Anthropic API request failed: " + e.message });
+    return res.status(500).json({ error: "OpenAI API request failed: " + e.message });
   }
 
-  if (!anthropicRes.ok) {
-    const errText = await anthropicRes.text().catch(() => "");
-    console.error("[pipeline/analyse] Anthropic error:", anthropicRes.status, errText);
-    return res.status(502).json({ error: "Anthropic API error: " + anthropicRes.status });
+  if (!openaiRes.ok) {
+    const errText = await openaiRes.text().catch(() => "");
+    console.error("[pipeline/analyse] OpenAI error:", openaiRes.status, errText);
+    return res.status(502).json({ error: "OpenAI API error: " + openaiRes.status });
   }
 
-  const payload = await anthropicRes.json();
-  const text = payload?.content?.[0]?.text || "";
+  const payload = await openaiRes.json();
+  const text = payload?.choices?.[0]?.message?.content || "";
 
   // Extract JSON from response
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) {
-    console.error("[pipeline/analyse] No JSON in Anthropic response:", text);
+    console.error("[pipeline/analyse] No JSON in OpenAI response:", text);
     return res.status(502).json({ error: "Could not parse AI response" });
   }
 
