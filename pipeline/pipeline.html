@@ -1008,30 +1008,76 @@
     }
     const btn = document.getElementById('saveBtn');
     btn.disabled = true;
-    btn.textContent = 'Saving…';
+    btn.textContent = 'Saving...';
     document.getElementById('step3Err').textContent = '';
     try {
       const nsText  = document.getElementById('fNextSteps').value;
       const next_steps = nsText.split('\n').map(s => s.trim()).filter(Boolean);
       const payload = {
         handle,
-        followers:      document.getElementById('fFollowers').value.trim() || null,
-        follower_count: Number(document.getElementById('fFollowerCount').value) || null,
-        category:       document.getElementById('fCategory').value.trim() || null,
-        stage:          document.getElementById('fStage').value,
-        stage_reasoning:document.getElementById('fReasoning').value.trim() || null,
-        notes:          document.getElementById('fNotes').value.trim() || null,
+        followers:       document.getElementById('fFollowers').value.trim() || null,
+        follower_count:  Number(document.getElementById('fFollowerCount').value) || null,
+        category:        document.getElementById('fCategory').value.trim() || null,
+        stage:           document.getElementById('fStage').value,
+        stage_reasoning: document.getElementById('fReasoning').value.trim() || null,
+        notes:           document.getElementById('fNotes').value.trim() || null,
         next_steps,
       };
       const data = await api('POST', '/pipeline/api/leads', payload);
-      leads.unshift(data.lead);
-      render();
+
+      if (data.updated) {
+        // Replace existing lead in local array
+        const idx = leads.findIndex(l => l.id === data.lead.id);
+        if (idx !== -1) leads[idx] = data.lead;
+        else leads.unshift(data.lead);
+        render();
+        const stageLabel = (STAGES[data.lead.stage] || {}).label || data.lead.stage;
+        showSaveResult('existing', stageLabel);
+      } else {
+        leads.unshift(data.lead);
+        render();
+        showSaveResult('new');
+      }
+
       closeModal();
     } catch (e) {
       document.getElementById('step3Err').textContent = 'Save failed: ' + e.message;
       btn.disabled = false;
       btn.textContent = 'Save to Pipeline';
     }
+  }
+
+  // ── Save result banner ─────────────────────────────────────────
+  let _bannerTimer = null;
+  function showSaveResult(type, stageLabel) {
+    let existing = document.getElementById('saveBanner');
+    if (!existing) {
+      existing = document.createElement('div');
+      existing.id = 'saveBanner';
+      existing.style.cssText = [
+        'position:fixed', 'bottom:24px', 'left:50%', 'transform:translateX(-50%)',
+        'padding:12px 22px', 'border-radius:10px', 'font-size:14px', 'font-weight:600',
+        'box-shadow:0 4px 20px rgba(0,0,0,0.15)', 'z-index:200',
+        'transition:opacity 0.3s', 'pointer-events:none',
+      ].join(';');
+      document.body.appendChild(existing);
+    }
+
+    if (type === 'existing') {
+      existing.textContent = 'Coach already in pipeline - status updated to ' + stageLabel;
+      existing.style.background = '#fffbeb';
+      existing.style.color      = '#92400e';
+      existing.style.border     = '1px solid #fde68a';
+    } else {
+      existing.textContent = 'Coach added to pipeline';
+      existing.style.background = '#f0fdf4';
+      existing.style.color      = '#14532d';
+      existing.style.border     = '1px solid #bbf7d0';
+    }
+
+    existing.style.opacity = '1';
+    clearTimeout(_bannerTimer);
+    _bannerTimer = setTimeout(() => { existing.style.opacity = '0'; }, 3500);
   }
 
   // ── Utilities ──────────────────────────────────────────────────

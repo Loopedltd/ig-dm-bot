@@ -6586,29 +6586,65 @@ app.get("/pipeline/api/leads", requirePipeline, async (req, res) => {
   res.json({ leads: data || [] });
 });
 
-// POST lead (create)
+// POST lead (create or update if handle already exists)
 app.post("/pipeline/api/leads", requirePipeline, async (req, res) => {
   const {
     handle, followers, follower_count, category,
     stage, stage_reasoning, notes, next_steps,
   } = req.body || {};
   if (!handle) return res.status(400).json({ error: "handle required" });
+
+  // Check for existing coach with same handle (case-insensitive)
+  const { data: existing, error: lookupErr } = await supabase
+    .from("pipeline_leads")
+    .select("*")
+    .ilike("handle", handle.trim())
+    .maybeSingle();
+
+  if (lookupErr) return res.status(500).json({ error: lookupErr.message });
+
+  if (existing) {
+    // Update the existing record with freshly analysed fields
+    const updates = {
+      stage:           stage           || existing.stage,
+      stage_reasoning: stage_reasoning || existing.stage_reasoning,
+      notes:           notes           || existing.notes,
+      next_steps:      next_steps      || existing.next_steps,
+      last_analysed_at: new Date().toISOString(),
+    };
+    if (followers)      updates.followers      = followers;
+    if (follower_count) updates.follower_count = follower_count;
+    if (category)       updates.category       = category;
+
+    const { data: updated, error: updateErr } = await supabase
+      .from("pipeline_leads")
+      .update(updates)
+      .eq("id", existing.id)
+      .select()
+      .single();
+
+    if (updateErr) return res.status(500).json({ error: updateErr.message });
+    return res.json({ updated: true, lead: updated });
+  }
+
+  // No existing record — insert as new
   const { data, error } = await supabase
     .from("pipeline_leads")
     .insert({
-      handle,
-      followers:      followers      || null,
-      follower_count: follower_count || null,
-      category:       category       || null,
-      stage:          stage          || "convo_cold",
+      handle:          handle.trim(),
+      followers:       followers      || null,
+      follower_count:  follower_count || null,
+      category:        category       || null,
+      stage:           stage          || "convo_cold",
       stage_reasoning: stage_reasoning || null,
-      notes:          notes          || null,
-      next_steps:     next_steps     || [],
+      notes:           notes          || null,
+      next_steps:      next_steps     || [],
+      last_analysed_at: new Date().toISOString(),
     })
     .select()
     .single();
   if (error) return res.status(500).json({ error: error.message });
-  res.json({ lead: data });
+  res.json({ updated: false, lead: data });
 });
 
 // PATCH lead (update)
