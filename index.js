@@ -4502,43 +4502,43 @@ app.get("/coach/api/stats", requireCoach, async (req, res) => {
         }
       : DEFAULT_TARGETS;
 
-    if (!leadIds.length) {
-      return safeJson(res, 200, {
-        ok: true,
-        totals: {
-          leads: 0,
-          conversations: 0,
-          repliesSent: 0,
-          replyRate: 0,
-          pipelineLeads: pipelineLeads ?? 0,
-        },
-        targets,
-      });
-    }
+    // Query messages directly by client_id using role column
+    const [msgsRes, repliesRes, inboundRes] = await Promise.all([
+      supabase
+        .from("messages")
+        .select("lead_id")
+        .eq("client_id", clientId)
+        .limit(50000),
+      supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("client_id", clientId)
+        .eq("role", "assistant"),
+      supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("client_id", clientId)
+        .eq("role", "user"),
+    ]);
 
-    const { data: msgs, error: msgErr } = await supabase
-      .from("messages")
-      .select("lead_id,direction")
-      .in("lead_id", leadIds)
-      .limit(10000);
+    if (msgsRes.error)   return safeJson(res, 500, msgsRes.error);
+    if (repliesRes.error) return safeJson(res, 500, repliesRes.error);
+    if (inboundRes.error) return safeJson(res, 500, inboundRes.error);
 
-    if (msgErr) return safeJson(res, 500, msgErr);
-
-    let repliesSent = 0;
     const convoSet = new Set();
-
-    for (const m of msgs || []) {
-      if (m?.direction === "out") repliesSent++;
-      if (m?.direction === "in" && m?.lead_id) convoSet.add(m.lead_id);
+    for (const m of msgsRes.data || []) {
+      if (m?.lead_id) convoSet.add(m.lead_id);
     }
 
     const conversations = convoSet.size;
+    const repliesSent   = repliesRes.count ?? 0;
+    const inbound       = inboundRes.count ?? 0;
 
     let replyRate = 0;
-    if (conversations > 0) {
-      replyRate = Math.round((repliesSent / conversations) * 100);
+    if (inbound > 0) {
+      replyRate = Math.round((repliesSent / inbound) * 1000) / 10; // 1 decimal
       if (replyRate > 100) replyRate = 100;
-      if (replyRate < 0) replyRate = 0;
+      if (replyRate < 0)   replyRate = 0;
     }
 
     return safeJson(res, 200, {

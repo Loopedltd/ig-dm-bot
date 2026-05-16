@@ -111,55 +111,113 @@
       color: rgba(15, 23, 42, 0.82);
     }
 
-    .ringText{display:flex;flex-direction:column;gap:4px;padding-top:2px;}
+    .ringText{display:flex;flex-direction:column;gap:5px;padding-top:2px;}
     .ringText .title{font-weight:750;font-size:15px;letter-spacing:-0.1px;}
     .ringText .progress{color:var(--muted);font-size:13px;}
 
-    /* Inline target editor */
-    .setTargetLink{
-      font-size:12px;
-      color:var(--accent);
-      cursor:pointer;
-      text-decoration:underline;
-      text-underline-offset:2px;
-      background:none;border:none;padding:0;
-      font-family:inherit;
-    }
-    .setTargetLink:hover{opacity:0.75;}
-
-    .targetEditor{
-      display:none;
+    /* Set target button */
+    .setTargetBtn{
+      display:inline-flex;
       align-items:center;
-      gap:6px;
-      margin-top:4px;
-    }
-    .targetEditor.open{display:flex;}
-
-    .targetInput{
-      width:64px;
-      padding:4px 8px;
-      border:1px solid var(--border2);
+      padding:4px 10px;
       border-radius:8px;
-      font-size:13px;
+      border:1px solid var(--border2);
+      background:#fff;
+      box-shadow: var(--shadow2);
+      font-size:12px;
+      font-weight:600;
+      color:var(--text);
+      cursor:pointer;
+      font-family:inherit;
+      line-height:1.4;
+      width:fit-content;
+    }
+    .setTargetBtn:hover{ box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08); }
+    .setTargetBtn:active{ transform: translateY(0.5px); }
+
+    /* Modal overlay */
+    .modalOverlay{
+      display:none;
+      position:fixed;
+      inset:0;
+      background: rgba(15, 23, 42, 0.30);
+      backdrop-filter: blur(2px);
+      z-index:100;
+      align-items:center;
+      justify-content:center;
+    }
+    .modalOverlay.open{ display:flex; }
+
+    .modal{
+      background:#fff;
+      border-radius:22px;
+      border:1px solid var(--border);
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
+      padding:28px 28px 24px;
+      width:320px;
+      max-width:calc(100vw - 40px);
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+    }
+
+    .modal h2{
+      margin:0;
+      font-size:18px;
+      font-weight:750;
+      letter-spacing:-0.02em;
+    }
+
+    .modalInput{
+      width:100%;
+      box-sizing:border-box;
+      padding:10px 14px;
+      border:1px solid var(--border2);
+      border-radius:12px;
+      font-size:16px;
       font-family:inherit;
       color:var(--text);
       background:#fff;
     }
-    .targetInput:focus{outline:2px solid var(--accent);outline-offset:1px;}
+    .modalInput:focus{
+      outline:2px solid var(--accent);
+      outline-offset:1px;
+      border-color:transparent;
+    }
 
-    .saveBtn{
-      padding:4px 10px;
-      border-radius:8px;
+    .modalActions{
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+    }
+
+    .btnSave{
+      padding:9px 20px;
+      border-radius:12px;
       border:none;
       background:var(--accent);
       color:#fff;
-      font-size:12px;
+      font-size:14px;
       font-weight:650;
       cursor:pointer;
       font-family:inherit;
     }
-    .saveBtn:hover{opacity:0.85;}
-    .saveBtn:disabled{opacity:0.5;cursor:default;}
+    .btnSave:hover{opacity:0.88;}
+    .btnSave:disabled{opacity:0.5;cursor:default;}
+
+    .btnCancel{
+      padding:9px 16px;
+      border-radius:12px;
+      border:1px solid var(--border2);
+      background:#fff;
+      color:var(--text);
+      font-size:14px;
+      font-weight:600;
+      cursor:pointer;
+      font-family:inherit;
+      box-shadow: var(--shadow2);
+    }
+    .btnCancel:hover{ box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08); }
 
     /* Error box */
     .err{
@@ -224,11 +282,7 @@
           <div class="ringText">
             <div class="title">Leads</div>
             <div class="progress" id="progressLeads">-- / -- target</div>
-            <button class="setTargetLink" onclick="toggleEditor('leads')">Set target</button>
-            <div class="targetEditor" id="editorLeads">
-              <input class="targetInput" type="number" min="1" id="inputLeads" />
-              <button class="saveBtn" onclick="saveTarget('leads')">Save</button>
-            </div>
+            <button class="setTargetBtn" onclick="openModal('leads')">Set target</button>
           </div>
         </div>
 
@@ -245,11 +299,7 @@
           <div class="ringText">
             <div class="title">Conversations</div>
             <div class="progress" id="progressConvos">-- / -- target</div>
-            <button class="setTargetLink" onclick="toggleEditor('convos')">Set target</button>
-            <div class="targetEditor" id="editorConvos">
-              <input class="targetInput" type="number" min="1" id="inputConvos" />
-              <button class="saveBtn" onclick="saveTarget('convos')">Save</button>
-            </div>
+            <button class="setTargetBtn" onclick="openModal('convos')">Set target</button>
           </div>
         </div>
 
@@ -266,11 +316,7 @@
           <div class="ringText">
             <div class="title">Pipeline leads</div>
             <div class="progress" id="progressPipeline">-- / -- target</div>
-            <button class="setTargetLink" onclick="toggleEditor('pipeline')">Set target</button>
-            <div class="targetEditor" id="editorPipeline">
-              <input class="targetInput" type="number" min="1" id="inputPipeline" />
-              <button class="saveBtn" onclick="saveTarget('pipeline')">Save</button>
-            </div>
+            <button class="setTargetBtn" onclick="openModal('pipeline')">Set target</button>
           </div>
         </div>
 
@@ -280,12 +326,30 @@
     </div>
   </div>
 
+  <!-- Target modal -->
+  <div class="modalOverlay" id="modalOverlay" onclick="handleOverlayClick(event)">
+    <div class="modal" id="modal">
+      <h2 id="modalTitle">Set target</h2>
+      <input class="modalInput" type="number" min="1" id="modalInput" />
+      <div class="modalActions">
+        <button class="btnCancel" onclick="closeModal()">Cancel</button>
+        <button class="btnSave" id="modalSaveBtn" onclick="saveTarget()">Save</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const CIRC = 2 * Math.PI * 26; // 163.36
 
-    // Current state — updated after each load
     let state = { totals: {}, targets: {} };
     let authToken = null;
+    let activeModalKey = null;
+
+    const modalConfig = {
+      leads:    { title: "Set leads target",         field: "leadsTarget"         },
+      convos:   { title: "Set conversations target", field: "conversationsTarget"  },
+      pipeline: { title: "Set pipeline leads target",field: "pipelineLeadsTarget" },
+    };
 
     function setRing(circleId, pctId, current, target) {
       const pct = target > 0 ? Math.max(0, Math.min(100, Math.round(current / target * 100))) : 0;
@@ -308,33 +372,28 @@
 
     function renderStats(data) {
       state = data;
-      const t = data.totals || {};
+      const t   = data.totals  || {};
       const tgt = data.targets || {};
 
-      document.getElementById("leadsVal").textContent     = t.leads ?? 0;
-      document.getElementById("convosVal").textContent    = t.conversations ?? 0;
-      document.getElementById("pipelineVal").textContent  = t.pipelineLeads ?? 0;
+      document.getElementById("leadsVal").textContent     = t.leads         ?? 0;
+      document.getElementById("convosVal").textContent    = t.conversations  ?? 0;
+      document.getElementById("pipelineVal").textContent  = t.pipelineLeads  ?? 0;
       document.getElementById("replyRateVal").textContent = (t.replyRate ?? 0) + "%";
 
-      const leads       = t.leads         ?? 0;
-      const convos      = t.conversations ?? 0;
-      const pipeline    = t.pipelineLeads ?? 0;
-      const leadsTarget = tgt.leads         || 0;
-      const convTarget  = tgt.conversations || 0;
-      const plTarget    = tgt.pipelineLeads || 0;
+      const leads    = t.leads         ?? 0;
+      const convos   = t.conversations ?? 0;
+      const pipeline = t.pipelineLeads ?? 0;
+      const leadsT   = tgt.leads         || 0;
+      const convT    = tgt.conversations || 0;
+      const plT      = tgt.pipelineLeads || 0;
 
-      document.getElementById("progressLeads").textContent    = leads    + " / " + leadsTarget + " target";
-      document.getElementById("progressConvos").textContent   = convos   + " / " + convTarget  + " target";
-      document.getElementById("progressPipeline").textContent = pipeline + " / " + plTarget    + " target";
+      document.getElementById("progressLeads").textContent    = leads    + " / " + leadsT + " target";
+      document.getElementById("progressConvos").textContent   = convos   + " / " + convT  + " target";
+      document.getElementById("progressPipeline").textContent = pipeline + " / " + plT    + " target";
 
-      setRing("ringLeads",    "pctLeads",    leads,    leadsTarget);
-      setRing("ringConvos",   "pctConvos",   convos,   convTarget);
-      setRing("ringPipeline", "pctPipeline", pipeline, plTarget);
-
-      // Pre-fill inputs
-      document.getElementById("inputLeads").value    = leadsTarget;
-      document.getElementById("inputConvos").value   = convTarget;
-      document.getElementById("inputPipeline").value = plTarget;
+      setRing("ringLeads",    "pctLeads",    leads,    leadsT);
+      setRing("ringConvos",   "pctConvos",   convos,   convT);
+      setRing("ringPipeline", "pctPipeline", pipeline, plT);
     }
 
     async function loadStats() {
@@ -357,32 +416,47 @@
       renderStats(data);
     }
 
-    // ---- Inline target editors ----
+    // ---- Modal ----
 
-    const editorMap = {
-      leads:    { editorId: "editorLeads",    inputId: "inputLeads",    field: "leadsTarget"         },
-      convos:   { editorId: "editorConvos",   inputId: "inputConvos",   field: "conversationsTarget"  },
-      pipeline: { editorId: "editorPipeline", inputId: "inputPipeline", field: "pipelineLeadsTarget" },
-    };
-
-    function toggleEditor(key) {
-      const { editorId } = editorMap[key];
-      const el = document.getElementById(editorId);
-      el.classList.toggle("open");
+    function currentTargetForKey(key) {
+      const tgt = state.targets || {};
+      if (key === "leads")    return tgt.leads         || 0;
+      if (key === "convos")   return tgt.conversations || 0;
+      if (key === "pipeline") return tgt.pipelineLeads || 0;
+      return 0;
     }
 
-    async function saveTarget(key) {
-      const { editorId, inputId, field } = editorMap[key];
-      const input = document.getElementById(inputId);
-      const val = parseInt(input.value, 10);
+    function openModal(key) {
+      activeModalKey = key;
+      const cfg = modalConfig[key];
+      document.getElementById("modalTitle").textContent = cfg.title;
+      document.getElementById("modalInput").value = currentTargetForKey(key);
+      document.getElementById("modalSaveBtn").disabled = false;
+      document.getElementById("modalSaveBtn").textContent = "Save";
+      document.getElementById("modalOverlay").classList.add("open");
+      document.getElementById("modalInput").focus();
+    }
+
+    function closeModal() {
+      document.getElementById("modalOverlay").classList.remove("open");
+      activeModalKey = null;
+    }
+
+    function handleOverlayClick(e) {
+      if (e.target === document.getElementById("modalOverlay")) closeModal();
+    }
+
+    async function saveTarget() {
+      if (!activeModalKey) return;
+      const val = parseInt(document.getElementById("modalInput").value, 10);
       if (!val || val < 1) return;
 
-      const btn = document.querySelector("#" + editorId + " .saveBtn");
-      btn.disabled = true;
-      btn.textContent = "Saving...";
+      const saveBtn = document.getElementById("modalSaveBtn");
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving...";
 
       const body = {};
-      body[field] = val;
+      body[modalConfig[activeModalKey].field] = val;
 
       const res = await fetch("/coach/api/stats/targets", {
         method: "POST",
@@ -393,8 +467,8 @@
         body: JSON.stringify(body),
       });
 
-      btn.disabled = false;
-      btn.textContent = "Save";
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save";
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -402,10 +476,15 @@
         return;
       }
 
-      // Close editor and reload stats to update rings in place
-      document.getElementById(editorId).classList.remove("open");
+      closeModal();
       await loadStats();
     }
+
+    // Allow Enter key in modal input to save
+    document.getElementById("modalInput").addEventListener("keydown", function(e) {
+      if (e.key === "Enter") saveTarget();
+      if (e.key === "Escape") closeModal();
+    });
 
     loadStats();
   </script>
