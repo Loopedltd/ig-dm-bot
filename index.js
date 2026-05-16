@@ -4477,6 +4477,31 @@ app.get("/coach/api/stats", requireCoach, async (req, res) => {
     const leadIds = (leads || []).map((l) => l.id);
     const leadsCount = leadIds.length;
 
+    // pipeline_leads has no client_id — return total count across all coaches
+    const { count: pipelineLeads, error: plErr } = await supabase
+      .from("pipeline_leads")
+      .select("id", { count: "exact", head: true });
+
+    if (plErr) return safeJson(res, 500, plErr);
+
+    // Coach targets — use defaults if no row exists yet
+    const DEFAULT_TARGETS = { leads: 10, conversations: 50, pipelineLeads: 5 };
+    const { data: targetsRow, error: tErr } = await supabase
+      .from("coach_targets")
+      .select("leads_target,conversations_target,pipeline_leads_target")
+      .eq("client_id", clientId)
+      .maybeSingle();
+
+    if (tErr) return safeJson(res, 500, tErr);
+
+    const targets = targetsRow
+      ? {
+          leads:         targetsRow.leads_target,
+          conversations: targetsRow.conversations_target,
+          pipelineLeads: targetsRow.pipeline_leads_target,
+        }
+      : DEFAULT_TARGETS;
+
     if (!leadIds.length) {
       return safeJson(res, 200, {
         ok: true,
@@ -4485,8 +4510,9 @@ app.get("/coach/api/stats", requireCoach, async (req, res) => {
           conversations: 0,
           repliesSent: 0,
           replyRate: 0,
-          bookingClicks: 0,
+          pipelineLeads: pipelineLeads ?? 0,
         },
+        targets,
       });
     }
 
@@ -4515,8 +4541,6 @@ app.get("/coach/api/stats", requireCoach, async (req, res) => {
       if (replyRate < 0) replyRate = 0;
     }
 
-    const bookingClicks = 0;
-
     return safeJson(res, 200, {
       ok: true,
       totals: {
@@ -4524,9 +4548,34 @@ app.get("/coach/api/stats", requireCoach, async (req, res) => {
         conversations,
         repliesSent,
         replyRate,
-        bookingClicks,
+        pipelineLeads: pipelineLeads ?? 0,
       },
+      targets,
     });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+// POST /coach/api/stats/targets — upsert coach targets
+app.post("/coach/api/stats/targets", requireCoach, async (req, res) => {
+  try {
+    const clientId = req.coach.client_id;
+    const { leadsTarget, conversationsTarget, pipelineLeadsTarget } = req.body || {};
+
+    const row = { client_id: clientId };
+    if (leadsTarget         != null) row.leads_target          = parseInt(leadsTarget, 10);
+    if (conversationsTarget != null) row.conversations_target   = parseInt(conversationsTarget, 10);
+    if (pipelineLeadsTarget != null) row.pipeline_leads_target  = parseInt(pipelineLeadsTarget, 10);
+    row.updated_at = new Date().toISOString();
+
+    const { error } = await supabase
+      .from("coach_targets")
+      .upsert(row, { onConflict: "client_id" });
+
+    if (error) return safeJson(res, 500, { error: error.message });
+
+    return safeJson(res, 200, { success: true });
   } catch (e) {
     return safeJson(res, 500, { error: String(e?.message || e) });
   }

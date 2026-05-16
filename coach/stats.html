@@ -5,23 +5,19 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Coach Stats</title>
   <style>
-    /* Light "Lovable-style" (match coach/dashboard.html) */
     :root{
       --bg: #f7f8fb;
       --panel: #ffffff;
-      --panel2: rgba(255,255,255,0.85);
       --border: rgba(15, 23, 42, 0.10);
       --border2: rgba(15, 23, 42, 0.14);
       --text: #0f172a;
       --muted: rgba(15, 23, 42, 0.62);
       --danger: #c0262d;
-
+      --accent: #2d6bff;
       --ringBg: rgba(15, 23, 42, 0.12);
       --ringFg: #2d6bff;
-
       --shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
       --shadow2: 0 1px 0 rgba(15, 23, 42, 0.04);
-      --ring: rgba(45, 107, 255, 0.22);
     }
 
     html,body{height:100%;}
@@ -39,7 +35,7 @@
 
     h1{margin:0 0 10px 0;font-size:44px;letter-spacing:-0.02em;}
 
-    a{
+    a.back{
       color: var(--text);
       text-decoration:none;
       display:inline-flex;
@@ -51,8 +47,8 @@
       background:#fff;
       box-shadow: var(--shadow2);
     }
-    a:hover{ box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08); }
-    a:active{ transform: translateY(0.5px); }
+    a.back:hover{ box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08); }
+    a.back:active{ transform: translateY(0.5px); }
 
     .panel{
       margin-top:18px;
@@ -63,6 +59,7 @@
       box-shadow: var(--shadow);
     }
 
+    /* Top cards */
     .gridTop{
       display:grid;
       grid-template-columns: repeat(4, 1fr);
@@ -81,9 +78,10 @@
       justify-content:space-between;
     }
 
-    .label{color:var(--muted);font-size:14px;font-weight:650}
-    .value{font-size:28px;font-weight:800;letter-spacing:-0.2px}
+    .label{color:var(--muted);font-size:14px;font-weight:650;}
+    .value{font-size:28px;font-weight:800;letter-spacing:-0.2px;}
 
+    /* Ring cards */
     .gridRings{
       display:grid;
       grid-template-columns: repeat(3, 1fr);
@@ -97,13 +95,73 @@
       padding:18px;
       display:flex;
       gap:14px;
-      align-items:center;
-      min-height:92px;
+      align-items:flex-start;
     }
 
-    .ringText .title{font-weight:850;letter-spacing:-0.1px}
-    .ringText .sub{color:var(--muted);font-size:14px;margin-top:2px}
+    .ring{
+      width:64px;height:64px;flex:0 0 64px;
+      position:relative;
+      display:grid;place-items:center;
+    }
+    .ring svg{transform:rotate(-90deg);}
+    .ring .pct{
+      position:absolute;
+      font-weight:850;
+      font-size:14px;
+      color: rgba(15, 23, 42, 0.82);
+    }
 
+    .ringText{display:flex;flex-direction:column;gap:4px;padding-top:2px;}
+    .ringText .title{font-weight:750;font-size:15px;letter-spacing:-0.1px;}
+    .ringText .progress{color:var(--muted);font-size:13px;}
+
+    /* Inline target editor */
+    .setTargetLink{
+      font-size:12px;
+      color:var(--accent);
+      cursor:pointer;
+      text-decoration:underline;
+      text-underline-offset:2px;
+      background:none;border:none;padding:0;
+      font-family:inherit;
+    }
+    .setTargetLink:hover{opacity:0.75;}
+
+    .targetEditor{
+      display:none;
+      align-items:center;
+      gap:6px;
+      margin-top:4px;
+    }
+    .targetEditor.open{display:flex;}
+
+    .targetInput{
+      width:64px;
+      padding:4px 8px;
+      border:1px solid var(--border2);
+      border-radius:8px;
+      font-size:13px;
+      font-family:inherit;
+      color:var(--text);
+      background:#fff;
+    }
+    .targetInput:focus{outline:2px solid var(--accent);outline-offset:1px;}
+
+    .saveBtn{
+      padding:4px 10px;
+      border-radius:8px;
+      border:none;
+      background:var(--accent);
+      color:#fff;
+      font-size:12px;
+      font-weight:650;
+      cursor:pointer;
+      font-family:inherit;
+    }
+    .saveBtn:hover{opacity:0.85;}
+    .saveBtn:disabled{opacity:0.5;cursor:default;}
+
+    /* Error box */
     .err{
       margin-top:14px;
       color: var(--danger);
@@ -116,24 +174,10 @@
       padding: 12px;
     }
 
-    /* circular progress */
-    .ring{
-      width:64px;height:64px;flex:0 0 64px;
-      position:relative;
-      display:grid;place-items:center;
-    }
-    .ring svg{transform:rotate(-90deg)}
-    .ring .pct{
-      position:absolute;
-      font-weight:850;
-      font-size:14px;
-      color: rgba(15, 23, 42, 0.82);
-    }
-
     @media (max-width: 900px){
-      .gridTop{grid-template-columns:1fr 1fr}
-      .gridRings{grid-template-columns:1fr}
-      h1{font-size:36px}
+      .gridTop{grid-template-columns:1fr 1fr;}
+      .gridRings{grid-template-columns:1fr;}
+      h1{font-size:36px;}
       .wrap{padding:32px 18px;}
     }
   </style>
@@ -141,31 +185,35 @@
 <body>
   <div class="wrap">
     <h1>Stats</h1>
-    <a href="/coach/dashboard.html">Back to dashboard</a>
+    <a class="back" href="/coach/dashboard.html">Back to dashboard</a>
 
     <div class="panel">
+      <!-- Top cards -->
       <div class="gridTop">
         <div class="card">
           <div class="label">Leads</div>
-          <div class="value" id="leadsVal">—</div>
+          <div class="value" id="leadsVal">--</div>
         </div>
         <div class="card">
           <div class="label">Conversations</div>
-          <div class="value" id="convosVal">—</div>
+          <div class="value" id="convosVal">--</div>
         </div>
         <div class="card">
-          <div class="label">Replies sent</div>
-          <div class="value" id="repliesVal">—</div>
+          <div class="label">Pipeline leads</div>
+          <div class="value" id="pipelineVal">--</div>
         </div>
         <div class="card">
           <div class="label">Reply rate</div>
-          <div class="value" id="replyRateVal">—</div>
+          <div class="value" id="replyRateVal">--</div>
         </div>
       </div>
 
+      <!-- Ring cards -->
       <div class="gridRings">
+
+        <!-- Leads ring -->
         <div class="ringCard">
-          <div class="ring" data-ring="leads">
+          <div class="ring">
             <svg width="64" height="64" viewBox="0 0 64 64">
               <circle cx="32" cy="32" r="26" stroke="var(--ringBg)" stroke-width="8" fill="none"></circle>
               <circle id="ringLeads" cx="32" cy="32" r="26" stroke="var(--ringFg)" stroke-width="8" fill="none"
@@ -174,40 +222,58 @@
             <div class="pct" id="pctLeads">0%</div>
           </div>
           <div class="ringText">
-            <div class="title">Leads progress</div>
-            <div class="sub">Based on your monthly target</div>
+            <div class="title">Leads</div>
+            <div class="progress" id="progressLeads">-- / -- target</div>
+            <button class="setTargetLink" onclick="toggleEditor('leads')">Set target</button>
+            <div class="targetEditor" id="editorLeads">
+              <input class="targetInput" type="number" min="1" id="inputLeads" />
+              <button class="saveBtn" onclick="saveTarget('leads')">Save</button>
+            </div>
           </div>
         </div>
 
+        <!-- Conversations ring -->
         <div class="ringCard">
-          <div class="ring" data-ring="replies">
+          <div class="ring">
             <svg width="64" height="64" viewBox="0 0 64 64">
               <circle cx="32" cy="32" r="26" stroke="var(--ringBg)" stroke-width="8" fill="none"></circle>
-              <circle id="ringReplies" cx="32" cy="32" r="26" stroke="var(--ringFg)" stroke-width="8" fill="none"
+              <circle id="ringConvos" cx="32" cy="32" r="26" stroke="var(--ringFg)" stroke-width="8" fill="none"
                       stroke-linecap="round" stroke-dasharray="163.36" stroke-dashoffset="163.36"></circle>
             </svg>
-            <div class="pct" id="pctReplies">0%</div>
+            <div class="pct" id="pctConvos">0%</div>
           </div>
           <div class="ringText">
-            <div class="title">Replies progress</div>
-            <div class="sub">Based on your monthly target</div>
+            <div class="title">Conversations</div>
+            <div class="progress" id="progressConvos">-- / -- target</div>
+            <button class="setTargetLink" onclick="toggleEditor('convos')">Set target</button>
+            <div class="targetEditor" id="editorConvos">
+              <input class="targetInput" type="number" min="1" id="inputConvos" />
+              <button class="saveBtn" onclick="saveTarget('convos')">Save</button>
+            </div>
           </div>
         </div>
 
+        <!-- Pipeline leads ring -->
         <div class="ringCard">
-          <div class="ring" data-ring="bookings">
+          <div class="ring">
             <svg width="64" height="64" viewBox="0 0 64 64">
               <circle cx="32" cy="32" r="26" stroke="var(--ringBg)" stroke-width="8" fill="none"></circle>
-              <circle id="ringBookings" cx="32" cy="32" r="26" stroke="var(--ringFg)" stroke-width="8" fill="none"
+              <circle id="ringPipeline" cx="32" cy="32" r="26" stroke="var(--ringFg)" stroke-width="8" fill="none"
                       stroke-linecap="round" stroke-dasharray="163.36" stroke-dashoffset="163.36"></circle>
             </svg>
-            <div class="pct" id="pctBookings">0%</div>
+            <div class="pct" id="pctPipeline">0%</div>
           </div>
           <div class="ringText">
-            <div class="title">Booking clicks</div>
-            <div class="sub">Based on your monthly target</div>
+            <div class="title">Pipeline leads</div>
+            <div class="progress" id="progressPipeline">-- / -- target</div>
+            <button class="setTargetLink" onclick="toggleEditor('pipeline')">Set target</button>
+            <div class="targetEditor" id="editorPipeline">
+              <input class="targetInput" type="number" min="1" id="inputPipeline" />
+              <button class="saveBtn" onclick="saveTarget('pipeline')">Save</button>
+            </div>
           </div>
         </div>
+
       </div>
 
       <div class="err" id="errBox" style="display:none;"></div>
@@ -217,65 +283,128 @@
   <script>
     const CIRC = 2 * Math.PI * 26; // 163.36
 
-    function setRing(circleEl, pctEl, pct){
-      const p = Math.max(0, Math.min(100, Math.round(pct)));
-      pctEl.textContent = p + "%";
-      const offset = CIRC * (1 - p/100);
-      circleEl.style.strokeDasharray = CIRC.toFixed(2);
-      circleEl.style.strokeDashoffset = offset.toFixed(2);
+    // Current state — updated after each load
+    let state = { totals: {}, targets: {} };
+    let authToken = null;
+
+    function setRing(circleId, pctId, current, target) {
+      const pct = target > 0 ? Math.max(0, Math.min(100, Math.round(current / target * 100))) : 0;
+      document.getElementById(pctId).textContent = pct + "%";
+      const offset = CIRC * (1 - pct / 100);
+      const circle = document.getElementById(circleId);
+      circle.style.strokeDasharray = CIRC.toFixed(2);
+      circle.style.strokeDashoffset = offset.toFixed(2);
     }
 
-    function showErr(obj){
+    function showErr(msg) {
       const box = document.getElementById("errBox");
       box.style.display = "block";
-      box.textContent = "Error loading stats:\n" + (typeof obj === "string" ? obj : JSON.stringify(obj, null, 2));
+      box.textContent = "Error loading stats:\n" + (typeof msg === "string" ? msg : JSON.stringify(msg, null, 2));
     }
 
-    function redirectToLogin(){
+    function redirectToLogin() {
       window.location.href = "/coach/login.html";
     }
 
-    async function loadStats(){
-      const token = localStorage.getItem("coach_token");
-      if(!token){
-        redirectToLogin();
-        return;
-      }
+    function renderStats(data) {
+      state = data;
+      const t = data.totals || {};
+      const tgt = data.targets || {};
+
+      document.getElementById("leadsVal").textContent     = t.leads ?? 0;
+      document.getElementById("convosVal").textContent    = t.conversations ?? 0;
+      document.getElementById("pipelineVal").textContent  = t.pipelineLeads ?? 0;
+      document.getElementById("replyRateVal").textContent = (t.replyRate ?? 0) + "%";
+
+      const leads       = t.leads         ?? 0;
+      const convos      = t.conversations ?? 0;
+      const pipeline    = t.pipelineLeads ?? 0;
+      const leadsTarget = tgt.leads         || 0;
+      const convTarget  = tgt.conversations || 0;
+      const plTarget    = tgt.pipelineLeads || 0;
+
+      document.getElementById("progressLeads").textContent    = leads    + " / " + leadsTarget + " target";
+      document.getElementById("progressConvos").textContent   = convos   + " / " + convTarget  + " target";
+      document.getElementById("progressPipeline").textContent = pipeline + " / " + plTarget    + " target";
+
+      setRing("ringLeads",    "pctLeads",    leads,    leadsTarget);
+      setRing("ringConvos",   "pctConvos",   convos,   convTarget);
+      setRing("ringPipeline", "pctPipeline", pipeline, plTarget);
+
+      // Pre-fill inputs
+      document.getElementById("inputLeads").value    = leadsTarget;
+      document.getElementById("inputConvos").value   = convTarget;
+      document.getElementById("inputPipeline").value = plTarget;
+    }
+
+    async function loadStats() {
+      authToken = localStorage.getItem("coach_token");
+      if (!authToken) { redirectToLogin(); return; }
 
       const res = await fetch("/coach/api/stats", {
-        headers: { "Authorization": "Bearer " + token }
+        headers: { "Authorization": "Bearer " + authToken }
       });
 
-      if(res.status === 401 || res.status === 403){
+      if (res.status === 401 || res.status === 403) {
         localStorage.removeItem("coach_token");
         redirectToLogin();
         return;
       }
 
       const data = await res.json().catch(() => ({}));
-      if(!res.ok){
-        showErr(data || { error: "request_failed" });
+      if (!res.ok) { showErr(data || { error: "request_failed" }); return; }
+
+      renderStats(data);
+    }
+
+    // ---- Inline target editors ----
+
+    const editorMap = {
+      leads:    { editorId: "editorLeads",    inputId: "inputLeads",    field: "leadsTarget"         },
+      convos:   { editorId: "editorConvos",   inputId: "inputConvos",   field: "conversationsTarget"  },
+      pipeline: { editorId: "editorPipeline", inputId: "inputPipeline", field: "pipelineLeadsTarget" },
+    };
+
+    function toggleEditor(key) {
+      const { editorId } = editorMap[key];
+      const el = document.getElementById(editorId);
+      el.classList.toggle("open");
+    }
+
+    async function saveTarget(key) {
+      const { editorId, inputId, field } = editorMap[key];
+      const input = document.getElementById(inputId);
+      const val = parseInt(input.value, 10);
+      if (!val || val < 1) return;
+
+      const btn = document.querySelector("#" + editorId + " .saveBtn");
+      btn.disabled = true;
+      btn.textContent = "Saving...";
+
+      const body = {};
+      body[field] = val;
+
+      const res = await fetch("/coach/api/stats/targets", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + authToken,
+        },
+        body: JSON.stringify(body),
+      });
+
+      btn.disabled = false;
+      btn.textContent = "Save";
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert("Failed to save target: " + (err.error || res.status));
         return;
       }
 
-      const t = data.totals || {};
-      document.getElementById("leadsVal").textContent = t.leads ?? 0;
-      document.getElementById("convosVal").textContent = t.conversations ?? 0;
-      document.getElementById("repliesVal").textContent = t.repliesSent ?? 0;
-      document.getElementById("replyRateVal").textContent = (t.replyRate ?? 0) + "%";
-
-      // Targets (change later if you want)
-      const leadsTarget = 100;
-      const repliesTarget = 300;
-      const bookingsTarget = 50;
-
-      const leadsPct = leadsTarget ? ( (t.leads ?? 0) / leadsTarget * 100 ) : 0;
-      const repliesPct = repliesTarget ? ( (t.repliesSent ?? 0) / repliesTarget * 100 ) : 0;
-      const bookingsPct = bookingsTarget ? ( (t.bookingClicks ?? 0) / bookingsTarget * 100 ) : 0;
-
-      setRing(document.getElementById("ringLeads"), document.getElementById("pctLeads"), leadsPct);
-      setRing(document.getElementById("ringReplies"), document.getElementById("pctReplies"), repliesPct);
-      setRing(document.getElementById("ringBookings"), document.getElementById("pctBookings"), bookingsPct);
+      // Close editor and reload stats to update rings in place
+      document.getElementById(editorId).classList.remove("open");
+      await loadStats();
     }
 
     loadStats();
