@@ -6663,18 +6663,32 @@ Extract and return ONLY a JSON object with these exact keys:
   "followers": "display string e.g. '142K'",
   "follower_count": 142000,
   "category": "niche/category e.g. 'Fitness Coach', 'Business Coach', 'Life Coach'",
-  "stage": "one of: convo_cold, convo_warm, loom_created, loom_sent, interested, not_interested",
+  "stage": "one of: convo_cold, convo_warm, no_response, loom_created, loom_sent, interested, not_interested",
   "stage_reasoning": "1-2 sentence explanation of why this stage",
   "notes": "any other relevant notes about the coach or conversation",
   "next_steps": ["array", "of", "actionable", "next steps"]
 }
 
-Base the stage on the conversation tone:
-- convo_cold: no reply or very generic/cold response
-- convo_warm: engaged, asked questions, showed some interest
-- loom_created/loom_sent: loom video was mentioned or sent
-- interested: expressed clear interest in working together
-- not_interested: explicitly declined or clearly uninterested
+IMPORTANT: Before classifying the stage, carefully inspect the conversation screenshot for the following:
+
+1. Identify who sent the last message. Outbound messages (sent by me) appear on the RIGHT side of the screen, typically in a purple or blue bubble.
+
+2. If the last message is outbound (from me, on the right):
+   a. Look for a "Seen" timestamp directly beneath it (e.g. "Seen 18h ago", "Seen 2h ago", "Seen just now").
+   b. If a "Seen" label is visible AND the time shown is greater than 1 hour ago (e.g. "Seen 2h ago", "Seen 18h ago", "Seen 3d ago"), classify as: no_response
+   c. If "Seen just now" or seen within the last hour, the lead can still be classified as warm if the conversation tone warrants it.
+   d. If there is NO "Seen" indicator under the last outbound message, treat it as unread or pending. Do not classify as warm unless there is a recent inbound reply visible elsewhere in the thread.
+
+3. If the last message is inbound (from the coach, on the left), classify based on their tone and content as normal.
+
+Stage definitions:
+- convo_cold: sent a message, no reply received yet, and message has not been seen
+- convo_warm: coach has replied and shown some interest or engagement
+- no_response: last message was outbound, coach has seen it (more than 1 hour ago) but has not replied
+- loom_created: a loom video has been created for this coach but not yet sent
+- loom_sent: a loom video has been sent to this coach
+- interested: coach expressed clear interest in working together
+- not_interested: coach explicitly declined or is clearly uninterested
 
 Return ONLY the JSON object, no other text.`;
 

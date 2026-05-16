@@ -73,7 +73,7 @@
     /* ── Stats bar ───────────────────────────────────── */
     .stats-bar {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 16px;
       padding: 20px 32px;
     }
@@ -97,10 +97,11 @@
       font-weight: 700;
       line-height: 1;
     }
-    .stat-value.total   { color: #4f46e5; }
-    .stat-value.warm    { color: #ea580c; }
-    .stat-value.interested { color: #16a34a; }
-    .stat-value.cold    { color: #2563eb; }
+    .stat-value.total       { color: #4f46e5; }
+    .stat-value.warm        { color: #ea580c; }
+    .stat-value.interested  { color: #16a34a; }
+    .stat-value.no-response { color: #d97706; }
+    .stat-value.cold        { color: #2563eb; }
 
     /* ── Tier sections ───────────────────────────────── */
     .main { padding: 0 32px 48px; }
@@ -169,6 +170,7 @@
 
     .lead-row[data-stage="convo_cold"]     { border-left-color: #3b82f6; }
     .lead-row[data-stage="convo_warm"]     { border-left-color: #f97316; }
+    .lead-row[data-stage="no_response"]    { border-left-color: #f59e0b; }
     .lead-row[data-stage="loom_created"]   { border-left-color: #eab308; }
     .lead-row[data-stage="loom_sent"]      { border-left-color: #8b5cf6; }
     .lead-row[data-stage="interested"]     { border-left-color: #22c55e; }
@@ -439,7 +441,7 @@
     .divider { height: 1px; background: var(--border); margin: 20px 0; }
 
     @media (max-width: 700px) {
-      .stats-bar { grid-template-columns: repeat(2, 1fr); }
+      .stats-bar { grid-template-columns: repeat(3, 1fr); }
       .main, .header { padding-left: 16px; padding-right: 16px; }
       .upload-grid { grid-template-columns: 1fr; }
     }
@@ -460,19 +462,23 @@
 <div class="stats-bar" id="statsBar">
   <div class="stat-card">
     <div class="stat-label">Total Coaches</div>
-    <div class="stat-value total" id="statTotal">—</div>
+    <div class="stat-value total" id="statTotal">--</div>
   </div>
   <div class="stat-card">
     <div class="stat-label">Warm Leads</div>
-    <div class="stat-value warm" id="statWarm">—</div>
+    <div class="stat-value warm" id="statWarm">--</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">No Reply</div>
+    <div class="stat-value no-response" id="statNoResponse">--</div>
   </div>
   <div class="stat-card">
     <div class="stat-label">Interested</div>
-    <div class="stat-value interested" id="statInterested">—</div>
+    <div class="stat-value interested" id="statInterested">--</div>
   </div>
   <div class="stat-card">
     <div class="stat-label">Not Interested</div>
-    <div class="stat-value cold" id="statNot">—</div>
+    <div class="stat-value cold" id="statNot">--</div>
   </div>
 </div>
 
@@ -565,6 +571,7 @@
         <select id="fStage">
           <option value="convo_cold">Cold</option>
           <option value="convo_warm">Warm</option>
+          <option value="no_response">No Reply</option>
           <option value="loom_created">Loom Created</option>
           <option value="loom_sent">Loom Sent</option>
           <option value="interested">Interested</option>
@@ -602,6 +609,7 @@
   const STAGES = {
     convo_cold:     { label: 'Cold',          bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
     convo_warm:     { label: 'Warm',          bg: '#fff7ed', text: '#c2410c', border: '#fed7aa' },
+    no_response:    { label: 'No Reply',      bg: '#fffbeb', text: '#b45309', border: '#fde68a' },
     loom_created:   { label: 'Loom Created',  bg: '#fefce8', text: '#854d0e', border: '#fde68a' },
     loom_sent:      { label: 'Loom Sent',     bg: '#f5f3ff', text: '#6d28d9', border: '#ddd6fe' },
     interested:     { label: 'Interested',    bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' },
@@ -652,9 +660,12 @@
   }
 
   function renderStats() {
-    document.getElementById('statTotal').textContent = leads.length;
+    document.getElementById('statTotal').textContent =
+      leads.length;
     document.getElementById('statWarm').textContent =
       leads.filter(l => l.stage === 'convo_warm' || l.stage === 'loom_sent' || l.stage === 'loom_created').length;
+    document.getElementById('statNoResponse').textContent =
+      leads.filter(l => l.stage === 'no_response').length;
     document.getElementById('statInterested').textContent =
       leads.filter(l => l.stage === 'interested').length;
     document.getElementById('statNot').textContent =
