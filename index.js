@@ -64,6 +64,12 @@ app.get("/welcome", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "welcome.html"));
 });
 
+app.get("/planner", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "planner.html"), (err) => {
+    if (err && !res.headersSent) res.status(500).send("Error loading planner");
+  });
+});
+
 // Clean SaaS routes
 app.get("/checkout", (req, res) => {
   if (!isPayHost(req) && process.env.NODE_ENV === "production") {
@@ -6796,10 +6802,6 @@ const PLANNER_JWT_SECRET =
   process.env.PLANNER_JWT_SECRET ||
   process.env.COACH_JWT_SECRET ||
   "planner-dev-secret-change-me";
-
-app.get("/planner", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "planner.html"));
-});
 
 function parsePlannerToken(req) {
   const raw = req.headers.cookie || "";
