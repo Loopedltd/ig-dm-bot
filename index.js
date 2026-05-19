@@ -6949,15 +6949,38 @@ Tasks: ${tasks}
 Respond with a JSON array. Each object has: time (string), title (string), detail (string), category (routine|gym|meal|work|outreach|break).
 Start your response with [ and end with ]. Nothing else.`;
 
-  const advisorPrompt = `You are a senior B2B SaaS sales and outreach advisor. Output a JSON object only. No prose before or after it. No markdown fences.
+  // Fetch last 5 saved days for this user, excluding today, for advisor context
+  const { data: historyRows } = await supabase
+    .from("planner_days")
+    .select("date, tasks, pipeline_note, advice")
+    .eq("user_id", req.plannerUser.user_id)
+    .neq("date", date)
+    .order("date", { ascending: false })
+    .limit(5);
 
-James: 19yo architecture student, non-technical founder of Looped (Instagram DM automation for fitness coaches). ~10 coaches pitched, mostly ignored. No clients yet. Loom video not filmed. Free trial offer. Testing X and Reddit outreach for coaches posting "looking for a setter" or "hiring a setter".
+  const historyStr = (historyRows || []).length
+    ? (historyRows || []).map(row => {
+        const priority = row.advice?.priority || "none recorded";
+        const pipelineNote = row.pipeline_note || "none";
+        const tasks_str = row.tasks || "none";
+        return `${row.date}: Tasks: ${tasks_str} | Pipeline update: ${pipelineNote} | Priority they were given: ${priority}`;
+      }).join("\n")
+    : "No previous days recorded yet.";
+
+  const advisorPrompt = `You are a senior B2B SaaS sales and outreach advisor giving James a day by day action plan to get his first client. Output a JSON object only. No prose before or after it. No markdown fences.
+
+James: 19yo architecture student, non-technical founder of Looped (Instagram DM automation for fitness coaches). Pitched around 10 coaches, mostly ignored. No clients yet. Loom video not filmed. Free trial offer. Testing X and Reddit outreach for coaches posting "looking for a setter" or "hiring a setter".
+
+PREVIOUS DAYS HISTORY (most recent first):
+${historyStr}
 
 Today: ${date}
-Tasks: ${tasks}
-Pipeline: ${pipeline_note || "No pipeline update provided."}
+Tasks James is planning today: ${tasks}
+Pipeline update today: ${pipeline_note || "No pipeline update provided."}
 
-Respond with a JSON object with: priority (string), reasoning (string), actions (array of objects with title/detail/effort where effort is low|medium|high), watch_out (string). 3-5 actions. Direct and specific. No em dashes.
+Using the history above, give James a sharp specific outreach plan for today that builds on what he has already done and has not done. Do not repeat advice he has already been given unless he has not acted on it. Push him forward toward his first client.
+
+Respond with a JSON object with: priority (string), reasoning (string, reference what he did or did not do previously where relevant), actions (array of objects with title, detail, effort where effort is low or medium or high), watch_out (string). 3 to 5 actions. Direct and specific. No em dashes.
 Start your response with { and end with }. Nothing else.`;
 
   async function callAnthropic(prompt) {
