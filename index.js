@@ -6847,8 +6847,7 @@ app.post("/planner/generate", async (req, res) => {
   const { tasks, pipeline_note, gym_time, date } = req.body || {};
   if (!tasks || !date) return res.status(400).json({ error: "tasks and date required" });
 
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  if (!anthropicKey) return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
+  if (!OPENAI_API_KEY) return res.status(500).json({ error: "OPENAI_API_KEY not configured" });
 
   const gymStr = gym_time ? gym_time.trim() : "8:30";
 
@@ -6897,25 +6896,24 @@ Respond with a JSON object with: priority (string), reasoning (string, reference
 Start your response with { and end with }. Nothing else.`;
 
   async function callAnthropic(prompt) {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        "x-api-key":         anthropicKey,
-        "anthropic-version": "2023-06-01",
-        "content-type":      "application/json",
+        "Authorization": "Bearer " + OPENAI_API_KEY,
+        "Content-Type":  "application/json",
       },
       body: JSON.stringify({
-        model:    "claude-sonnet-4-20250514",
+        model:      "gpt-4o-mini",
         max_tokens: 2000,
-        messages: [{ role: "user", content: prompt }],
+        messages:   [{ role: "user", content: prompt }],
       }),
     });
     if (!r.ok) {
       const t = await r.text().catch(() => "");
-      throw new Error("Anthropic error " + r.status + ": " + t.slice(0, 200));
+      throw new Error("OpenAI error " + r.status + ": " + t.slice(0, 200));
     }
     const payload = await r.json();
-    return (payload?.content?.[0]?.text || "").trim();
+    return (payload?.choices?.[0]?.message?.content || "").trim();
   }
 
   function parseJsonText(text, opener) {
