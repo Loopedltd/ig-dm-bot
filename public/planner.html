@@ -814,15 +814,15 @@
 
   // ── State ─────────────────────────────────────────────
   function showState(state) {
-    document.getElementById('formState').style.display    = state === 'form'    ? '' : 'none';
-    document.getElementById('loadingState').style.display = state === 'loading' ? '' : 'none';
-    document.getElementById('planState').style.display    = state === 'plan'    ? '' : 'none';
+    document.getElementById('formState').style.display    = state === 'form'    ? 'block' : 'none';
+    document.getElementById('loadingState').style.display = state === 'loading' ? 'block' : 'none';
+    document.getElementById('planState').style.display    = state === 'plan'    ? 'block' : 'none';
   }
 
   function showFormErr(msg) {
     const el = document.getElementById('formErr');
     el.textContent = msg;
-    el.style.display = '';
+    el.style.display = 'block';
   }
 
   // ── Init ──────────────────────────────────────────────
