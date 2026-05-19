@@ -6790,6 +6790,220 @@ Return ONLY the JSON object, no other text.`;
 
 // ─── End Pipeline CRM ─────────────────────────────────────────────────────────
 
+// ─── Daily Planner ─────────────────────────────────────────────────────────
+
+const PLANNER_JWT_SECRET =
+  process.env.PLANNER_JWT_SECRET ||
+  process.env.COACH_JWT_SECRET ||
+  "planner-dev-secret-change-me";
+
+app.get("/planner", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "planner.html"));
+});
+
+function parsePlannerToken(req) {
+  const raw = req.headers.cookie || "";
+  for (const part of raw.split(";")) {
+    const [k, ...rest] = part.trim().split("=");
+    if (k.trim() === "planner_token") return rest.join("=");
+  }
+  return null;
+}
+
+function requirePlanner(req, res, next) {
+  const token = parsePlannerToken(req);
+  if (!token) return res.status(401).json({ error: "not authenticated" });
+  try {
+    const decoded = jwt.verify(token, PLANNER_JWT_SECRET);
+    if (!decoded?.user_id) return res.status(401).json({ error: "invalid token" });
+    req.plannerUser = decoded;
+    next();
+  } catch {
+    res.status(401).json({ error: "invalid token" });
+  }
+}
+
+// POST /planner/register
+app.post("/planner/register", async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password)
+    return res.status(400).json({ error: "username and password required" });
+  if (password.length < 6)
+    return res.status(400).json({ error: "password must be at least 6 characters" });
+
+  const hash = await bcrypt.hash(password, 12);
+  const { error } = await supabase
+    .from("planner_users")
+    .insert({ username: username.trim().toLowerCase(), password_hash: hash });
+
+  if (error) {
+    const msg = error.code === "23505" ? "Username already taken" : error.message;
+    return res.status(400).json({ error: msg });
+  }
+  res.json({ success: true });
+});
+
+// POST /planner/login
+app.post("/planner/login", async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password)
+    return res.status(400).json({ error: "username and password required" });
+
+  const { data: user, error } = await supabase
+    .from("planner_users")
+    .select("id,username,password_hash")
+    .eq("username", username.trim().toLowerCase())
+    .maybeSingle();
+
+  if (error || !user) return res.status(401).json({ error: "Invalid credentials" });
+
+  const ok = await bcrypt.compare(password, user.password_hash);
+  if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+
+  const token = jwt.sign(
+    { user_id: user.id, username: user.username },
+    PLANNER_JWT_SECRET,
+    { expiresIn: "30d" }
+  );
+
+  const cookieOpts = [
+    "planner_token=" + token,
+    "HttpOnly",
+    "Path=/",
+    "Max-Age=" + 30 * 24 * 60 * 60,
+    "SameSite=Lax",
+  ];
+  if (process.env.NODE_ENV === "production") cookieOpts.push("Secure");
+  res.setHeader("Set-Cookie", cookieOpts.join("; "));
+  res.json({ success: true, username: user.username });
+});
+
+// POST /planner/logout
+app.post("/planner/logout", (req, res) => {
+  res.setHeader("Set-Cookie", "planner_token=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
+  res.json({ success: true });
+});
+
+// GET /planner/me — verify session and return username
+app.get("/planner/me", requirePlanner, (req, res) => {
+  res.json({ username: req.plannerUser.username });
+});
+
+// GET /planner/day?date=YYYY-MM-DD
+app.get("/planner/day", requirePlanner, async (req, res) => {
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: "date required" });
+
+  const { data, error } = await supabase
+    .from("planner_days")
+    .select("*")
+    .eq("user_id", req.plannerUser.user_id)
+    .eq("date", date)
+    .maybeSingle();
+
+  if (error) return res.status(500).json({ error: error.message });
+  if (!data) return res.json({ exists: false });
+  res.json({ exists: true, day: data });
+});
+
+// POST /planner/day — upsert a saved plan
+app.post("/planner/day", requirePlanner, async (req, res) => {
+  const { date, tasks, pipeline_note, gym_time, schedule, advice } = req.body || {};
+  if (!date) return res.status(400).json({ error: "date required" });
+
+  const { error } = await supabase.from("planner_days").upsert(
+    {
+      user_id:      req.plannerUser.user_id,
+      date,
+      tasks:        tasks        || null,
+      pipeline_note:pipeline_note|| null,
+      gym_time:     gym_time     || null,
+      schedule:     schedule     || null,
+      advice:       advice       || null,
+      updated_at:   new Date().toISOString(),
+    },
+    { onConflict: "user_id,date" }
+  );
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// POST /planner/generate — call Anthropic twice and return schedule + advice
+app.post("/planner/generate", requirePlanner, async (req, res) => {
+  const { tasks, pipeline_note, gym_time, date } = req.body || {};
+  if (!tasks || !date) return res.status(400).json({ error: "tasks and date required" });
+
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  if (!anthropicKey) return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
+
+  const gymStr = gym_time ? gym_time.trim() : "8:30";
+
+  const timetablePrompt = `You are a daily planner. Output a JSON array only. No prose before or after it. No markdown fences.
+
+James fixed schedule: wake 7:00, morning routine until 8:00, breakfast 8:00-8:30, gym 1hr at ${gymStr}, work starts no earlier than 11:30, lunch ~12:30 (30min), dinner ~17:00 (30min), day ends 21:00. Add short breaks between long work blocks.
+
+Today: ${date}
+Tasks: ${tasks}
+
+Respond with a JSON array. Each object has: time (string), title (string), detail (string), category (routine|gym|meal|work|outreach|break).
+Start your response with [ and end with ]. Nothing else.`;
+
+  const advisorPrompt = `You are a senior B2B SaaS sales and outreach advisor. Output a JSON object only. No prose before or after it. No markdown fences.
+
+James: 19yo architecture student, non-technical founder of Looped (Instagram DM automation for fitness coaches). ~10 coaches pitched, mostly ignored. No clients yet. Loom video not filmed. Free trial offer. Testing X and Reddit outreach for coaches posting "looking for a setter" or "hiring a setter".
+
+Today: ${date}
+Tasks: ${tasks}
+Pipeline: ${pipeline_note || "No pipeline update provided."}
+
+Respond with a JSON object with: priority (string), reasoning (string), actions (array of objects with title/detail/effort where effort is low|medium|high), watch_out (string). 3-5 actions. Direct and specific. No em dashes.
+Start your response with { and end with }. Nothing else.`;
+
+  async function callAnthropic(prompt) {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key":         anthropicKey,
+        "anthropic-version": "2023-06-01",
+        "content-type":      "application/json",
+      },
+      body: JSON.stringify({
+        model:      "claude-sonnet-4-20250514",
+        max_tokens: 2000,
+        messages:   [{ role: "user", content: prompt }],
+      }),
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(() => "");
+      throw new Error("Anthropic error " + r.status + ": " + t.slice(0, 200));
+    }
+    const payload = await r.json();
+    return (payload?.content?.[0]?.text || "").trim();
+  }
+
+  function parseJsonText(text, opener) {
+    try { return JSON.parse(text); } catch {}
+    const re = opener === "[" ? /\[[\s\S]*\]/ : /\{[\s\S]*\}/;
+    const m = text.match(re);
+    if (!m) throw new Error("Could not parse AI response as JSON");
+    return JSON.parse(m[0]);
+  }
+
+  try {
+    const scheduleText = await callAnthropic(timetablePrompt);
+    const adviceText   = await callAnthropic(advisorPrompt);
+    const schedule = parseJsonText(scheduleText, "[");
+    const advice   = parseJsonText(adviceText,   "{");
+    res.json({ schedule, advice });
+  } catch (e) {
+    console.error("[planner/generate]", e.message);
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// ─── End Daily Planner ───────────────────────────────────────────────────────
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);

@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily Planner</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #f0f2f5;
+      --card:    #ffffff;
+      --border:  #e5e7eb;
+      --text:    #111827;
+      --muted:   #6b7280;
+      --subtle:  #9ca3af;
+      --primary: #4f46e5;
+      --primary-h:#4338ca;
+      --radius:  14px;
+      --shadow:  0 1px 6px rgba(0,0,0,0.07), 0 2px 12px rgba(0,0,0,0.04);
+
+      /* category colours */
+      --c-routine:  #16a34a;
+      --c-gym:      #ea580c;
+      --c-meal:     #2563eb;
+      --c-work:     #7c3aed;
+      --c-outreach: #dc2626;
+      --c-break:    #6b7280;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Auth shell ──────────────────────────────────────── */
+    #authView {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .auth-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .auth-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      letter-spacing: -0.02em;
+    }
+
+    .auth-sub {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 28px;
+    }
+
+    .field {
+      margin-bottom: 14px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 5px;
+    }
+
+    .field input, .field textarea {
+      width: 100%;
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      padding: 10px 13px;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+      background: #fff;
+    }
+
+    .field input:focus, .field textarea:focus { border-color: var(--primary); }
+    .field textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+
+    .btn-primary {
+      width: 100%;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      padding: 11px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-top: 4px;
+    }
+    .btn-primary:hover { background: var(--primary-h); }
+    .btn-primary:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+    .auth-toggle {
+      margin-top: 18px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .auth-toggle a {
+      color: var(--primary);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    .auth-err {
+      color: #dc2626;
+      font-size: 13px;
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    /* ── Planner shell ───────────────────────────────────── */
+    #plannerView { display: none; }
+
+    .header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+
+    .header-title {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .header-date {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-ghost {
+      background: none;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 14px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-ghost:hover { border-color: #9ca3af; color: var(--text); }
+
+    .btn-sm {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 7px 14px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-sm:hover { background: var(--primary-h); }
+
+    /* ── Date nav ────────────────────────────────────────── */
+    .date-nav {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 18px 28px 0;
+    }
+
+    .nav-btn {
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 16px;
+      color: var(--muted);
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .nav-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+    .nav-date {
+      font-size: 15px;
+      font-weight: 600;
+      min-width: 160px;
+      text-align: center;
+      letter-spacing: -0.01em;
+    }
+
+    /* ── Content area ────────────────────────────────────── */
+    .content {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 22px 22px 60px;
+    }
+
+    /* ── Input form ──────────────────────────────────────── */
+    .form-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 28px;
+      margin-top: 0;
+    }
+
+    .form-title {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      letter-spacing: -0.02em;
+    }
+
+    .form-sub {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 22px;
+    }
+
+    .form-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 18px;
+    }
+
+    .btn-generate {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      padding: 10px 24px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-generate:hover { background: var(--primary-h); }
+    .btn-generate:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+    /* ── Loading ─────────────────────────────────────────── */
+    #loadingState {
+      display: none;
+      text-align: center;
+      padding: 80px 20px;
+    }
+
+    .spinner {
+      width: 38px; height: 38px;
+      border: 3px solid #e5e7eb;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 18px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+    .loading-sub  { font-size: 13px; color: var(--muted); }
+
+    /* ── Plan view ───────────────────────────────────────── */
+    #planState { display: none; }
+
+    .plan-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      background: #f3f4f6;
+      border-radius: 10px;
+      padding: 4px;
+      width: fit-content;
+    }
+
+    .tab {
+      padding: 7px 18px;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: var(--muted);
+      transition: background 0.15s, color 0.15s;
+      font-family: inherit;
+    }
+    .tab.active {
+      background: #fff;
+      color: var(--text);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+
+    /* ── Timetable ───────────────────────────────────────── */
+    .timetable { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+
+    .time-block {
+      background: var(--card);
+      border-radius: 11px;
+      box-shadow: var(--shadow);
+      display: flex;
+      gap: 14px;
+      padding: 14px 16px;
+      align-items: flex-start;
+      border-left: 4px solid transparent;
+    }
+
+    .time-block[data-cat="routine"]  { border-left-color: var(--c-routine);  }
+    .time-block[data-cat="gym"]      { border-left-color: var(--c-gym);      }
+    .time-block[data-cat="meal"]     { border-left-color: var(--c-meal);     }
+    .time-block[data-cat="work"]     { border-left-color: var(--c-work);     }
+    .time-block[data-cat="outreach"] { border-left-color: var(--c-outreach); }
+    .time-block[data-cat="break"]    { border-left-color: var(--c-break);    }
+
+    .block-time {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--subtle);
+      min-width: 52px;
+      padding-top: 1px;
+    }
+
+    .block-body { flex: 1; }
+
+    .block-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .cat-pill {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 2px 7px;
+      border-radius: 99px;
+    }
+
+    .cat-pill[data-cat="routine"]  { background: #dcfce7; color: var(--c-routine);  }
+    .cat-pill[data-cat="gym"]      { background: #ffedd5; color: var(--c-gym);      }
+    .cat-pill[data-cat="meal"]     { background: #dbeafe; color: var(--c-meal);     }
+    .cat-pill[data-cat="work"]     { background: #ede9fe; color: var(--c-work);     }
+    .cat-pill[data-cat="outreach"] { background: #fee2e2; color: var(--c-outreach); }
+    .cat-pill[data-cat="break"]    { background: #f3f4f6; color: var(--c-break);    }
+
+    .block-detail {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ── Advisor tab ─────────────────────────────────────── */
+    #advisorTab { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+    .priority-card {
+      background: #eef2ff;
+      border: 1.5px solid #c7d2fe;
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+
+    .priority-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #4338ca;
+      margin-bottom: 6px;
+    }
+
+    .priority-text {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e1b4b;
+      margin-bottom: 6px;
+      letter-spacing: -0.01em;
+    }
+
+    .reasoning-text {
+      font-size: 13px;
+      color: #4338ca;
+      line-height: 1.5;
+    }
+
+    .actions-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .action-card {
+      background: var(--card);
+      border-radius: 11px;
+      box-shadow: var(--shadow);
+      padding: 14px 16px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .action-num {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--primary);
+      background: #eef2ff;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 24px;
+    }
+
+    .action-body { flex: 1; }
+
+    .action-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .effort-pill {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 2px 7px;
+      border-radius: 99px;
+    }
+    .effort-pill.low    { background: #dcfce7; color: #16a34a; }
+    .effort-pill.medium { background: #fef9c3; color: #92400e; }
+    .effort-pill.high   { background: #fee2e2; color: #dc2626; }
+
+    .action-detail {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .watch-out-card {
+      background: #fffbeb;
+      border: 1.5px solid #fde68a;
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+
+    .watch-out-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #92400e;
+      margin-bottom: 5px;
+    }
+
+    .watch-out-text {
+      font-size: 13px;
+      color: #78350f;
+      line-height: 1.5;
+    }
+
+    /* ── Error ───────────────────────────────────────────── */
+    .err-box {
+      color: #dc2626;
+      font-size: 13px;
+      margin-top: 10px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+
+    @media (max-width: 600px) {
+      .header { padding: 0 16px; }
+      .content { padding: 16px 14px 60px; }
+      .date-nav { padding-top: 14px; }
+      .tabs { width: 100%; }
+      .tab { flex: 1; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Auth view ─────────────────────────────────────── -->
+<div id="authView">
+  <div class="auth-card">
+
+    <!-- Login form -->
+    <div id="loginForm">
+      <div class="auth-title">Daily Planner</div>
+      <div class="auth-sub">Sign in to plan your day</div>
+      <div class="field"><label>Username</label><input type="text" id="loginUser" autocomplete="username" /></div>
+      <div class="field"><label>Password</label><input type="password" id="loginPass" autocomplete="current-password" /></div>
+      <button class="btn-primary" id="loginBtn" onclick="doLogin()">Sign in</button>
+      <div class="auth-err" id="loginErr"></div>
+      <div class="auth-toggle">No account? <a onclick="showRegister()">Create one</a></div>
+    </div>
+
+    <!-- Register form -->
+    <div id="registerForm" style="display:none">
+      <div class="auth-title">Create account</div>
+      <div class="auth-sub">Choose a username and password</div>
+      <div class="field"><label>Username</label><input type="text" id="regUser" autocomplete="username" /></div>
+      <div class="field"><label>Password</label><input type="password" id="regPass" autocomplete="new-password" /></div>
+      <button class="btn-primary" id="regBtn" onclick="doRegister()">Create account</button>
+      <div class="auth-err" id="regErr"></div>
+      <div class="auth-toggle">Already have one? <a onclick="showLogin()">Sign in</a></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Planner view ───────────────────────────────────── -->
+<div id="plannerView">
+
+  <header class="header">
+    <div class="header-left">
+      <span class="header-title">Daily Planner</span>
+      <span class="header-date" id="headerDate"></span>
+    </div>
+    <div class="header-right">
+      <span style="font-size:13px;color:var(--muted)" id="headerUser"></span>
+      <button class="btn-ghost" onclick="doLogout()">Sign out</button>
+    </div>
+  </header>
+
+  <!-- Date nav -->
+  <div class="date-nav">
+    <button class="nav-btn" onclick="shiftDay(-1)" title="Previous day">&#8592;</button>
+    <div class="nav-date" id="navDate"></div>
+    <button class="nav-btn" onclick="shiftDay(1)" title="Next day">&#8594;</button>
+  </div>
+
+  <div class="content">
+
+    <!-- Input form -->
+    <div id="formState">
+      <div class="form-card">
+        <div class="form-title">Plan this day</div>
+        <div class="form-sub">Fill in what you need to get done and generate a schedule.</div>
+
+        <div class="field">
+          <label>What do you need to get done today?</label>
+          <textarea id="fTasks" rows="4" placeholder="e.g. Record Loom video, follow up with 5 coaches, work on onboarding flow..."></textarea>
+        </div>
+
+        <div class="field">
+          <label>Outreach or pipeline update? (optional)</label>
+          <textarea id="fPipeline" rows="2" placeholder="e.g. 3 coaches seen my message, 1 replied asking for more info..."></textarea>
+        </div>
+
+        <div class="field">
+          <label>Gym time (leave blank for 8:30)</label>
+          <input type="text" id="fGym" placeholder="e.g. 9:00 or 10:30" style="max-width:180px" />
+        </div>
+
+        <div class="form-actions">
+          <button class="btn-generate" id="generateBtn" onclick="generate()">Plan my day ✦</button>
+        </div>
+        <div class="err-box" id="formErr" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loadingState">
+      <div class="spinner"></div>
+      <div class="loading-text">Building your plan...</div>
+      <div class="loading-sub">Calling the advisor and scheduling your day.</div>
+    </div>
+
+    <!-- Plan -->
+    <div id="planState">
+      <div class="plan-header">
+        <div class="tabs">
+          <button class="tab active" id="tabTimetable" onclick="switchTab('timetable')">Timetable</button>
+          <button class="tab" id="tabAdvisor" onclick="switchTab('advisor')">Outreach advisor</button>
+        </div>
+        <button class="btn-ghost" onclick="replan()">Replan today</button>
+      </div>
+
+      <!-- Timetable -->
+      <div id="timetableTab">
+        <div class="timetable" id="timetableList"></div>
+      </div>
+
+      <!-- Advisor -->
+      <div id="advisorTab" style="display:none">
+        <div class="priority-card" id="priorityCard"></div>
+        <div class="actions-list" id="actionsList"></div>
+        <div class="watch-out-card" id="watchOutCard"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── State ─────────────────────────────────────────────
+  let currentDate = todayStr();
+  let currentUsername = '';
+
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0');
+  }
+
+  function formatDisplayDate(str) {
+    const [y, m, d] = str.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    return date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  function shiftDay(delta) {
+    const [y, m, d] = currentDate.split('-').map(Number);
+    const date = new Date(y, m - 1, d + delta);
+    currentDate = date.getFullYear() + '-' +
+      String(date.getMonth() + 1).padStart(2, '0') + '-' +
+      String(date.getDate()).padStart(2, '0');
+    loadDay();
+  }
+
+  // ── HTTP helpers ──────────────────────────────────────
+  async function api(method, path, body) {
+    const opts = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    const r = await fetch(path, opts);
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+    return data;
+  }
+
+  // ── Auth ──────────────────────────────────────────────
+  function showLogin()    { document.getElementById('loginForm').style.display=''; document.getElementById('registerForm').style.display='none'; }
+  function showRegister() { document.getElementById('registerForm').style.display=''; document.getElementById('loginForm').style.display='none'; }
+
+  async function doLogin() {
+    const btn = document.getElementById('loginBtn');
+    const err = document.getElementById('loginErr');
+    err.textContent = '';
+    btn.disabled = true;
+    btn.textContent = 'Signing in...';
+    try {
+      const data = await api('POST', '/planner/login', {
+        username: document.getElementById('loginUser').value.trim(),
+        password: document.getElementById('loginPass').value,
+      });
+      currentUsername = data.username || '';
+      showPlanner();
+    } catch (e) {
+      err.textContent = e.message;
+      btn.disabled = false;
+      btn.textContent = 'Sign in';
+    }
+  }
+
+  async function doRegister() {
+    const btn = document.getElementById('regBtn');
+    const err = document.getElementById('regErr');
+    err.textContent = '';
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+    try {
+      await api('POST', '/planner/register', {
+        username: document.getElementById('regUser').value.trim(),
+        password: document.getElementById('regPass').value,
+      });
+      // Auto-login after register
+      await api('POST', '/planner/login', {
+        username: document.getElementById('regUser').value.trim(),
+        password: document.getElementById('regPass').value,
+      });
+      currentUsername = document.getElementById('regUser').value.trim().toLowerCase();
+      showPlanner();
+    } catch (e) {
+      err.textContent = e.message;
+      btn.disabled = false;
+      btn.textContent = 'Create account';
+    }
+  }
+
+  async function doLogout() {
+    await api('POST', '/planner/logout').catch(() => {});
+    document.getElementById('plannerView').style.display = 'none';
+    document.getElementById('authView').style.display = 'flex';
+    document.getElementById('loginUser').value = '';
+    document.getElementById('loginPass').value = '';
+    showLogin();
+  }
+
+  // ── Planner init ──────────────────────────────────────
+  function showPlanner() {
+    document.getElementById('authView').style.display = 'none';
+    document.getElementById('plannerView').style.display = '';
+    document.getElementById('headerUser').textContent = currentUsername;
+    document.getElementById('headerDate').textContent = formatDisplayDate(todayStr());
+    currentDate = todayStr();
+    loadDay();
+  }
+
+  function updateNavDate() {
+    document.getElementById('navDate').textContent = formatDisplayDate(currentDate);
+  }
+
+  // ── Load a day ────────────────────────────────────────
+  async function loadDay() {
+    updateNavDate();
+    showState('loading');
+    try {
+      const data = await api('GET', '/planner/day?date=' + currentDate);
+      if (data.exists && data.day?.schedule && data.day?.advice) {
+        renderPlan(data.day.schedule, data.day.advice);
+        showState('plan');
+      } else {
+        clearForm();
+        showState('form');
+      }
+    } catch (e) {
+      if (e.message === 'not authenticated' || e.message === 'invalid token') {
+        document.getElementById('plannerView').style.display = 'none';
+        document.getElementById('authView').style.display = 'flex';
+        return;
+      }
+      clearForm();
+      showState('form');
+    }
+  }
+
+  function clearForm() {
+    document.getElementById('fTasks').value    = '';
+    document.getElementById('fPipeline').value = '';
+    document.getElementById('fGym').value      = '';
+    document.getElementById('formErr').style.display = 'none';
+    document.getElementById('generateBtn').disabled = false;
+    document.getElementById('generateBtn').textContent = 'Plan my day \u2736';
+  }
+
+  // ── Generate ──────────────────────────────────────────
+  async function generate() {
+    const tasks = document.getElementById('fTasks').value.trim();
+    if (!tasks) { showFormErr('Please describe what you need to get done today.'); return; }
+
+    document.getElementById('formErr').style.display = 'none';
+    const btn = document.getElementById('generateBtn');
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    showState('loading');
+
+    try {
+      const result = await api('POST', '/planner/generate', {
+        tasks,
+        pipeline_note: document.getElementById('fPipeline').value.trim() || null,
+        gym_time:      document.getElementById('fGym').value.trim() || null,
+        date:          currentDate,
+      });
+
+      // Save immediately
+      await api('POST', '/planner/day', {
+        date:          currentDate,
+        tasks,
+        pipeline_note: document.getElementById('fPipeline').value.trim() || null,
+        gym_time:      document.getElementById('fGym').value.trim() || null,
+        schedule:      result.schedule,
+        advice:        result.advice,
+      });
+
+      renderPlan(result.schedule, result.advice);
+      showState('plan');
+    } catch (e) {
+      showState('form');
+      showFormErr(e.message);
+      btn.disabled = false;
+      btn.textContent = 'Plan my day \u2736';
+    }
+  }
+
+  // ── Replan ────────────────────────────────────────────
+  function replan() {
+    clearForm();
+    showState('form');
+  }
+
+  // ── Render plan ───────────────────────────────────────
+  function renderPlan(schedule, advice) {
+    renderTimetable(schedule);
+    renderAdvisor(advice);
+    switchTab('timetable');
+  }
+
+  function renderTimetable(schedule) {
+    const list = document.getElementById('timetableList');
+    if (!Array.isArray(schedule) || !schedule.length) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:16px 0">No schedule data.</div>';
+      return;
+    }
+    list.innerHTML = schedule.map(block => {
+      const cat = esc(block.category || 'work');
+      return `<div class="time-block" data-cat="${cat}">
+        <div class="block-time">${esc(block.time || '')}</div>
+        <div class="block-body">
+          <div class="block-title">
+            ${esc(block.title || '')}
+            <span class="cat-pill" data-cat="${cat}">${cat}</span>
+          </div>
+          <div class="block-detail">${esc(block.detail || '')}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderAdvisor(advice) {
+    if (!advice) return;
+
+    document.getElementById('priorityCard').innerHTML = `
+      <div class="priority-label">Priority focus</div>
+      <div class="priority-text">${esc(advice.priority || '')}</div>
+      <div class="reasoning-text">${esc(advice.reasoning || '')}</div>
+    `;
+
+    const actions = Array.isArray(advice.actions) ? advice.actions : [];
+    document.getElementById('actionsList').innerHTML = actions.map((a, i) => {
+      const effort = (a.effort || 'medium').toLowerCase();
+      return `<div class="action-card">
+        <div class="action-num">${i + 1}</div>
+        <div class="action-body">
+          <div class="action-title">
+            ${esc(a.title || '')}
+            <span class="effort-pill ${effort}">${effort}</span>
+          </div>
+          <div class="action-detail">${esc(a.detail || '')}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    document.getElementById('watchOutCard').innerHTML = `
+      <div class="watch-out-label">Watch out</div>
+      <div class="watch-out-text">${esc(advice.watch_out || '')}</div>
+    `;
+  }
+
+  // ── Tabs ──────────────────────────────────────────────
+  function switchTab(tab) {
+    document.getElementById('timetableTab').style.display  = tab === 'timetable' ? '' : 'none';
+    document.getElementById('advisorTab').style.display    = tab === 'advisor'   ? '' : 'none';
+    document.getElementById('tabTimetable').classList.toggle('active', tab === 'timetable');
+    document.getElementById('tabAdvisor').classList.toggle('active',   tab === 'advisor');
+  }
+
+  // ── State switching ───────────────────────────────────
+  function showState(state) {
+    document.getElementById('formState').style.display    = state === 'form'    ? '' : 'none';
+    document.getElementById('loadingState').style.display = state === 'loading' ? '' : 'none';
+    document.getElementById('planState').style.display    = state === 'plan'    ? '' : 'none';
+  }
+
+  function showFormErr(msg) {
+    const el = document.getElementById('formErr');
+    el.textContent = msg;
+    el.style.display = '';
+  }
+
+  // ── Utilities ─────────────────────────────────────────
+  function esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Enter key support ─────────────────────────────────
+  document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  document.getElementById('regPass').addEventListener('keydown',   e => { if (e.key === 'Enter') doRegister(); });
+
+  // ── Init: check session ───────────────────────────────
+  (async function init() {
+    try {
+      const me = await api('GET', '/planner/me');
+      currentUsername = me.username || '';
+      showPlanner();
+    } catch {
+      // Not logged in — stay on auth view
+    }
+  })();
+</script>
+</body>
+</html>
