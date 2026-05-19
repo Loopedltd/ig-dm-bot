@@ -19,7 +19,6 @@
       --radius:  14px;
       --shadow:  0 1px 6px rgba(0,0,0,0.07), 0 2px 12px rgba(0,0,0,0.04);
 
-      /* category colours */
       --c-routine:  #16a34a;
       --c-gym:      #ea580c;
       --c-meal:     #2563eb;
@@ -35,8 +34,8 @@
       min-height: 100vh;
     }
 
-    /* ── Auth shell ──────────────────────────────────────── */
-    #authView {
+    /* ── Password gate ───────────────────────────────────── */
+    #gateView {
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -44,59 +43,44 @@
       padding: 24px;
     }
 
-    .auth-card {
+    .gate-card {
       background: var(--card);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
       padding: 40px 36px;
       width: 100%;
-      max-width: 380px;
+      max-width: 360px;
     }
 
-    .auth-title {
+    .gate-title {
       font-size: 22px;
       font-weight: 700;
       margin-bottom: 6px;
       letter-spacing: -0.02em;
     }
 
-    .auth-sub {
+    .gate-sub {
       font-size: 13px;
       color: var(--muted);
-      margin-bottom: 28px;
+      margin-bottom: 24px;
     }
 
-    .field {
-      margin-bottom: 14px;
-    }
-
-    .field label {
-      display: block;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 5px;
-    }
-
-    .field input, .field textarea {
+    .gate-input {
       width: 100%;
       border: 1.5px solid var(--border);
       border-radius: 9px;
-      padding: 10px 13px;
+      padding: 11px 13px;
       font-family: inherit;
-      font-size: 14px;
+      font-size: 15px;
       color: var(--text);
       outline: none;
       transition: border-color 0.15s;
       background: #fff;
+      margin-bottom: 12px;
     }
+    .gate-input:focus { border-color: var(--primary); }
 
-    .field input:focus, .field textarea:focus { border-color: var(--primary); }
-    .field textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
-
-    .btn-primary {
+    .gate-btn {
       width: 100%;
       background: var(--primary);
       color: #fff;
@@ -108,25 +92,10 @@
       font-weight: 600;
       cursor: pointer;
       transition: background 0.15s;
-      margin-top: 4px;
     }
-    .btn-primary:hover { background: var(--primary-h); }
-    .btn-primary:disabled { background: #a5b4fc; cursor: not-allowed; }
+    .gate-btn:hover { background: var(--primary-h); }
 
-    .auth-toggle {
-      margin-top: 18px;
-      text-align: center;
-      font-size: 13px;
-      color: var(--muted);
-    }
-
-    .auth-toggle a {
-      color: var(--primary);
-      cursor: pointer;
-      text-decoration: underline;
-    }
-
-    .auth-err {
+    .gate-err {
       color: #dc2626;
       font-size: 13px;
       margin-top: 10px;
@@ -167,12 +136,6 @@
       font-weight: 500;
     }
 
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
     .btn-ghost {
       background: none;
       border: 1.5px solid var(--border);
@@ -186,20 +149,6 @@
       transition: border-color 0.15s, color 0.15s;
     }
     .btn-ghost:hover { border-color: #9ca3af; color: var(--text); }
-
-    .btn-sm {
-      background: var(--primary);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      padding: 7px 14px;
-      font-family: inherit;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    .btn-sm:hover { background: var(--primary-h); }
 
     /* ── Date nav ────────────────────────────────────────── */
     .date-nav {
@@ -247,7 +196,6 @@
       border-radius: var(--radius);
       box-shadow: var(--shadow);
       padding: 28px;
-      margin-top: 0;
     }
 
     .form-title {
@@ -262,6 +210,33 @@
       color: var(--muted);
       margin-bottom: 22px;
     }
+
+    .field { margin-bottom: 14px; }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 5px;
+    }
+
+    .field input, .field textarea {
+      width: 100%;
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      padding: 10px 13px;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+      background: #fff;
+    }
+    .field input:focus, .field textarea:focus { border-color: var(--primary); }
+    .field textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
 
     .form-actions {
       display: flex;
@@ -314,7 +289,6 @@
       margin-bottom: 16px;
     }
 
-    /* Tabs */
     .tabs {
       display: flex;
       gap: 4px;
@@ -514,7 +488,6 @@
       line-height: 1.5;
     }
 
-    /* ── Error ───────────────────────────────────────────── */
     .err-box {
       color: #dc2626;
       font-size: 13px;
@@ -536,32 +509,14 @@
 </head>
 <body>
 
-<!-- ── Auth view ─────────────────────────────────────── -->
-<div id="authView">
-  <div class="auth-card">
-
-    <!-- Login form -->
-    <div id="loginForm">
-      <div class="auth-title">Daily Planner</div>
-      <div class="auth-sub">Sign in to plan your day</div>
-      <div class="field"><label>Username</label><input type="text" id="loginUser" autocomplete="username" /></div>
-      <div class="field"><label>Password</label><input type="password" id="loginPass" autocomplete="current-password" /></div>
-      <button class="btn-primary" id="loginBtn" onclick="doLogin()">Sign in</button>
-      <div class="auth-err" id="loginErr"></div>
-      <div class="auth-toggle">No account? <a onclick="showRegister()">Create one</a></div>
-    </div>
-
-    <!-- Register form -->
-    <div id="registerForm" style="display:none">
-      <div class="auth-title">Create account</div>
-      <div class="auth-sub">Choose a username and password</div>
-      <div class="field"><label>Username</label><input type="text" id="regUser" autocomplete="username" /></div>
-      <div class="field"><label>Password</label><input type="password" id="regPass" autocomplete="new-password" /></div>
-      <button class="btn-primary" id="regBtn" onclick="doRegister()">Create account</button>
-      <div class="auth-err" id="regErr"></div>
-      <div class="auth-toggle">Already have one? <a onclick="showLogin()">Sign in</a></div>
-    </div>
-
+<!-- ── Password gate ──────────────────────────────────── -->
+<div id="gateView">
+  <div class="gate-card">
+    <div class="gate-title">Daily Planner</div>
+    <div class="gate-sub">Enter the password to continue.</div>
+    <input class="gate-input" type="password" id="gatePass" placeholder="Password" autocomplete="current-password" />
+    <button class="gate-btn" id="gateBtn" onclick="submitGate()">Continue</button>
+    <div class="gate-err" id="gateErr"></div>
   </div>
 </div>
 
@@ -573,13 +528,9 @@
       <span class="header-title">Daily Planner</span>
       <span class="header-date" id="headerDate"></span>
     </div>
-    <div class="header-right">
-      <span style="font-size:13px;color:var(--muted)" id="headerUser"></span>
-      <button class="btn-ghost" onclick="doLogout()">Sign out</button>
-    </div>
+    <button class="btn-ghost" onclick="doLock()">Lock</button>
   </header>
 
-  <!-- Date nav -->
   <div class="date-nav">
     <button class="nav-btn" onclick="shiftDay(-1)" title="Previous day">&#8592;</button>
     <div class="nav-date" id="navDate"></div>
@@ -633,12 +584,10 @@
         <button class="btn-ghost" onclick="replan()">Replan today</button>
       </div>
 
-      <!-- Timetable -->
       <div id="timetableTab">
         <div class="timetable" id="timetableList"></div>
       </div>
 
-      <!-- Advisor -->
       <div id="advisorTab" style="display:none">
         <div class="priority-card" id="priorityCard"></div>
         <div class="actions-list" id="actionsList"></div>
@@ -650,10 +599,12 @@
 </div>
 
 <script>
-  // ── State ─────────────────────────────────────────────
-  let currentDate = todayStr();
-  let currentUsername = '';
+  const CORRECT_PASSWORD = 'Looped2024!';
+  const LS_KEY = 'planner_authed';
 
+  let currentDate = todayStr();
+
+  // ── Utilities ─────────────────────────────────────────
   function todayStr() {
     const d = new Date();
     return d.getFullYear() + '-' +
@@ -663,8 +614,47 @@
 
   function formatDisplayDate(str) {
     const [y, m, d] = str.split('-').map(Number);
-    const date = new Date(y, m - 1, d);
-    return date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    return new Date(y, m - 1, d).toLocaleDateString('en-GB', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+  }
+
+  function esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Password gate ─────────────────────────────────────
+  function submitGate() {
+    const val = document.getElementById('gatePass').value;
+    if (val === CORRECT_PASSWORD) {
+      localStorage.setItem(LS_KEY, '1');
+      showPlanner();
+    } else {
+      document.getElementById('gateErr').textContent = 'Incorrect password';
+      document.getElementById('gatePass').value = '';
+      document.getElementById('gatePass').focus();
+    }
+  }
+
+  function doLock() {
+    localStorage.removeItem(LS_KEY);
+    document.getElementById('plannerView').style.display = 'none';
+    document.getElementById('gateView').style.display    = 'flex';
+    document.getElementById('gatePass').value = '';
+    document.getElementById('gateErr').textContent = '';
+  }
+
+  document.getElementById('gatePass').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitGate();
+  });
+
+  // ── Planner init ──────────────────────────────────────
+  function showPlanner() {
+    document.getElementById('gateView').style.display    = 'none';
+    document.getElementById('plannerView').style.display = '';
+    document.getElementById('headerDate').textContent    = formatDisplayDate(todayStr());
+    currentDate = todayStr();
+    loadDay();
   }
 
   function shiftDay(delta) {
@@ -676,86 +666,18 @@
     loadDay();
   }
 
-  // ── HTTP helpers ──────────────────────────────────────
+  function updateNavDate() {
+    document.getElementById('navDate').textContent = formatDisplayDate(currentDate);
+  }
+
+  // ── HTTP ──────────────────────────────────────────────
   async function api(method, path, body) {
-    const opts = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
     if (body !== undefined) opts.body = JSON.stringify(body);
     const r = await fetch(path, opts);
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
     return data;
-  }
-
-  // ── Auth ──────────────────────────────────────────────
-  function showLogin()    { document.getElementById('loginForm').style.display=''; document.getElementById('registerForm').style.display='none'; }
-  function showRegister() { document.getElementById('registerForm').style.display=''; document.getElementById('loginForm').style.display='none'; }
-
-  async function doLogin() {
-    const btn = document.getElementById('loginBtn');
-    const err = document.getElementById('loginErr');
-    err.textContent = '';
-    btn.disabled = true;
-    btn.textContent = 'Signing in...';
-    try {
-      const data = await api('POST', '/planner/login', {
-        username: document.getElementById('loginUser').value.trim(),
-        password: document.getElementById('loginPass').value,
-      });
-      currentUsername = data.username || '';
-      showPlanner();
-    } catch (e) {
-      err.textContent = e.message;
-      btn.disabled = false;
-      btn.textContent = 'Sign in';
-    }
-  }
-
-  async function doRegister() {
-    const btn = document.getElementById('regBtn');
-    const err = document.getElementById('regErr');
-    err.textContent = '';
-    btn.disabled = true;
-    btn.textContent = 'Creating...';
-    try {
-      await api('POST', '/planner/register', {
-        username: document.getElementById('regUser').value.trim(),
-        password: document.getElementById('regPass').value,
-      });
-      // Auto-login after register
-      await api('POST', '/planner/login', {
-        username: document.getElementById('regUser').value.trim(),
-        password: document.getElementById('regPass').value,
-      });
-      currentUsername = document.getElementById('regUser').value.trim().toLowerCase();
-      showPlanner();
-    } catch (e) {
-      err.textContent = e.message;
-      btn.disabled = false;
-      btn.textContent = 'Create account';
-    }
-  }
-
-  async function doLogout() {
-    await api('POST', '/planner/logout').catch(() => {});
-    document.getElementById('plannerView').style.display = 'none';
-    document.getElementById('authView').style.display = 'flex';
-    document.getElementById('loginUser').value = '';
-    document.getElementById('loginPass').value = '';
-    showLogin();
-  }
-
-  // ── Planner init ──────────────────────────────────────
-  function showPlanner() {
-    document.getElementById('authView').style.display = 'none';
-    document.getElementById('plannerView').style.display = '';
-    document.getElementById('headerUser').textContent = currentUsername;
-    document.getElementById('headerDate').textContent = formatDisplayDate(todayStr());
-    currentDate = todayStr();
-    loadDay();
-  }
-
-  function updateNavDate() {
-    document.getElementById('navDate').textContent = formatDisplayDate(currentDate);
   }
 
   // ── Load a day ────────────────────────────────────────
@@ -771,12 +693,7 @@
         clearForm();
         showState('form');
       }
-    } catch (e) {
-      if (e.message === 'not authenticated' || e.message === 'invalid token') {
-        document.getElementById('plannerView').style.display = 'none';
-        document.getElementById('authView').style.display = 'flex';
-        return;
-      }
+    } catch {
       clearForm();
       showState('form');
     }
@@ -787,8 +704,9 @@
     document.getElementById('fPipeline').value = '';
     document.getElementById('fGym').value      = '';
     document.getElementById('formErr').style.display = 'none';
-    document.getElementById('generateBtn').disabled = false;
-    document.getElementById('generateBtn').textContent = 'Plan my day \u2736';
+    const btn = document.getElementById('generateBtn');
+    btn.disabled = false;
+    btn.textContent = 'Plan my day \u2736';
   }
 
   // ── Generate ──────────────────────────────────────────
@@ -806,16 +724,15 @@
       const result = await api('POST', '/planner/generate', {
         tasks,
         pipeline_note: document.getElementById('fPipeline').value.trim() || null,
-        gym_time:      document.getElementById('fGym').value.trim() || null,
+        gym_time:      document.getElementById('fGym').value.trim()      || null,
         date:          currentDate,
       });
 
-      // Save immediately
       await api('POST', '/planner/day', {
         date:          currentDate,
         tasks,
         pipeline_note: document.getElementById('fPipeline').value.trim() || null,
-        gym_time:      document.getElementById('fGym').value.trim() || null,
+        gym_time:      document.getElementById('fGym').value.trim()      || null,
         schedule:      result.schedule,
         advice:        result.advice,
       });
@@ -830,13 +747,9 @@
     }
   }
 
-  // ── Replan ────────────────────────────────────────────
-  function replan() {
-    clearForm();
-    showState('form');
-  }
+  function replan() { clearForm(); showState('form'); }
 
-  // ── Render plan ───────────────────────────────────────
+  // ── Render ────────────────────────────────────────────
   function renderPlan(schedule, advice) {
     renderTimetable(schedule);
     renderAdvisor(advice);
@@ -866,13 +779,11 @@
 
   function renderAdvisor(advice) {
     if (!advice) return;
-
     document.getElementById('priorityCard').innerHTML = `
       <div class="priority-label">Priority focus</div>
       <div class="priority-text">${esc(advice.priority || '')}</div>
       <div class="reasoning-text">${esc(advice.reasoning || '')}</div>
     `;
-
     const actions = Array.isArray(advice.actions) ? advice.actions : [];
     document.getElementById('actionsList').innerHTML = actions.map((a, i) => {
       const effort = (a.effort || 'medium').toLowerCase();
@@ -887,7 +798,6 @@
         </div>
       </div>`;
     }).join('');
-
     document.getElementById('watchOutCard').innerHTML = `
       <div class="watch-out-label">Watch out</div>
       <div class="watch-out-text">${esc(advice.watch_out || '')}</div>
@@ -896,13 +806,13 @@
 
   // ── Tabs ──────────────────────────────────────────────
   function switchTab(tab) {
-    document.getElementById('timetableTab').style.display  = tab === 'timetable' ? '' : 'none';
-    document.getElementById('advisorTab').style.display    = tab === 'advisor'   ? '' : 'none';
+    document.getElementById('timetableTab').style.display = tab === 'timetable' ? '' : 'none';
+    document.getElementById('advisorTab').style.display   = tab === 'advisor'   ? '' : 'none';
     document.getElementById('tabTimetable').classList.toggle('active', tab === 'timetable');
     document.getElementById('tabAdvisor').classList.toggle('active',   tab === 'advisor');
   }
 
-  // ── State switching ───────────────────────────────────
+  // ── State ─────────────────────────────────────────────
   function showState(state) {
     document.getElementById('formState').style.display    = state === 'form'    ? '' : 'none';
     document.getElementById('loadingState').style.display = state === 'loading' ? '' : 'none';
@@ -915,25 +825,11 @@
     el.style.display = '';
   }
 
-  // ── Utilities ─────────────────────────────────────────
-  function esc(str) {
-    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  // ── Init ──────────────────────────────────────────────
+  if (localStorage.getItem(LS_KEY) === '1') {
+    showPlanner();
   }
-
-  // ── Enter key support ─────────────────────────────────
-  document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-  document.getElementById('regPass').addEventListener('keydown',   e => { if (e.key === 'Enter') doRegister(); });
-
-  // ── Init: check session ───────────────────────────────
-  (async function init() {
-    try {
-      const me = await api('GET', '/planner/me');
-      currentUsername = me.username || '';
-      showPlanner();
-    } catch {
-      // Not logged in — stay on auth view
-    }
-  })();
+  // else: gateView is already visible by default
 </script>
 </body>
 </html>

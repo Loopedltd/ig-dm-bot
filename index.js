@@ -6797,109 +6797,20 @@ Return ONLY the JSON object, no other text.`;
 // ─── End Pipeline CRM ─────────────────────────────────────────────────────────
 
 // ─── Daily Planner ─────────────────────────────────────────────────────────
+// Auth: password-gate only (localStorage on client). No sessions, no JWT, no DB users.
+// All data stored against a fixed user_id — no FK constraint required.
 
-const PLANNER_JWT_SECRET =
-  process.env.PLANNER_JWT_SECRET ||
-  process.env.COACH_JWT_SECRET ||
-  "planner-dev-secret-change-me";
-
-function parsePlannerToken(req) {
-  const raw = req.headers.cookie || "";
-  for (const part of raw.split(";")) {
-    const [k, ...rest] = part.trim().split("=");
-    if (k.trim() === "planner_token") return rest.join("=");
-  }
-  return null;
-}
-
-function requirePlanner(req, res, next) {
-  const token = parsePlannerToken(req);
-  if (!token) return res.status(401).json({ error: "not authenticated" });
-  try {
-    const decoded = jwt.verify(token, PLANNER_JWT_SECRET);
-    if (!decoded?.user_id) return res.status(401).json({ error: "invalid token" });
-    req.plannerUser = decoded;
-    next();
-  } catch {
-    res.status(401).json({ error: "invalid token" });
-  }
-}
-
-// POST /planner/register
-app.post("/planner/register", async (req, res) => {
-  const { username, password } = req.body || {};
-  if (!username || !password)
-    return res.status(400).json({ error: "username and password required" });
-  if (password.length < 6)
-    return res.status(400).json({ error: "password must be at least 6 characters" });
-
-  const hash = await bcrypt.hash(password, 12);
-  const { error } = await supabase
-    .from("planner_users")
-    .insert({ username: username.trim().toLowerCase(), password_hash: hash });
-
-  if (error) {
-    const msg = error.code === "23505" ? "Username already taken" : error.message;
-    return res.status(400).json({ error: msg });
-  }
-  res.json({ success: true });
-});
-
-// POST /planner/login
-app.post("/planner/login", async (req, res) => {
-  const { username, password } = req.body || {};
-  if (!username || !password)
-    return res.status(400).json({ error: "username and password required" });
-
-  const { data: user, error } = await supabase
-    .from("planner_users")
-    .select("id,username,password_hash")
-    .eq("username", username.trim().toLowerCase())
-    .maybeSingle();
-
-  if (error || !user) return res.status(401).json({ error: "Invalid credentials" });
-
-  const ok = await bcrypt.compare(password, user.password_hash);
-  if (!ok) return res.status(401).json({ error: "Invalid credentials" });
-
-  const token = jwt.sign(
-    { user_id: user.id, username: user.username },
-    PLANNER_JWT_SECRET,
-    { expiresIn: "30d" }
-  );
-
-  const cookieOpts = [
-    "planner_token=" + token,
-    "HttpOnly",
-    "Path=/",
-    "Max-Age=" + 30 * 24 * 60 * 60,
-    "SameSite=Lax",
-  ];
-  if (process.env.NODE_ENV === "production") cookieOpts.push("Secure");
-  res.setHeader("Set-Cookie", cookieOpts.join("; "));
-  res.json({ success: true, username: user.username });
-});
-
-// POST /planner/logout
-app.post("/planner/logout", (req, res) => {
-  res.setHeader("Set-Cookie", "planner_token=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
-  res.json({ success: true });
-});
-
-// GET /planner/me — verify session and return username
-app.get("/planner/me", requirePlanner, (req, res) => {
-  res.json({ username: req.plannerUser.username });
-});
+const PLANNER_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 // GET /planner/day?date=YYYY-MM-DD
-app.get("/planner/day", requirePlanner, async (req, res) => {
+app.get("/planner/day", async (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: "date required" });
 
   const { data, error } = await supabase
     .from("planner_days")
     .select("*")
-    .eq("user_id", req.plannerUser.user_id)
+    .eq("user_id", PLANNER_USER_ID)
     .eq("date", date)
     .maybeSingle();
 
@@ -6909,20 +6820,20 @@ app.get("/planner/day", requirePlanner, async (req, res) => {
 });
 
 // POST /planner/day — upsert a saved plan
-app.post("/planner/day", requirePlanner, async (req, res) => {
+app.post("/planner/day", async (req, res) => {
   const { date, tasks, pipeline_note, gym_time, schedule, advice } = req.body || {};
   if (!date) return res.status(400).json({ error: "date required" });
 
   const { error } = await supabase.from("planner_days").upsert(
     {
-      user_id:      req.plannerUser.user_id,
+      user_id:       PLANNER_USER_ID,
       date,
-      tasks:        tasks        || null,
-      pipeline_note:pipeline_note|| null,
-      gym_time:     gym_time     || null,
-      schedule:     schedule     || null,
-      advice:       advice       || null,
-      updated_at:   new Date().toISOString(),
+      tasks:         tasks         || null,
+      pipeline_note: pipeline_note || null,
+      gym_time:      gym_time      || null,
+      schedule:      schedule      || null,
+      advice:        advice        || null,
+      updated_at:    new Date().toISOString(),
     },
     { onConflict: "user_id,date" }
   );
@@ -6932,7 +6843,7 @@ app.post("/planner/day", requirePlanner, async (req, res) => {
 });
 
 // POST /planner/generate — call Anthropic twice and return schedule + advice
-app.post("/planner/generate", requirePlanner, async (req, res) => {
+app.post("/planner/generate", async (req, res) => {
   const { tasks, pipeline_note, gym_time, date } = req.body || {};
   if (!tasks || !date) return res.status(400).json({ error: "tasks and date required" });
 
@@ -6951,21 +6862,21 @@ Tasks: ${tasks}
 Respond with a JSON array. Each object has: time (string), title (string), detail (string), category (routine|gym|meal|work|outreach|break).
 Start your response with [ and end with ]. Nothing else.`;
 
-  // Fetch last 5 saved days for this user, excluding today, for advisor context
+  // Fetch last 5 saved days, excluding today, for advisor context
   const { data: historyRows } = await supabase
     .from("planner_days")
     .select("date, tasks, pipeline_note, advice")
-    .eq("user_id", req.plannerUser.user_id)
+    .eq("user_id", PLANNER_USER_ID)
     .neq("date", date)
     .order("date", { ascending: false })
     .limit(5);
 
   const historyStr = (historyRows || []).length
     ? (historyRows || []).map(row => {
-        const priority = row.advice?.priority || "none recorded";
-        const pipelineNote = row.pipeline_note || "none";
-        const tasks_str = row.tasks || "none";
-        return `${row.date}: Tasks: ${tasks_str} | Pipeline update: ${pipelineNote} | Priority they were given: ${priority}`;
+        const priority     = row.advice?.priority || "none recorded";
+        const pipelineNote = row.pipeline_note    || "none";
+        const tasksStr     = row.tasks            || "none";
+        return `${row.date}: Tasks: ${tasksStr} | Pipeline update: ${pipelineNote} | Priority they were given: ${priority}`;
       }).join("\n")
     : "No previous days recorded yet.";
 
@@ -6994,9 +6905,9 @@ Start your response with { and end with }. Nothing else.`;
         "content-type":      "application/json",
       },
       body: JSON.stringify({
-        model:      "claude-sonnet-4-20250514",
+        model:    "claude-sonnet-4-20250514",
         max_tokens: 2000,
-        messages:   [{ role: "user", content: prompt }],
+        messages: [{ role: "user", content: prompt }],
       }),
     });
     if (!r.ok) {
