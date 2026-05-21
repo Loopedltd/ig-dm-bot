@@ -2808,7 +2808,7 @@ async function getIgAccountByClientId(clientId) {
 function signAdminToken() {
   if (!DASHBOARD_JWT_SECRET) return null;
   return jwt.sign({ role: "admin" }, DASHBOARD_JWT_SECRET, {
-    expiresIn: "7d",
+    expiresIn: "90d",
   });
 }
 

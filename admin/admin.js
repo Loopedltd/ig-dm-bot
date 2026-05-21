@@ -75,8 +75,9 @@ const AdminDashboard = {
     const r = await fetch(path, { ...opts, headers: { ...this.authHeaders(), ...(opts.headers || {}) } });
     const j = await r.json().catch(() => ({}));
     if (r.status === 401) {
-      const serverMsg = j?.error || "session invalid";
-      throw new Error(`Auth error: ${serverMsg}`);
+      localStorage.removeItem("admin_token");
+      window.location.href = "/admin/login.html";
+      return;
     }
     if (!r.ok) throw new Error(j?.error || j?.message || `Request failed (${r.status})`);
     return j;
