@@ -3925,6 +3925,9 @@ if (
 ) {
   allowed.faq = patch.faq;
 }
+if (typeof patch.calendly_api_key === "string" || patch.calendly_api_key === null) {
+  allowed.calendly_api_key = patch.calendly_api_key || null;
+}
     console.log("[config save] allowed keys being written:", Object.keys(allowed));
     console.log("[config save] comment_keyword_dm_enabled in allowed:", allowed.comment_keyword_dm_enabled);
     const { data, error } = await supabase
@@ -6899,6 +6902,77 @@ Return ONLY the JSON object, no other text.`;
 });
 
 // ─── End Pipeline CRM ─────────────────────────────────────────────────────────
+
+// ─── Calendly Integration ─────────────────────────────────────────────────
+
+// Public webhook — Calendly POSTs here when a booking is created or cancelled.
+// URL given to coaches: https://app.looped.ltd/webhooks/calendly/:client_id
+app.post("/webhooks/calendly/:client_id", async (req, res) => {
+  // Ack immediately so Calendly doesn't retry
+  res.status(200).json({ ok: true });
+
+  try {
+    const { client_id } = req.params;
+    const body = req.body || {};
+    const eventType = body.event; // "invitee.created" | "invitee.canceled"
+    const p = body.payload || {};
+
+    if (!eventType || !p) return;
+
+    const inviteeUri  = p.uri || null;
+    const eventUri    = p.event || null;
+    const inviteeName = p.name || null;
+    const inviteeEmail = p.email || null;
+    const se          = p.scheduled_event || {};
+    const startTime   = se.start_time || null;
+    const endTime     = se.end_time || null;
+    const eventName   = se.name || null;
+
+    if (eventType === "invitee.canceled") {
+      await supabase
+        .from("calendly_bookings")
+        .update({ status: "canceled" })
+        .eq("client_id", client_id)
+        .eq("invitee_uri", inviteeUri);
+      return;
+    }
+
+    if (eventType === "invitee.created") {
+      await supabase
+        .from("calendly_bookings")
+        .upsert({
+          client_id,
+          invitee_uri:   inviteeUri,
+          event_uri:     eventUri,
+          invitee_name:  inviteeName,
+          invitee_email: inviteeEmail,
+          start_time:    startTime,
+          end_time:      endTime,
+          event_name:    eventName,
+          status:        "active",
+          raw_payload:   body,
+        }, { onConflict: "invitee_uri" });
+    }
+  } catch (e) {
+    console.error("[calendly webhook]", e?.message || e);
+  }
+});
+
+// Protected — returns this coach's upcoming bookings
+app.get("/coach/api/calendly/bookings", requireCoach, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("calendly_bookings")
+      .select("id, invitee_name, invitee_email, start_time, end_time, event_name, status, created_at")
+      .eq("client_id", req.coach.client_id)
+      .order("start_time", { ascending: true });
+
+    if (error) return safeJson(res, 500, { error: error.message });
+    return safeJson(res, 200, { ok: true, bookings: data || [] });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
 
 // ─── Daily Planner ─────────────────────────────────────────────────────────
 // Auth: password-gate only (localStorage on client). No sessions, no JWT, no DB users.

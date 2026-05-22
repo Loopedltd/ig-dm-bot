@@ -655,6 +655,18 @@ input:focus, textarea:focus, select:focus{
       <div class="sub">Manage broadcasts, leads, and bot status.</div>
 
 
+      <!-- ── Upcoming Bookings (Calendly) ─────────────────────────────── -->
+      <div class="card" id="bookingsCard">
+        <div class="takeoverHeader">
+          <div>
+            <div class="takeoverTitle">Upcoming Bookings</div>
+            <div class="takeoverSub">Confirmed calls booked via your Calendly link.</div>
+          </div>
+          <button class="btn small" id="refreshBookingsBtn">Refresh</button>
+        </div>
+        <div id="bookingsList" style="margin-top:14px;"></div>
+      </div>
+
       <div class="card" id="instagramConnectionCard">
         <div class="takeoverHeader">
           <div>
@@ -847,5 +859,85 @@ Hey — just checking in. If you're still thinking about it, happy to answer any
       </div>
     </div>
     <script src="/coach/coach.js"></script>
+    <script>
+    (function () {
+      const API = "/coach/api";
+
+      function getToken() { return localStorage.getItem("coach_token"); }
+
+      async function apiFetch(path, opts) {
+        const r = await fetch(path, {
+          ...opts,
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + getToken(), ...(opts?.headers || {}) },
+        });
+        const j = await r.json().catch(() => ({}));
+        if (r.status === 401) { localStorage.removeItem("coach_token"); window.location.href = "/coach/login.html"; return null; }
+        if (!r.ok) throw new Error(j?.error || "Request failed");
+        return j;
+      }
+
+      function fmtDate(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+      }
+
+      function fmtTime(iso) {
+        if (!iso) return "";
+        return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+      }
+
+      async function loadBookings() {
+        const list = document.getElementById("bookingsList");
+        if (!list) return;
+        list.innerHTML = '<div class="takeoverMeta">Loading bookings…</div>';
+
+        try {
+          const data = await apiFetch(`${API}/calendly/bookings`);
+          if (!data) return;
+
+          const bookings = (data.bookings || []).filter(b => b.status !== "canceled");
+          const now = new Date();
+          const upcoming = bookings.filter(b => b.start_time && new Date(b.start_time) >= now);
+
+          if (!upcoming.length) {
+            list.innerHTML = '<div class="takeoverMeta">No upcoming bookings. Connect Calendly in Settings to start receiving them.</div>';
+            return;
+          }
+
+          list.innerHTML = upcoming.map(b => {
+            const name  = b.invitee_name  || "Unknown";
+            const email = b.invitee_email || "";
+            const evtName = b.event_name  || "Call";
+            const date  = fmtDate(b.start_time);
+            const start = fmtTime(b.start_time);
+            const end   = b.end_time ? fmtTime(b.end_time) : "";
+            return `<div style="display:flex; align-items:flex-start; gap:14px; padding:12px 0; border-bottom:1px solid rgba(15,23,42,0.08);">
+              <div style="min-width:52px; text-align:center; background:rgba(15,23,42,0.04); border-radius:10px; padding:8px 6px;">
+                <div style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.04em;">${new Date(b.start_time).toLocaleDateString("en-GB",{month:"short"})}</div>
+                <div style="font-size:22px; font-weight:800; line-height:1; margin-top:2px;">${new Date(b.start_time).getDate()}</div>
+              </div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-weight:700; font-size:14px;">${name}</div>
+                <div style="font-size:12px; color:var(--muted); margin-top:2px;">${evtName} &middot; ${start}${end ? " – " + end : ""}</div>
+                ${email ? `<div style="font-size:12px; color:var(--muted);">${email}</div>` : ""}
+              </div>
+              <div style="font-size:12px; color:var(--muted); white-space:nowrap; padding-top:2px;">${date}</div>
+            </div>`;
+          }).join("");
+        } catch (e) {
+          const list2 = document.getElementById("bookingsList");
+          if (list2) list2.innerHTML = '<div class="takeoverMeta">Could not load bookings.</div>';
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        if (!getToken()) return;
+        loadBookings();
+        const refreshBtn = document.getElementById("refreshBookingsBtn");
+        if (refreshBtn) refreshBtn.addEventListener("click", loadBookings);
+      });
+    })();
+    </script>
   </body>
 </html>

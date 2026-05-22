@@ -225,6 +225,9 @@
       val(qs("#vocabulary"), c.vocabulary);
       val(qs("#system_prompt"), c.system_prompt);
       if (c.example_messages) val(qs("#example_messages"), c.example_messages);
+      // Calendly — show placeholder dots if key is already saved, blank if not
+      const keyEl = qs("#calendly_api_key");
+      if (keyEl) keyEl.placeholder = c.calendly_api_key ? "••••••••••••  (saved)" : "eyJ…";
 
     } catch (e) {
       setErr("Failed to load settings: " + String(e.message || e));
@@ -699,6 +702,65 @@
     });
   }
 
+  // ── Calendly ──────────────────────────────────────────────────────────────
+
+  async function wireCalendly() {
+    // Populate webhook URL from /me client_id
+    try {
+      const me = await apiFetch(`${API}/me`);
+      const clientId = me?.client?.id;
+      const urlEl = qs("#calendlyWebhookUrl");
+      if (urlEl && clientId) {
+        urlEl.value = `${window.location.origin}/webhooks/calendly/${clientId}`;
+      }
+    } catch (_) {}
+
+    // Copy webhook URL
+    const copyBtn = qs("#copyWebhookBtn");
+    if (copyBtn && !copyBtn.__wired) {
+      copyBtn.__wired = true;
+      copyBtn.addEventListener("click", async () => {
+        const urlEl = qs("#calendlyWebhookUrl");
+        if (!urlEl) return;
+        try {
+          await navigator.clipboard.writeText(urlEl.value);
+          copyBtn.textContent = "Copied!";
+          setTimeout(() => { copyBtn.textContent = "Copy"; }, 2000);
+        } catch (_) {}
+      });
+    }
+
+    // Save Calendly API key
+    const saveBtn = qs("#saveCalendlyBtn");
+    if (saveBtn && !saveBtn.__wired) {
+      saveBtn.__wired = true;
+      saveBtn.addEventListener("click", async () => {
+        const statusEl = qs("#calendlyStatus");
+        const key = String(qs("#calendly_api_key")?.value || "").trim();
+        if (!key) {
+          if (statusEl) statusEl.textContent = "Enter an API key first.";
+          return;
+        }
+        saveBtn.disabled = true;
+        if (statusEl) statusEl.textContent = "Saving…";
+        try {
+          await apiFetch(`${API}/config`, {
+            method: "POST",
+            body: JSON.stringify({ calendly_api_key: key }),
+          });
+          if (statusEl) statusEl.textContent = "Saved ✓";
+          const keyEl = qs("#calendly_api_key");
+          if (keyEl) { keyEl.value = ""; keyEl.placeholder = "••••••••••••  (saved)"; }
+          setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 3000);
+        } catch (e) {
+          if (statusEl) statusEl.textContent = "Error: " + String(e.message || e);
+        } finally {
+          saveBtn.disabled = false;
+        }
+      });
+    }
+  }
+
   // ── Logout ────────────────────────────────────────────────────────────────
 
   function wireLogout() {
@@ -740,6 +802,8 @@
       loadInstagramConnectionStatus(),
       loadPromptUsageStatus(),
     ]);
+
+    wireCalendly();
 
     // Sync badge display after config values are loaded into selects
     wireBadges();

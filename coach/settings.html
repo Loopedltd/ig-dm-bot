@@ -412,6 +412,31 @@ assistant: use this and get booked in
         <input id="booking_url_alt" placeholder="https://…" style="max-width:420px;" />
       </div>
 
+      <!-- ─── SECTION 3: Calendly Integration ─────────────────────────── -->
+      <div class="sectionLabel" style="display:flex; align-items:center; gap:8px;">
+        <span class="sectionNum" style="background:#5b21b6;">3</span> Calendly Integration
+      </div>
+      <div class="card">
+        <div class="takeoverTitle" style="font-size:16px;">Connect Calendly</div>
+        <div class="takeoverSub" style="margin-top:4px; margin-bottom:18px;">Your booking link above is already sent automatically in DMs. Save your API key so confirmed bookings appear on your dashboard.</div>
+
+        <label style="margin-top:0;">Calendly API key</label>
+        <input type="password" id="calendly_api_key" placeholder="eyJ..." style="max-width:480px;" autocomplete="off" />
+        <div class="helper">In Calendly: Account → Integrations → API &amp; Webhooks → Personal Access Tokens. Create a token and paste it here.</div>
+
+        <label style="margin-top:18px;">Your Calendly webhook URL <span style="font-weight:500; color:var(--muted);">(paste into Calendly → Webhooks)</span></label>
+        <div style="display:flex; gap:8px; align-items:center; margin-top:6px; max-width:560px;">
+          <input id="calendlyWebhookUrl" readonly style="background:rgba(15,23,42,0.03); color:var(--muted); cursor:text; flex:1;" value="Loading…" />
+          <button type="button" class="btn" id="copyWebhookBtn" style="white-space:nowrap; flex-shrink:0;">Copy</button>
+        </div>
+        <div class="helper">In Calendly: Account → Integrations → Webhooks → Add new webhook. Subscribe to <strong>invitee.created</strong> and <strong>invitee.canceled</strong> events. Paste the URL above as the destination.</div>
+
+        <div style="margin-top:18px; display:flex; gap:10px; align-items:center;">
+          <button class="btn primary" id="saveCalendlyBtn">Save API key</button>
+          <span class="helper" id="calendlyStatus" style="margin:0;"></span>
+        </div>
+      </div>
+
       <!-- Save -->
       <div class="card" style="margin-top:16px;">
         <div class="actions" style="margin-top:0;">
