@@ -350,7 +350,7 @@ async function loadInstagramConnectionStatus() {
     });
 
     if (data?.connected) {
-badgeEl.className = "badge connected";
+      badgeEl.className = "badge connected";
       badgeEl.textContent = "Connected";
 
       metaEl.textContent = data.username
@@ -376,10 +376,14 @@ badgeEl.className = "badge connected";
       window.location.href = "/coach/login.html";
       return;
     }
-    // Any other error (DB, network, subscription): show clean "not connected" state
-    badgeEl.className = "badge warn";
-    badgeEl.textContent = "Not connected";
-    metaEl.textContent = "No Instagram account connected yet.";
+    // Log the real error so it's visible in the browser console
+    console.error("[Instagram status] check failed:", e?.status, e?.message, e?.payload);
+    // Don't show "Not connected" for API errors — the account may still be connected.
+    // Show a neutral state so the user knows something went wrong, not that they're unconnected.
+    badgeEl.className = "badge";
+    badgeEl.textContent = "Status unavailable";
+    metaEl.textContent = `Could not check connection (HTTP ${e?.status || "network error"}). Open browser console for details.`;
+    btn.textContent = "Connect Instagram";
     btn.disabled = false;
     btn.style.opacity = "1";
   }
