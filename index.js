@@ -6438,21 +6438,23 @@ const ig =
 // On reconnect, ONLY the tokens in ig_accounts should change.
 // client_configs and leads are NEVER touched — they stay exactly as they were.
 //
-// Strategy:
-//  1. Look for an existing row matching this ig_user_id OR page_id.
-//     If found: update it in place, preserving its client_id.
-//  2. If not found by IG identity, look for the coach's own existing row by client_id.
-//     If found: update it in place (coach changed their connected IG account).
-//  3. If truly no row exists: insert fresh.
-//  In all cases: deactivate any other stale rows for this client_id so
-//  there is never more than one active row per client.
+// Strategy (all queries scoped to the current clientId):
+//  1. Look for an existing row for THIS client matching this ig_user_id OR page_id.
+//     If found: update it in place.
+//  2. If not found by IG identity, look for any existing row for this client.
+//     If found: update it in place (coach changed which IG account they're using).
+//  3. If truly no row exists for this client: insert fresh.
+//  Then: deactivate stale rows for this client and deactivate this IG under any other client.
 
+// Look for an existing row for THIS client with this IG identity (scoped to clientId)
 const { data: existingByIg } = await supabase
   .from("ig_accounts")
   .select("id, client_id")
+  .eq("client_id", clientId)
   .or(`ig_user_id.eq.${ig.id},page_id.eq.${page.id}`)
   .maybeSingle();
 
+// If not found by IG identity, check if this client has any row at all (changed IG account)
 const { data: existingByClient } = existingByIg ? { data: null } : await supabase
   .from("ig_accounts")
   .select("id, client_id")
@@ -6460,11 +6462,10 @@ const { data: existingByClient } = existingByIg ? { data: null } : await supabas
   .maybeSingle();
 
 const rowToUpdate = existingByIg || existingByClient;
-const activeClientId = rowToUpdate ? rowToUpdate.client_id : clientId;
 
 let upsertErr;
 if (rowToUpdate) {
-  console.log("ig_connect: updating existing ig_accounts row", { id: rowToUpdate.id, activeClientId, requestingClientId: clientId });
+  console.log("ig_connect: updating existing ig_accounts row", { id: rowToUpdate.id, clientId });
   ({ error: upsertErr } = await supabase
     .from("ig_accounts")
     .update({
@@ -6489,12 +6490,20 @@ if (rowToUpdate) {
     }));
 }
 
-// Deactivate any other stale rows for this client so there is exactly one active row
+// Deactivate any other stale rows for THIS client (e.g. previously connected a different IG)
 await supabase
   .from("ig_accounts")
   .update({ is_active: false })
-  .eq("client_id", activeClientId)
+  .eq("client_id", clientId)
   .neq("ig_user_id", ig.id);
+
+// If this IG account was previously active under a different client, deactivate it there
+// (prevents duplicate routing of incoming DMs to the old client)
+await supabase
+  .from("ig_accounts")
+  .update({ is_active: false })
+  .or(`ig_user_id.eq.${ig.id},page_id.eq.${page.id}`)
+  .neq("client_id", clientId);
 
     if (upsertErr) {
       return res
