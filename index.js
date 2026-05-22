@@ -70,6 +70,12 @@ app.get("/planner", (req, res) => {
   });
 });
 
+app.get("/demo", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "demo.html"), (err) => {
+    if (err && !res.headersSent) res.status(500).send("Error loading demo page");
+  });
+});
+
 // Clean SaaS routes
 app.get("/checkout", (req, res) => {
   if (!isPayHost(req) && process.env.NODE_ENV === "production") {
@@ -252,7 +258,7 @@ function randomInt(min, max) {
 
 function isAllowedStripeStatus(status) {
   const s = String(status || "").toLowerCase();
-  return s === "active" || s === "trialing";
+  return s === "active" || s === "trialing" || s === "demo";
 }
 
 function getHost(req) {
@@ -3545,6 +3551,104 @@ app.post("/coach/api/login", async (req, res) => {
     }
 
     const token = signCoachToken(user.client_id);
+    return safeJson(res, 200, { ok: true, token });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+/**
+ * ===========================
+ * DEMO SELF-SIGNUP
+ * ===========================
+ */
+
+app.post("/demo/register", async (req, res) => {
+  try {
+    const { name, email, password } = req.body || {};
+
+    const nameStr  = String(name  || "").trim();
+    const emailStr = String(email || "").trim().toLowerCase();
+    const passStr  = String(password || "");
+
+    if (!nameStr)  return safeJson(res, 400, { error: "Name is required" });
+    if (!emailStr) return safeJson(res, 400, { error: "Email is required" });
+    if (!passStr || passStr.length < 8) {
+      return safeJson(res, 400, { error: "Password must be at least 8 characters" });
+    }
+
+    // Block if email already registered
+    const { data: existing } = await supabase
+      .from("coach_users")
+      .select("id")
+      .eq("email", emailStr)
+      .maybeSingle();
+
+    if (existing) {
+      return safeJson(res, 409, { error: "An account with this email already exists. Try logging in." });
+    }
+
+    // Create client row
+    const { data: client, error: clientErr } = await supabase
+      .from("clients")
+      .insert({ name: nameStr, timezone: "Europe/London" })
+      .select()
+      .single();
+
+    if (clientErr) {
+      return safeJson(res, 500, { error: String(clientErr.message || clientErr) });
+    }
+
+    // Create client_config with stripe_subscription_status = 'demo'
+    const { error: configErr } = await supabase
+      .from("client_configs")
+      .insert({
+        client_id: client.id,
+        stripe_subscription_status: "demo",
+        system_prompt: "You are a helpful assistant that qualifies leads and books sales calls on behalf of this coach. Keep replies short, casual and conversational. Ask one question at a time to understand the lead's goals and situation before moving towards booking a call.",
+        tone: "direct",
+        style: "short, punchy",
+        vocabulary: "casual UK coach",
+        niche: "generic",
+        offer_description: null,
+        offer_price: null,
+        what_you_do: null,
+        what_they_get: null,
+        how_it_works: null,
+        who_its_for: null,
+        main_result: null,
+        best_fit_leads: null,
+        not_a_fit: null,
+        common_objections: null,
+        closing_triggers: null,
+        urgency_reason: null,
+        trust_builders: null,
+        faq: null,
+        story_reply_auto_dm_enabled: false,
+        story_reply_auto_dm_text: null,
+        comment_reply_auto_dm_enabled: false,
+        comment_reply_auto_dm_text: null,
+        keyword_auto_dm_enabled: false,
+        keyword_trigger_text: null,
+        keyword_auto_dm_text: null,
+      });
+
+    if (configErr) {
+      return safeJson(res, 500, { error: String(configErr.message || configErr) });
+    }
+
+    // Create coach_users row
+    const password_hash = await bcrypt.hash(passStr, 10);
+    const { error: userErr } = await supabase
+      .from("coach_users")
+      .insert({ email: emailStr, password_hash, client_id: client.id });
+
+    if (userErr) {
+      return safeJson(res, 500, { error: String(userErr.message || userErr) });
+    }
+
+    // Sign and return token — dashboard loads immediately, no payment step
+    const token = signCoachToken(client.id);
     return safeJson(res, 200, { ok: true, token });
   } catch (e) {
     return safeJson(res, 500, { error: String(e?.message || e) });

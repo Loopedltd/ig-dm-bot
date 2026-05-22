@@ -239,6 +239,9 @@ const AdminDashboard = {
   getBillingStatusPill(cfg) {
     const status = String(cfg?.stripe_subscription_status || "").toLowerCase();
 
+    if (status === "demo") {
+      return { text: "demo", className: "pill demo" };
+    }
     if (status === "active" || status === "trialing") {
       return { text: status, className: "pill ok" };
     }
