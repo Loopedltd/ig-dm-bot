@@ -810,8 +810,8 @@ badge.className = paused ? "badge globalPaused" : "badge connected";
   if (input) input.value = status.bot_paused_reason || "";
 
   btn.textContent = paused
-    ? "Resume bot globally"
-    : "Pause bot globally";
+    ? "Resume all messaging globally"
+    : "Pause all messaging globally";
 }
 
 function wireGlobalPauseButton() {
@@ -929,11 +929,14 @@ function renderLeadRow(lead) {
     ${isPaused ? `<span class="badge leadPausedBadge">Bot paused</span>` : `<span class="badge leadPausedBadge leadPausedBadge--hidden"></span>`}
     <button class="leadResetBtn${botOn ? " leadResetBtn--hidden" : ""}" data-id="${lead.id}" title="Clear the pause and resume the bot for this lead immediately">Reset bot</button>
     <div class="leadToggleWrap">
-      <span class="leadToggleLabel">${botOn ? "On" : "Off"}</span>
-      <label class="leadToggle" title="${botOn ? "Bot active - click to pause" : "Bot paused - click to resume"}">
-        <input type="checkbox" class="leadBotToggle" data-id="${lead.id}" ${botOn ? "checked" : ""}>
-        <span class="leadToggleSlider"></span>
-      </label>
+      <div class="leadToggleRow">
+        <span class="leadToggleLabel">${botOn ? "On" : "Off"}</span>
+        <label class="leadToggle" title="${botOn ? "Bot active - click to pause" : "Bot paused - click to resume"}">
+          <input type="checkbox" class="leadBotToggle" data-id="${lead.id}" ${botOn ? "checked" : ""}>
+          <span class="leadToggleSlider"></span>
+        </label>
+      </div>
+      <span class="leadToggleHint">Toggle off to pause all messaging to this lead.</span>
     </div>
   </div>`;
 }
