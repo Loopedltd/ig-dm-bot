@@ -428,7 +428,7 @@ input:focus, textarea:focus, select:focus{
       /* ---- Lead row layout ---- */
       .leadRow{
         display:grid;
-        grid-template-columns: 1fr auto auto auto auto;
+        grid-template-columns: 1fr auto auto auto auto auto;
         align-items:center;
         gap:12px;
         padding:12px 14px;
@@ -436,8 +436,24 @@ input:focus, textarea:focus, select:focus{
         background:#fff;
         border-radius:14px;
       }
+      .leadRow--paused{
+        background:rgba(251,191,36,0.06);
+        border-color:rgba(181,71,8,0.25);
+      }
       .leadRow:hover{ background:rgba(15,23,42,0.012); }
+      .leadRow--paused:hover{ background:rgba(251,191,36,0.1); }
       .leadIdent{ min-width:0; }
+      .leadPausedBadge{
+        font-size:11px;
+        font-weight:700;
+        padding:3px 8px;
+        border-radius:8px;
+        background:rgba(181,71,8,0.1);
+        border:1px solid rgba(181,71,8,0.25);
+        color:#b54708;
+        white-space:nowrap;
+      }
+      .leadPausedBadge--hidden{ visibility:hidden; pointer-events:none; }
       .leadResetBtn{
         font-size:12px;
         font-weight:700;
@@ -642,7 +658,8 @@ input:focus, textarea:focus, select:focus{
         .globalRight{ justify-content:flex-end; width:100%; }
         .connectCardRow{ flex-direction:column; }
         .connectRight{ justify-content:flex-end; width:100%; }
-        .leadRow{ grid-template-columns: 1fr auto auto; }
+        .leadRow{ grid-template-columns: 1fr auto auto auto; }
+        .leadPausedBadge{ display:none; }
       }
       @media (max-width: 1080px) and (min-width: 901px){
         .row[style*="1fr 1fr 1fr 1fr"]{ grid-template-columns: 1fr 1fr !important; }

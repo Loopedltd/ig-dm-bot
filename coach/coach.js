@@ -168,9 +168,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function fmtTime(iso) {
-    if (!iso) return "—";
+    if (!iso) return "";
     const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "—";
+    if (Number.isNaN(d.getTime())) return "";
     return d.toLocaleString();
   }
 function getTimeUntilTomorrow() {
@@ -412,7 +412,7 @@ async function loadCommentActivity() {
     };
 
     const rowsHtml = rows.map((r) => {
-      const keyword  = r.keyword ? `<span class="mono">${r.keyword.replace(/</g, "&lt;")}</span>` : `<span style="color:var(--muted)">—</span>`;
+      const keyword  = r.keyword ? `<span class="mono">${r.keyword.replace(/</g, "&lt;")}</span>` : `<span style="color:var(--muted)">-</span>`;
       const username = r.ig_username ? `@${r.ig_username.replace(/</g, "&lt;")}` : `<span style="color:var(--muted)">unknown</span>`;
 
       return `<tr>
@@ -805,7 +805,7 @@ badge.className = paused ? "badge globalPaused" : "badge connected";
 
   meta.textContent = status.bot_paused_at
     ? `Updated ${fmtTime(status.bot_paused_at)}`
-    : "—";
+    : "";
 
   if (input) input.value = status.bot_paused_reason || "";
 
@@ -894,7 +894,7 @@ function leadLastActivity(lead) {
 }
 
 function fmtRelative(iso) {
-  if (!iso) return "—";
+  if (!iso) return "no activity";
   const ms = Date.now() - new Date(iso).getTime();
   if (ms < 0) return "just now";
   const mins = Math.floor(ms / 60000);
@@ -917,19 +917,20 @@ function renderLeadRow(lead) {
   const stage = lead.stage || "new";
   const stageLabel = STAGE_LABELS[stage] || stage;
   const lastMsg = fmtRelative(leadLastActivity(lead));
-  const botOn = !lead.manual_override;
-  const toggleId = `toggle_${lead.id}`;
+  const isPaused = lead.manual_override === true;
+  const botOn = !isPaused;
 
-  return `<div class="leadRow" data-id="${lead.id}" data-paused="${lead.manual_override ? "1" : "0"}">
+  return `<div class="leadRow${isPaused ? " leadRow--paused" : ""}" data-id="${lead.id}" data-paused="${isPaused ? "1" : "0"}">
     <div class="leadIdent">
       <div class="leadName">${escHtml(name)}</div>
       <div class="leadSub">${escHtml(subLine)} · ${lastMsg}</div>
     </div>
     <span class="badge stageBadge stage-${escHtml(stage)}">${escHtml(stageLabel)}</span>
+    ${isPaused ? `<span class="badge leadPausedBadge">Bot paused</span>` : `<span class="badge leadPausedBadge leadPausedBadge--hidden"></span>`}
     <button class="leadResetBtn${botOn ? " leadResetBtn--hidden" : ""}" data-id="${lead.id}" title="Clear the pause and resume the bot for this lead immediately">Reset bot</button>
     <div class="leadToggleWrap">
       <span class="leadToggleLabel">${botOn ? "On" : "Off"}</span>
-      <label class="leadToggle" title="${botOn ? "Bot active — click to pause" : "Bot paused — click to resume"}">
+      <label class="leadToggle" title="${botOn ? "Bot active - click to pause" : "Bot paused - click to resume"}">
         <input type="checkbox" class="leadBotToggle" data-id="${lead.id}" ${botOn ? "checked" : ""}>
         <span class="leadToggleSlider"></span>
       </label>
