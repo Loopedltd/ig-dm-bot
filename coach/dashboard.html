@@ -428,7 +428,7 @@ input:focus, textarea:focus, select:focus{
       /* ---- Lead row layout ---- */
       .leadRow{
         display:grid;
-        grid-template-columns: 1fr auto auto auto;
+        grid-template-columns: 1fr auto auto auto auto;
         align-items:center;
         gap:12px;
         padding:12px 14px;
@@ -438,6 +438,21 @@ input:focus, textarea:focus, select:focus{
       }
       .leadRow:hover{ background:rgba(15,23,42,0.012); }
       .leadIdent{ min-width:0; }
+      .leadResetBtn{
+        font-size:12px;
+        font-weight:700;
+        padding:6px 10px;
+        border-radius:10px;
+        background:rgba(181,71,8,0.08);
+        border:1px solid rgba(181,71,8,0.22);
+        color:#b54708;
+        cursor:pointer;
+        white-space:nowrap;
+        line-height:1;
+      }
+      .leadResetBtn:hover{ background:rgba(181,71,8,0.14); }
+      .leadResetBtn:disabled{ opacity:0.55; cursor:default; }
+      .leadResetBtn--hidden{ visibility:hidden; pointer-events:none; }
       .leadName{
         font-size:14px;
         font-weight:700;

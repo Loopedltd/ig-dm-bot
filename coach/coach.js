@@ -926,6 +926,7 @@ function renderLeadRow(lead) {
       <div class="leadSub">${escHtml(subLine)} · ${lastMsg}</div>
     </div>
     <span class="badge stageBadge stage-${escHtml(stage)}">${escHtml(stageLabel)}</span>
+    <button class="leadResetBtn${botOn ? " leadResetBtn--hidden" : ""}" data-id="${lead.id}" title="Clear the pause and resume the bot for this lead immediately">Reset bot</button>
     <div class="leadToggleWrap">
       <span class="leadToggleLabel">${botOn ? "On" : "Off"}</span>
       <label class="leadToggle" title="${botOn ? "Bot active — click to pause" : "Bot paused — click to resume"}">
@@ -1056,6 +1057,34 @@ function wireLeadToggles() {
         // Revert toggle on error
         input.checked = !botOn;
         input.disabled = false;
+        setErr(String(e.message || e));
+      }
+    });
+  });
+
+  // "Reset bot" button — clears the manual pause immediately for paused leads
+  document.querySelectorAll(".leadResetBtn").forEach((btn) => {
+    if (btn.__wired) return;
+    btn.__wired = true;
+
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-id");
+      btn.disabled = true;
+      btn.textContent = "Resetting…";
+
+      try {
+        await apiFetch(`${API}/leads/${id}/manual-override`, {
+          method: "POST",
+          body: JSON.stringify({ enabled: false, reason: "Reset by coach" }),
+        });
+
+        const lead = allLeads.find((l) => l.id === id);
+        if (lead) lead.manual_override = false;
+
+        renderLeadsList();
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = "Reset bot";
         setErr(String(e.message || e));
       }
     });
