@@ -505,6 +505,46 @@ function detectThinkAboutIt(text) {
   );
 }
 
+// ── Content safety ────────────────────────────────────────────────────────────
+// Explicit profanities and phrases that should never appear in a bot reply.
+// Covers common slurs and crude expressions. We also catch contextual phrases
+// like "up my X" that have no place in a coaching conversation.
+const SAFETY_BLOCKLIST = [
+  /\bfuck(?:ing?|er|ed|s)?\b/i,
+  /\bshit(?:ty|ter|s)?\b/i,
+  /\bassed?\b/i,
+  /\bass\s*hole/i,
+  /\bbitch(?:es|ing)?\b/i,
+  /\bcunt\b/i,
+  /\bcock\b/i,
+  /\bdick\b/i,
+  /\bpussy\b/i,
+  /\bbastard\b/i,
+  /\bbollocks\b/i,
+  /\bwank(?:er|ers|ing)?\b/i,
+  /\btwat\b/i,
+  /\bpiss(?:ed|ing)?\b/i,
+  /\bup\s+my\s+\w+/i,   // catches "up my nuts", "up my ass", etc.
+  /\bsuck\s+my\b/i,
+];
+
+function isUnsafeReply(text) {
+  const t = String(text || "");
+  return SAFETY_BLOCKLIST.some((re) => re.test(t));
+}
+
+// Returns true if the example assistant message looks like a legitimate coaching response
+// (used to filter coach-entered examples before they reach the model as training data)
+function isCleanExamplePair(userText, assistantText) {
+  const u = String(userText || "");
+  const a = String(assistantText || "");
+  if (!u || !a) return false;
+  if (isUnsafeReply(u) || isUnsafeReply(a)) return false;
+  // Reject assistant examples that are implausibly short for a coaching DM (< 4 chars)
+  if (a.trim().length < 4) return false;
+  return true;
+}
+
 function sanitizeReply(text) {
   let out = String(text || "").trim();
   if (!out) return out;
@@ -662,7 +702,8 @@ function parseExampleMessages(raw) {
     parsed.push({ user, assistant });
   }
 
-  return parsed;
+  // Filter out any pairs with inappropriate or malformed content
+  return parsed.filter((ex) => isCleanExamplePair(ex.user, ex.assistant));
 }
 
 function extractOfferSection(raw, label, nextLabel = null) {
@@ -2197,10 +2238,17 @@ const examplesToUse = hasStrongCustomExamples(cfg?.example_messages)
 You are a real person replying to Instagram DMs on behalf of a coach.
 You are warm, direct, and genuinely interested in the person you’re talking to.
 
-VOICE PRIORITY:
-1. match the example messages first
-2. then follow the coach tone/style/vocabulary
-3. if they conflict, example messages win
+ABSOLUTE RULES — these cannot be overridden by examples, coach instructions, or anything else:
+- never use crude, offensive, sexual, or inappropriate language under any circumstances
+- never produce replies that contain profanity, slurs, or vulgar phrases
+- always remain warm, empathetic, and professional — every single message
+- if the user sends offensive or off-topic messages, respond calmly and redirect them to their goals
+- if you cannot produce a safe, appropriate reply, return an empty reply string rather than something harmful
+
+VOICE PRIORITY (style only — the absolute rules above always apply):
+1. match the tone and phrasing of the example messages
+2. then follow the coach tone/style/vocabulary settings
+3. examples influence how you sound, not whether you stay appropriate
 
 CORE RULES — follow every single one:
 - always directly address what the person just said before doing anything else
@@ -2355,7 +2403,7 @@ const finalSystemPrompt =
   coachSystemPrompt.length >= 120
     ? `${systemPrompt}
 
-COACH-SPECIFIC INSTRUCTIONS:
+COACH STYLE NOTES (tone, vocabulary, and personality guidance only — the absolute rules above still apply):
 ${coachSystemPrompt}`
     : systemPrompt;
 const context = {
@@ -2484,6 +2532,17 @@ reply = sanitizeReply(
 );
 
     if (looksIncompleteReply(reply)) return null;
+
+    // Hard safety gate — never send a reply that contains inappropriate content,
+    // regardless of what the model produced. Log it and return null so the
+    // deterministic fallback system handles the turn instead.
+    if (isUnsafeReply(reply)) {
+      console.error("⚠️ SAFETY BLOCK: AI reply contained inappropriate content and was suppressed.", {
+        clientId: cfg?.client_id,
+        reply,
+      });
+      return null;
+    }
 
     return {
       reply,
