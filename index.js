@@ -2965,6 +2965,16 @@ app.post("/admin/api/login", async (req, res) => {
  * ===========================
  */
 
+// Manual DM queue flush — call this if messages get stuck
+app.post("/admin/api/flush-dm-queue", requireAdmin, async (req, res) => {
+  try {
+    await processDmQueue();
+    res.json({ ok: true, message: "DM queue flushed" });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
+});
+
 app.get("/admin/api/stats", requireAdmin, async (req, res) => {
   try {
     const { count: clientsCount, error: cErr } = await supabase
@@ -5517,7 +5527,15 @@ async function queueDm({ clientId, igPsid, text }) {
   }
 }
 
+// Guard: prevents concurrent processDmQueue runs overlapping
+let dmQueueRunning = false;
+
 async function processDmQueue() {
+  if (dmQueueRunning) {
+    console.log("processDmQueue: already running, skipping");
+    return;
+  }
+  dmQueueRunning = true;
   try {
     // Fetch pending messages ordered by created_at (oldest first), limit batch
     const { data: pendingItems, error } = await supabase
@@ -5528,10 +5546,15 @@ async function processDmQueue() {
       .limit(50);
 
     if (error) {
-      console.error("processDmQueue fetch failed:", error);
+      console.error("processDmQueue fetch failed:", error.message || error);
       return;
     }
-    if (!pendingItems || pendingItems.length === 0) return;
+    if (!pendingItems || pendingItems.length === 0) {
+      console.log("processDmQueue: no pending items");
+      return;
+    }
+
+    console.log(`processDmQueue: processing ${pendingItems.length} pending item(s)`);
 
     for (const item of pendingItems) {
       try {
@@ -5551,16 +5574,18 @@ async function processDmQueue() {
         const igAccount = await getIgAccountByClientId(item.client_id);
         if (!igAccount?.page_access_token) {
           console.error("dm_queue: no access token for client", item.client_id);
-          await supabase.from("dm_queue").update({
+          const { error: updErr } = await supabase.from("dm_queue").update({
             status: "failed",
             error: "No access token",
             processed_at: new Date().toISOString(),
           }).eq("id", item.id);
+          if (updErr) console.error("dm_queue: status update failed", updErr.message);
           continue;
         }
 
         // Send the message
-        const { sendResp } = await sendInstagramTextMessage({
+        console.log(`dm_queue: sending item ${item.id} to ${item.ig_psid}`);
+        const { sendResp, sendData } = await sendInstagramTextMessage({
           accessToken: igAccount.page_access_token,
           recipientId: item.ig_psid,
           text: item.message,
@@ -5568,29 +5593,35 @@ async function processDmQueue() {
 
         tracker.count += 1;
 
-        await supabase.from("dm_queue").update({
-          status: sendResp.ok ? "sent" : "failed",
-          error: sendResp.ok ? null : `HTTP ${sendResp.status}`,
+        const { error: updErr } = await supabase.from("dm_queue").update({
+          status: "sent",
+          error: null,
           processed_at: new Date().toISOString(),
         }).eq("id", item.id);
+        if (updErr) console.error("dm_queue: sent status update failed", updErr.message);
 
         log("dm_queue_processed", {
           id: item.id,
           clientId: item.client_id,
           igPsid: item.ig_psid,
           sendOk: sendResp.ok,
+          sendData,
         });
+        console.log(`dm_queue: sent item ${item.id} ok=${sendResp.ok}`);
       } catch (e) {
         console.error("dm_queue item failed:", item.id, e?.message || e);
-        await supabase.from("dm_queue").update({
+        const { error: updErr } = await supabase.from("dm_queue").update({
           status: "failed",
           error: String(e?.message || e).slice(0, 200),
           processed_at: new Date().toISOString(),
-        }).eq("id", item.id).catch(() => {});
+        }).eq("id", item.id);
+        if (updErr) console.error("dm_queue: failed status update error", updErr.message);
       }
     }
   } catch (e) {
     console.error("processDmQueue error:", e?.message || e);
+  } finally {
+    dmQueueRunning = false;
   }
 }
 
@@ -6306,6 +6337,11 @@ log("ig_trigger_opener_sent", {
 
             // Feature 4: route through DM safety queue
             await queueDm({ clientId: lead.client_id, igPsid: senderId, text: msg });
+
+            // Trigger queue processor immediately — don't wait for the 30-second interval
+            void processDmQueue().catch((e) =>
+              console.error("dm_queue: post-queue trigger failed", e?.message || e)
+            );
 
             log("ig_message_queued", {
               leadId: lead.id,
@@ -7177,7 +7213,11 @@ app.listen(PORT, () => {
     );
   }, 30 * 60 * 1000);
 
-  // Feature 4: DM Safety Queue — process every 30 seconds
+  // Feature 4: DM Safety Queue — flush any pending items immediately on startup,
+  // then continue processing every 30 seconds as a safety net
+  processDmQueue().catch((e) =>
+    console.error("dm_queue: startup flush failed", e?.message || e)
+  );
   setInterval(() => {
     processDmQueue().catch((e) =>
       console.error("dm_queue: processor error", e?.message || e)
