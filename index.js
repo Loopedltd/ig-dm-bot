@@ -2037,6 +2037,20 @@ async function saveLearnedExample({
 
   if (!cleanUser || !cleanAssistant) return null;
 
+  // Safety gate: never store examples that contain inappropriate content.
+  // Also rejects pairs that are clearly not coaching-related.
+  if (isUnsafeReply(cleanUser) || isUnsafeReply(cleanAssistant)) {
+    console.warn("learned_example skipped: inappropriate content detected", {
+      clientId,
+      userMessage: cleanUser.slice(0, 80),
+      assistantMessage: cleanAssistant.slice(0, 80),
+    });
+    return null;
+  }
+
+  // Reject implausibly short assistant messages (< 6 chars) — not useful training data
+  if (cleanAssistant.length < 6) return null;
+
   const { data, error } = await supabase
     .from("learned_examples")
     .insert({
@@ -6367,7 +6381,12 @@ log("ig_trigger_opener_sent", {
             }
 
             try {
-              if (msg.length < 120 && !msg.includes("http")) {
+              if (
+                msg.length < 120 &&
+                !msg.includes("http") &&
+                !isUnsafeReply(msg) &&
+                !isUnsafeReply(text)
+              ) {
                 await saveLearnedExample({
                   clientId: lead.client_id,
                   leadId: lead.id,
