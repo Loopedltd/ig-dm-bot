@@ -371,8 +371,9 @@ async function loadInstagramConnectionStatus() {
       btn.style.opacity = "1";
     }
   } catch (e) {
-    // Real auth failure — send back to login
+    // Real auth failure — clear stale token then send back to login
     if (e?.status === 401) {
+      clearToken();
       window.location.href = "/coach/login.html";
       return;
     }
@@ -1446,6 +1447,13 @@ function wireQueueRefreshButton() {
   }
 
 
-  wireTopbarButtons();
-  loadDashboard();
+  // Only run dashboard logic when we're actually on a dashboard page.
+  // login.html and set-password.html share this script but must not trigger
+  // loadDashboard() — that function redirects to login when there is no token,
+  // which causes an infinite reload loop on those pages.
+  const isAuthPage = !!document.getElementById("loginForm") || !!document.getElementById("setPasswordForm");
+  if (!isAuthPage) {
+    wireTopbarButtons();
+    loadDashboard();
+  }
 })();
