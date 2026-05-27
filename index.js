@@ -5963,12 +5963,13 @@ async function processDmEvent(messaging, igAccount, overrideText) {
             return;
           }
 
-          // Emit: DM received
+          // Emit: DM received (or story reply received)
           {
             const evtName = lead.ig_name || lead.email || `Lead ${String(lead.ig_psid || "").slice(-6)}`;
             leadNameCache.set(`${lead.client_id}:${senderId}`, evtName);
+            const isStoryReply = isStoryReplyTrigger(messaging);
             emitActivityEvent(lead.client_id, {
-              type: "dm_received",
+              type: isStoryReply ? "story_reply_received" : "dm_received",
               leadName: evtName,
               igPsid: senderId,
               preview: text ? String(text).slice(0, 120) : "[non-text message]",
@@ -6080,11 +6081,32 @@ if (storyAutoDmMatched || commentAutoDmMatched || keywordAutoDmMatched) {
                 return;
               }
 
+              // Emit: sending opener DM
+              {
+                const evtName = leadNameCache.get(`${lead.client_id}:${senderId}`) || lead.ig_name || `Lead ${String(senderId).slice(-6)}`;
+                emitActivityEvent(lead.client_id, {
+                  type: "opener_sending",
+                  leadName: evtName,
+                  igPsid: senderId,
+                });
+              }
+
               const { sendResp, sendData } = await sendInstagramTextMessage({
                 accessToken: activeIgAccount.page_access_token,
                 recipientId: senderId,
                 text: opener,
               });
+
+              // Emit: opener DM sent
+              if (sendResp.ok) {
+                const evtName = leadNameCache.get(`${lead.client_id}:${senderId}`) || lead.ig_name || `Lead ${String(senderId).slice(-6)}`;
+                emitActivityEvent(lead.client_id, {
+                  type: "opener_sent",
+                  leadName: evtName,
+                  igPsid: senderId,
+                  preview: String(opener).slice(0, 140),
+                });
+              }
 
 log("ig_trigger_opener_sent", {
   leadId: lead.id,

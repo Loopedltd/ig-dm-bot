@@ -1297,7 +1297,10 @@ function wireQueueRefreshButton() {
   let activityEventSource = null;
 
   const ACTIVITY_CONFIG = {
-    dm_received:   { icon: "💬", iconCls: "activityIcon--blue",   cardCls: "activityEvent--received",  label: "DM received" },
+    dm_received:          { icon: "💬", iconCls: "activityIcon--blue",   cardCls: "activityEvent--received",  label: "DM received" },
+    story_reply_received: { icon: "📸", iconCls: "activityIcon--blue",   cardCls: "activityEvent--received",  label: "Story reply received" },
+    opener_sending:       { icon: "→",  iconCls: "activityIcon--yellow", cardCls: "activityEvent--generating", label: "Sending automatic DM" },
+    opener_sent:          { icon: "✓",  iconCls: "activityIcon--green",  cardCls: "activityEvent--sent",      label: "DM sent successfully" },
     ai_generating: { icon: "⚡", iconCls: "activityIcon--yellow", cardCls: "activityEvent--generating", label: "AI generating reply" },
     ai_reply_ready:{ icon: "✓",  iconCls: "activityIcon--sky",    cardCls: "activityEvent--ready",      label: "Reply ready" },
     reply_queued:  { icon: "→",  iconCls: "activityIcon--purple", cardCls: "activityEvent--queued",     label: "Reply queued" },
@@ -1326,10 +1329,10 @@ function wireQueueRefreshButton() {
     const cfg = ACTIVITY_CONFIG[event.type];
     if (!cfg) return;
 
-    const isPulsing = event.type === "ai_generating";
+    const isPulsing = event.type === "ai_generating" || event.type === "opener_sending";
 
-    // If this is a reply_sent event, resolve any matching ai_generating entry
-    if (event.type === "reply_sent" || event.type === "ai_reply_ready") {
+    // Stop pulsing when the corresponding completion event arrives
+    if (event.type === "reply_sent" || event.type === "ai_reply_ready" || event.type === "opener_sent") {
       const gen = feed.querySelector(`.activityEvent--generating[data-psid="${escHtml(event.igPsid || "")}"]`);
       if (gen) gen.querySelector(".activityIcon")?.classList.remove("activityIcon--pulse");
     }
