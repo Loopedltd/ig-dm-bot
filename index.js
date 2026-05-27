@@ -9,6 +9,25 @@ import { fileURLToPath } from "url";
 import Stripe from "stripe";
 import { supabase } from "./supabaseClient.js";
 
+// ─── Real-time activity stream (SSE) ─────────────────────────────────────────
+/** clientId -> Set<Express res> */
+const activityStreamClients = new Map();
+/** "clientId:igPsid" -> displayName — populated on DM received, used in processDmQueue */
+const leadNameCache = new Map();
+
+function emitActivityEvent(clientId, event) {
+  const clients = activityStreamClients.get(clientId);
+  if (!clients || clients.size === 0) return;
+  const payload = JSON.stringify({ ...event, ts: new Date().toISOString() });
+  for (const res of clients) {
+    try {
+      res.write(`data: ${payload}\n\n`);
+    } catch {
+      clients.delete(res);
+    }
+  }
+}
+
 // Load env only for local/dev (Render injects env vars itself)
 if (process.env.NODE_ENV !== "production") {
   dotenv.config();
@@ -4056,6 +4075,50 @@ app.post("/coach/api/bot-paused", requireCoach, async (req, res) => {
   }
 });
 
+// ─── Activity stream (SSE) ────────────────────────────────────────────────────
+// EventSource can't set headers, so we accept the JWT via ?token= query param.
+app.get("/coach/api/activity-stream", async (req, res) => {
+  const token = req.query.token || "";
+  if (!token) return res.status(401).end();
+
+  let coach;
+  try {
+    coach = jwt.verify(token, COACH_JWT_SECRET);
+  } catch {
+    return res.status(401).end();
+  }
+
+  const clientId = coach.client_id;
+  if (!clientId) return res.status(401).end();
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // disable Render/nginx buffering
+
+  // Must flush headers before writing — required for SSE
+  if (typeof res.flushHeaders === "function") res.flushHeaders();
+
+  // Send initial connected event
+  res.write(`data: ${JSON.stringify({ type: "connected", ts: new Date().toISOString() })}\n\n`);
+
+  if (!activityStreamClients.has(clientId)) {
+    activityStreamClients.set(clientId, new Set());
+  }
+  activityStreamClients.get(clientId).add(res);
+  console.log(`activity-stream: coach ${clientId} connected (total: ${activityStreamClients.get(clientId).size})`);
+
+  const hb = setInterval(() => {
+    try { res.write(": hb\n\n"); } catch { clearInterval(hb); }
+  }, 20000);
+
+  req.on("close", () => {
+    clearInterval(hb);
+    activityStreamClients.get(clientId)?.delete(res);
+    console.log(`activity-stream: coach ${clientId} disconnected`);
+  });
+});
+
 app.get("/coach/api/bot-paused", requireCoach, async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -5600,6 +5663,14 @@ async function processDmQueue() {
         }).eq("id", item.id);
         if (updErr) console.error("dm_queue: sent status update failed", updErr.message);
 
+        // Emit: reply delivered to Instagram
+        emitActivityEvent(item.client_id, {
+          type: "reply_sent",
+          leadName: leadNameCache.get(`${item.client_id}:${item.ig_psid}`) || `Lead ${String(item.ig_psid).slice(-6)}`,
+          igPsid: item.ig_psid,
+          preview: String(item.message).slice(0, 140),
+        });
+
         log("dm_queue_processed", {
           id: item.id,
           clientId: item.client_id,
@@ -5892,6 +5963,18 @@ async function processDmEvent(messaging, igAccount, overrideText) {
             return;
           }
 
+          // Emit: DM received
+          {
+            const evtName = lead.ig_name || lead.email || `Lead ${String(lead.ig_psid || "").slice(-6)}`;
+            leadNameCache.set(`${lead.client_id}:${senderId}`, evtName);
+            emitActivityEvent(lead.client_id, {
+              type: "dm_received",
+              leadName: evtName,
+              igPsid: senderId,
+              preview: text ? String(text).slice(0, 120) : "[non-text message]",
+            });
+          }
+
           // Voice note / audio attachment — send fixed reply, skip AI
           const attachments = messaging?.message?.attachments || [];
           const isVoiceNote = attachments.some((a) => {
@@ -6156,6 +6239,13 @@ log("ig_trigger_opener_sent", {
 
           lead.last_message = text;
 
+          // Emit: AI generating reply
+          emitActivityEvent(lead.client_id, {
+            type: "ai_generating",
+            leadName: leadNameCache.get(`${lead.client_id}:${senderId}`) || lead.ig_name || `Lead ${String(senderId).slice(-6)}`,
+            igPsid: senderId,
+          });
+
           const aiResult = await generateAiReply({
             cfg,
             lead,
@@ -6225,6 +6315,14 @@ log("ig_trigger_opener_sent", {
           }
 
           if (!reply) return;
+
+          // Emit: AI reply generated
+          emitActivityEvent(lead.client_id, {
+            type: "ai_reply_ready",
+            leadName: leadNameCache.get(`${lead.client_id}:${senderId}`) || lead.ig_name || `Lead ${String(senderId).slice(-6)}`,
+            igPsid: senderId,
+            preview: String(reply).slice(0, 140),
+          });
 
           const shouldHumanise = ![
             "answer_price_after_cta",
@@ -6337,6 +6435,14 @@ log("ig_trigger_opener_sent", {
 
             // Feature 4: route through DM safety queue
             await queueDm({ clientId: lead.client_id, igPsid: senderId, text: msg });
+
+            // Emit: reply queued for delivery
+            emitActivityEvent(lead.client_id, {
+              type: "reply_queued",
+              leadName: leadNameCache.get(`${lead.client_id}:${senderId}`) || lead.ig_name || `Lead ${String(senderId).slice(-6)}`,
+              igPsid: senderId,
+              preview: String(msg).slice(0, 140),
+            });
 
             // Trigger queue processor immediately — don't wait for the 30-second interval
             void processDmQueue().catch((e) =>

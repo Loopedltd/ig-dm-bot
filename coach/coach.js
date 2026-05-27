@@ -1291,6 +1291,133 @@ function wireQueueRefreshButton() {
   });
 }
 
+  // ─── Conversation Activity Stream ────────────────────────────────────────────
+  const MAX_ACTIVITY_EVENTS = 60;
+  let activityEventSource = null;
+
+  const ACTIVITY_CONFIG = {
+    dm_received:   { icon: "💬", iconCls: "activityIcon--blue",   cardCls: "activityEvent--received",  label: "DM received" },
+    ai_generating: { icon: "⚡", iconCls: "activityIcon--yellow", cardCls: "activityEvent--generating", label: "AI generating reply" },
+    ai_reply_ready:{ icon: "✓",  iconCls: "activityIcon--sky",    cardCls: "activityEvent--ready",      label: "Reply ready" },
+    reply_queued:  { icon: "→",  iconCls: "activityIcon--purple", cardCls: "activityEvent--queued",     label: "Reply queued" },
+    reply_sent:    { icon: "✓",  iconCls: "activityIcon--green",  cardCls: "activityEvent--sent",       label: "Delivered to Instagram" },
+  };
+
+  function fmtActivityTime(isoStr) {
+    if (!isoStr) return "";
+    const ms = Date.now() - new Date(isoStr).getTime();
+    const s = Math.floor(ms / 1000);
+    if (s < 5)  return "just now";
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    return `${Math.floor(m / 60)}h ago`;
+  }
+
+  function addActivityEvent(event) {
+    const feed = qs("#activityFeed");
+    if (!feed) return;
+
+    // Remove empty placeholder
+    const empty = qs("#activityEmpty");
+    if (empty) empty.remove();
+
+    const cfg = ACTIVITY_CONFIG[event.type];
+    if (!cfg) return;
+
+    const isPulsing = event.type === "ai_generating";
+
+    // If this is a reply_sent event, resolve any matching ai_generating entry
+    if (event.type === "reply_sent" || event.type === "ai_reply_ready") {
+      const gen = feed.querySelector(`.activityEvent--generating[data-psid="${escHtml(event.igPsid || "")}"]`);
+      if (gen) gen.querySelector(".activityIcon")?.classList.remove("activityIcon--pulse");
+    }
+
+    const el = document.createElement("div");
+    el.className = `activityEvent ${cfg.cardCls}`;
+    if (event.igPsid) el.dataset.psid = event.igPsid;
+
+    const preview = event.preview
+      ? `<div class="activityPreview">${escHtml(String(event.preview).slice(0, 120))}</div>`
+      : "";
+
+    el.innerHTML = `
+      <div class="activityIcon ${cfg.iconCls}${isPulsing ? " activityIcon--pulse" : ""}">${cfg.icon}</div>
+      <div class="activityBody">
+        <div class="activityLabel">${cfg.label}</div>
+        ${event.leadName ? `<div class="activityLead">${escHtml(event.leadName)}</div>` : ""}
+        ${preview}
+      </div>
+      <div class="activityTime" data-ts="${escHtml(event.ts || "")}">${fmtActivityTime(event.ts)}</div>
+    `;
+
+    // Prepend so newest is at the top
+    feed.insertBefore(el, feed.firstChild);
+
+    // Cap at max
+    const items = feed.querySelectorAll(".activityEvent");
+    if (items.length > MAX_ACTIVITY_EVENTS) {
+      items[items.length - 1].remove();
+    }
+  }
+
+  function updateActivityBadge(id, connected) {
+    const el = qs(id);
+    if (!el) return;
+    if (connected) {
+      el.className = "asBadge asBadge--green";
+    } else {
+      el.className = "asBadge asBadge--grey";
+    }
+  }
+
+  function startActivityTimestampRefresh() {
+    setInterval(() => {
+      document.querySelectorAll(".activityTime[data-ts]").forEach((el) => {
+        el.textContent = fmtActivityTime(el.dataset.ts);
+      });
+    }, 30000);
+  }
+
+  function connectActivityStream() {
+    if (activityEventSource) {
+      activityEventSource.close();
+      activityEventSource = null;
+    }
+
+    const token = getToken();
+    if (!token) return;
+
+    const url = `${API}/activity-stream?token=${encodeURIComponent(token)}`;
+    activityEventSource = new EventSource(url);
+
+    activityEventSource.onopen = () => {
+      updateActivityBadge("#asBadgeIg", true);
+      updateActivityBadge("#asBadgeAi", true);
+    };
+
+    activityEventSource.onmessage = (e) => {
+      try {
+        const event = JSON.parse(e.data);
+        if (event.type === "connected") {
+          updateActivityBadge("#asBadgeIg", true);
+          updateActivityBadge("#asBadgeAi", true);
+          return;
+        }
+        addActivityEvent(event);
+      } catch {}
+    };
+
+    activityEventSource.onerror = () => {
+      updateActivityBadge("#asBadgeIg", false);
+      updateActivityBadge("#asBadgeAi", false);
+      activityEventSource.close();
+      activityEventSource = null;
+      // Reconnect after 6 seconds
+      setTimeout(connectActivityStream, 6000);
+    };
+  }
+
   async function loadDashboard() {
     if (!getToken()) {
       window.location.href = "/coach/login.html";
@@ -1304,6 +1431,9 @@ function wireQueueRefreshButton() {
     wireBroadcast();
     wireQueueRefreshButton();
     wireCommentActivityRefresh();
+
+    connectActivityStream();
+    startActivityTimestampRefresh();
 
     await Promise.allSettled([
       loadInstagramConnectionStatus(),
