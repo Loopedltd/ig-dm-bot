@@ -1447,6 +1447,51 @@ function wireQueueRefreshButton() {
       loadManualTakeovers(),
       loadQueueStatus(),
     ]);
+
+    // After OAuth: show success banner and scroll to the profile section
+    if (new URLSearchParams(window.location.search).get("instagram_connected") === "1") {
+      showIgConnectedBanner();
+      // Clean up the URL without reloading
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }
+
+  function showIgConnectedBanner() {
+    // Insert a success notice at the top of the wrap if not already there
+    const wrap = document.querySelector(".wrap");
+    if (!wrap || document.getElementById("igConnectedBanner")) return;
+
+    const banner = document.createElement("div");
+    banner.id = "igConnectedBanner";
+    banner.style.cssText = [
+      "display:flex",
+      "align-items:center",
+      "gap:10px",
+      "padding:14px 18px",
+      "border-radius:14px",
+      "background:var(--okBg)",
+      "border:1px solid var(--okBorder)",
+      "color:var(--okText)",
+      "font-size:14px",
+      "font-weight:650",
+      "margin-bottom:18px",
+      "animation:activitySlideIn 0.3s ease",
+    ].join(";");
+    banner.innerHTML = `
+      <span style="font-size:18px;">✓</span>
+      <span>Instagram account connected successfully. Your profile and recent posts are shown below.</span>
+      <button onclick="this.parentElement.remove()" style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:18px;line-height:1;color:inherit;padding:0 2px;" title="Dismiss">&#x2715;</button>
+    `;
+    wrap.insertBefore(banner, wrap.firstChild);
+
+    // Scroll the profile card into view
+    const profileCard = document.getElementById("igProfileCard");
+    if (profileCard && profileCard.style.display !== "none") {
+      profileCard.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    // Auto-dismiss after 8 seconds
+    setTimeout(() => banner.remove(), 8000);
   }
 
 

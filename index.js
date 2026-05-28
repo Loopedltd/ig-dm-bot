@@ -6727,10 +6727,9 @@ await supabase
       }
     })();
 
-    if (isFirstConnection) {
-      return res.redirect("/settings?instagram_connected=1");
-    }
-    return res.redirect("/coach/dashboard.html?instagram_connected=1");
+    // Always land on the dashboard after connecting, so the coach can see
+    // the Connected Instagram Profile section with live account data.
+    return res.redirect("/dashboard?instagram_connected=1");
   } catch (e) {
     return res.status(500).send(String(e?.message || e));
   }
