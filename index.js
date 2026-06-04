@@ -2781,40 +2781,97 @@ app.get("/coach/api/instagram/connect-url", requireCoach, async (req, res) => {
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
 });
+// ------------------------------------------------------------------
+// subscribeIgWebhook — shared helper used at connect time and by the
+// resubscribe / diagnostic endpoints.
+// ------------------------------------------------------------------
+async function subscribeIgWebhook(accessToken, igUserId) {
+  // Use the numeric user ID explicitly rather than the `me` alias —
+  // some Instagram API versions don't resolve `me` for this endpoint.
+  const url = `https://graph.instagram.com/v21.0/${encodeURIComponent(igUserId)}/subscribed_apps`;
+
+  // Only subscribe to `messages` — the one field Instagram Business Login
+  // actually supports for DMs. `messaging_postbacks` is Messenger-only and
+  // causes the request to be rejected.
+  const body = new URLSearchParams({ subscribed_fields: "messages" }).toString();
+
+  console.log("subscribeIgWebhook: calling", { url, body });
+
+  const resp = await fetch(`${url}?access_token=${encodeURIComponent(accessToken)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+
+  const httpStatus = resp.status;
+  const data = await resp.json().catch(() => ({}));
+
+  console.log("subscribeIgWebhook: response", { igUserId, httpStatus, data });
+
+  return { ok: resp.ok && data?.success === true, httpStatus, data };
+}
+
 // Re-subscribe webhook for the current Instagram Login account (no OAuth round-trip needed)
 app.post("/coach/api/instagram/resubscribe", requireCoach, async (req, res) => {
   try {
-    const { data: acc, error } = await supabase
+    const { data: rows } = await supabase
       .from("ig_accounts")
-      .select("ig_user_id, page_access_token, page_id")
+      .select("ig_user_id, page_access_token")
       .eq("client_id", req.coach.client_id)
       .eq("is_active", true)
-      .is("page_id", null) // Instagram Login accounts only
+      .is("page_id", null)
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
 
-    if (error || !acc?.page_access_token) {
+    const acc = Array.isArray(rows) ? rows[0] : null;
+    if (!acc?.page_access_token) {
       return safeJson(res, 404, { error: "No active Instagram Login account found" });
     }
 
-    const subResp = await fetch(
-      `https://graph.instagram.com/v21.0/me/subscribed_apps?access_token=${encodeURIComponent(acc.page_access_token)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "subscribed_fields=messages%2Cmessaging_postbacks",
-      }
-    );
-    const subData = await subResp.json().catch(() => ({}));
+    const { ok, httpStatus, data } = await subscribeIgWebhook(acc.page_access_token, acc.ig_user_id);
 
-    if (!subResp.ok || !subData?.success) {
-      console.error("resubscribe: failed", { ig_user_id: acc.ig_user_id, subData });
-      return safeJson(res, 502, { error: "Webhook subscription failed", detail: subData });
+    if (!ok) {
+      return safeJson(res, 502, { error: "Webhook subscription failed", httpStatus, detail: data });
     }
 
-    console.log("resubscribe: success", { ig_user_id: acc.ig_user_id });
-    return safeJson(res, 200, { ok: true });
+    return safeJson(res, 200, { ok: true, detail: data });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+// Diagnostic: returns the raw Instagram API response for the subscribed_apps call
+// and also checks what the current subscription looks like.
+// Call: GET /coach/api/instagram/subscription-debug
+app.get("/coach/api/instagram/subscription-debug", requireCoach, async (req, res) => {
+  try {
+    const { data: rows } = await supabase
+      .from("ig_accounts")
+      .select("ig_user_id, page_access_token, ig_username")
+      .eq("client_id", req.coach.client_id)
+      .eq("is_active", true)
+      .is("page_id", null)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    const acc = Array.isArray(rows) ? rows[0] : null;
+    if (!acc?.page_access_token) {
+      return safeJson(res, 404, { error: "No active Instagram Login account found" });
+    }
+
+    // Check current subscription status (GET)
+    const getUrl = `https://graph.instagram.com/v21.0/${encodeURIComponent(acc.ig_user_id)}/subscribed_apps?access_token=${encodeURIComponent(acc.page_access_token)}`;
+    const getResp = await fetch(getUrl);
+    const getCurrentData = await getResp.json().catch(() => ({}));
+
+    // Attempt subscription (POST)
+    const { ok, httpStatus, data: postData } = await subscribeIgWebhook(acc.page_access_token, acc.ig_user_id);
+
+    return safeJson(res, 200, {
+      account: { ig_user_id: acc.ig_user_id, ig_username: acc.ig_username },
+      current_subscription: { httpStatus: getResp.status, data: getCurrentData },
+      subscribe_attempt: { ok, httpStatus, data: postData },
+    });
   } catch (e) {
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
@@ -7031,28 +7088,10 @@ app.get("/auth/instagram/callback", async (req, res) => {
         console.log("ig_signup: new coach created", { resolvedClientId, igUsername });
       }
 
-      // Subscribe webhook (non-blocking) — Instagram Business Login uses graph.instagram.com
-      // subscribed_fields must be in the POST body, not the query string
-      void (async () => {
-        try {
-          const subResp = await fetch(
-            `https://graph.instagram.com/v21.0/me/subscribed_apps?access_token=${encodeURIComponent(longToken)}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/x-www-form-urlencoded" },
-              body: "subscribed_fields=messages%2Cmessaging_postbacks",
-            }
-          );
-          const subData = await subResp.json().catch(() => ({}));
-          if (!subResp.ok || !subData?.success) {
-            console.error("ig_signup: webhook subscription failed", { igUserId, subData });
-          } else {
-            console.log("ig_signup: webhook subscription successful", { igUserId, subData });
-          }
-        } catch (e) {
-          console.error("ig_signup: webhook subscription threw", e?.message || e);
-        }
-      })();
+      // Subscribe webhook (non-blocking)
+      void subscribeIgWebhook(longToken, igUserId).catch((e) =>
+        console.error("ig_signup: webhook subscription threw", e?.message || e)
+      );
 
       const token = signCoachToken(resolvedClientId);
       return res.redirect(`/dashboard?token=${encodeURIComponent(token)}&instagram_connected=1`);
@@ -7130,27 +7169,9 @@ app.get("/auth/instagram/callback", async (req, res) => {
     }
 
     // Subscribe webhook (non-blocking)
-    // subscribed_fields must be in the POST body, not the query string
-    void (async () => {
-      try {
-        const subResp = await fetch(
-          `https://graph.instagram.com/v21.0/me/subscribed_apps?access_token=${encodeURIComponent(longToken)}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: "subscribed_fields=messages%2Cmessaging_postbacks",
-          }
-        );
-        const subData = await subResp.json().catch(() => ({}));
-        if (subResp.ok && subData?.success) {
-          console.log("ig_connect: webhook subscription successful", { igUserId, clientId });
-        } else {
-          console.error("ig_connect: webhook subscription FAILED", { igUserId, subData, clientId });
-        }
-      } catch (subErr) {
-        console.error("ig_connect: webhook subscription threw", { error: subErr?.message || subErr, clientId });
-      }
-    })();
+    void subscribeIgWebhook(longToken, igUserId).catch((e) =>
+      console.error("ig_connect: webhook subscription threw", e?.message || e)
+    );
 
     return res.redirect("/dashboard?instagram_connected=1");
   } catch (e) {
