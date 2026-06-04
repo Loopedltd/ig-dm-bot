@@ -4284,36 +4284,44 @@ app.get("/coach/api/leads", requireCoach, async (req, res) => {
 
 // ── Debug: probe messages table schema and test insert ───────────────────
 app.get("/coach/api/debug/messages", requireCoach, async (req, res) => {
+  // Safe serialiser — avoids circular-reference crashes from Supabase error objects
+  function flatErr(e) {
+    if (!e) return null;
+    if (typeof e === "string") return e;
+    return {
+      message: e.message ?? null,
+      details: e.details ?? null,
+      hint: e.hint ?? null,
+      code: e.code ?? null,
+    };
+  }
+
+  const out = { client_id: req.coach.client_id };
+
+  // 1. Fetch one row to see what columns actually exist
   try {
-    const clientId = req.coach.client_id;
+    const { data, error } = await supabase.from("messages").select("*").limit(1);
+    out.sample_row = data?.[0] ? Object.keys(data[0]) : [];
+    out.sample_row_error = flatErr(error);
+  } catch (e) { out.sample_row_error = String(e.message); }
 
-    // 1. What columns does the messages table actually have?
-    const { data: columns, error: colErr } = await supabase
-      .rpc("get_messages_columns")
-      .catch(() => ({ data: null, error: "rpc not available" }));
+  // 2. Total row count (no client_id filter — avoids failure if column missing)
+  try {
+    const { count, error } = await supabase
+      .from("messages").select("*", { count: "exact", head: true });
+    out.total_rows = count;
+    out.total_rows_error = flatErr(error);
+  } catch (e) { out.total_rows_error = String(e.message); }
 
-    // Fallback: query information_schema directly via raw SQL
-    const { data: schemaRows, error: schemaErr } = await supabase
-      .from("messages")
-      .select("*")
-      .limit(1);
+  // 3. Get a real lead for the test insert
+  try {
+    const { data: lead, error } = await supabase
+      .from("leads").select("id, client_id").eq("client_id", req.coach.client_id)
+      .limit(1).maybeSingle();
+    out.test_lead = lead ? { id: lead.id, client_id: lead.client_id } : null;
+    out.test_lead_error = flatErr(error);
 
-    // 2. How many rows exist for this client?
-    const { count, error: countErr } = await supabase
-      .from("messages")
-      .select("*", { count: "exact", head: true })
-      .eq("client_id", clientId);
-
-    // 3. Get the coach's first lead to test insert against
-    const { data: lead } = await supabase
-      .from("leads")
-      .select("id, client_id")
-      .eq("client_id", clientId)
-      .limit(1)
-      .maybeSingle();
-
-    // 4. Attempt a real insert with the exact same payload the webhook uses
-    let testInsertResult = null;
+    // 4. Attempt the exact same insert the webhook does
     if (lead) {
       const { data: inserted, error: insertErr } = await supabase
         .from("messages")
@@ -4321,39 +4329,23 @@ app.get("/coach/api/debug/messages", requireCoach, async (req, res) => {
           lead_id: lead.id,
           client_id: lead.client_id,
           direction: "in",
-          text: "[debug test message - safe to delete]",
+          text: "[debug test — safe to delete]",
           created_at: new Date().toISOString(),
         })
         .select();
 
-      testInsertResult = {
-        ok: !insertErr,
-        error: insertErr ? JSON.stringify(insertErr) : null,
-        inserted: inserted || null,
-      };
+      out.test_insert_ok = !insertErr;
+      out.test_insert_error = flatErr(insertErr);
+      out.test_insert_row = inserted?.[0] ?? null;
 
-      // Clean up the test row immediately
-      if (inserted && inserted[0]?.id) {
-        await supabase.from("messages").delete().eq("id", inserted[0].id);
+      // Clean up immediately
+      if (inserted?.[0]?.id) {
+        await supabase.from("messages").delete().eq("id", inserted[0].id).catch(() => {});
       }
     }
+  } catch (e) { out.test_lead_error = String(e.message); }
 
-    // 5. What columns are visible from a sample row?
-    const sampleRow = schemaRows?.[0] || null;
-    const visibleColumns = sampleRow ? Object.keys(sampleRow) : [];
-
-    return safeJson(res, 200, {
-      client_id: clientId,
-      messages_count_for_client: count ?? null,
-      count_error: countErr ? JSON.stringify(countErr) : null,
-      visible_columns: visibleColumns,
-      schema_error: schemaErr ? JSON.stringify(schemaErr) : null,
-      test_lead: lead ? { id: lead.id, client_id: lead.client_id } : null,
-      test_insert: testInsertResult,
-    });
-  } catch (e) {
-    return safeJson(res, 500, { error: String(e?.message || e) });
-  }
+  return safeJson(res, 200, out);
 });
 
 // ── Debug: return what client_id the JWT has vs ig_accounts ──────────────
