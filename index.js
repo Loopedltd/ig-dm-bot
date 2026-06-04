@@ -2768,6 +2768,7 @@ app.get("/coach/api/instagram/connect-url", requireCoach, async (req, res) => {
     authUrl.searchParams.set("response_type", "code");
     authUrl.searchParams.set("scope", "instagram_business_basic,instagram_business_manage_messages");
     authUrl.searchParams.set("enable_fb_login", "0");
+    authUrl.searchParams.set("force_reauth", "0");
     authUrl.searchParams.set("state", state);
 
     return safeJson(res, 200, {
@@ -6771,6 +6772,7 @@ app.get("/auth/instagram/start", (req, res) => {
     authUrl.searchParams.set("response_type", "code");
     authUrl.searchParams.set("scope", "instagram_business_basic,instagram_business_manage_messages");
     authUrl.searchParams.set("enable_fb_login", "0");
+    authUrl.searchParams.set("force_reauth", "0");
     authUrl.searchParams.set("state", state);
     return res.redirect(authUrl.toString());
   } catch (e) {
