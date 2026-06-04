@@ -4160,6 +4160,108 @@ app.post("/coach/api/leads/:leadId/manual-override", requireCoach, async (req, r
   }
 });
 
+app.get("/coach/api/leads/:leadId/messages", requireCoach, async (req, res) => {
+  try {
+    const leadId = req.params.leadId;
+    const clientId = req.coach.client_id;
+
+    const { data: lead, error: leadErr } = await supabase
+      .from("leads")
+      .select("id, ig_psid")
+      .eq("id", leadId)
+      .eq("client_id", clientId)
+      .maybeSingle();
+
+    if (leadErr) return safeJson(res, 500, { error: leadErr.message });
+    if (!lead) return safeJson(res, 404, { error: "Lead not found" });
+
+    const { data: messages, error: msgErr } = await supabase
+      .from("messages")
+      .select("id, direction, text, created_at")
+      .eq("lead_id", leadId)
+      .order("created_at", { ascending: true })
+      .limit(200);
+
+    if (msgErr) return safeJson(res, 500, { error: msgErr.message });
+
+    return safeJson(res, 200, { ok: true, messages: messages || [] });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+app.post("/coach/api/leads/:leadId/reply", requireCoach, async (req, res) => {
+  try {
+    const leadId = req.params.leadId;
+    const clientId = req.coach.client_id;
+    const text = String(req.body?.text || "").trim();
+
+    if (!text) return safeJson(res, 400, { error: "text is required" });
+
+    const { data: lead, error: leadErr } = await supabase
+      .from("leads")
+      .select("id, ig_psid")
+      .eq("id", leadId)
+      .eq("client_id", clientId)
+      .maybeSingle();
+
+    if (leadErr) return safeJson(res, 500, { error: leadErr.message });
+    if (!lead) return safeJson(res, 404, { error: "Lead not found" });
+    if (!lead.ig_psid) return safeJson(res, 400, { error: "Lead has no Instagram IGSID" });
+
+    const { data: igAccount, error: igErr } = await supabase
+      .from("ig_accounts")
+      .select("page_access_token")
+      .eq("client_id", clientId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (igErr) return safeJson(res, 500, { error: igErr.message });
+    if (!igAccount?.page_access_token) {
+      return safeJson(res, 400, { error: "No connected Instagram account" });
+    }
+
+    const { sendResp, sendData } = await sendInstagramTextMessage({
+      accessToken: igAccount.page_access_token,
+      recipientId: lead.ig_psid,
+      text,
+    });
+
+    if (!sendResp.ok) {
+      return safeJson(res, 502, { error: `Instagram API error: ${JSON.stringify(sendData)}` });
+    }
+
+    const { error: insertErr } = await supabase
+      .from("messages")
+      .insert({
+        lead_id: leadId,
+        client_id: clientId,
+        direction: "out",
+        text,
+        created_at: new Date().toISOString(),
+      });
+
+    if (insertErr) {
+      console.error("inbox reply insert error:", insertErr);
+    }
+
+    // Pause bot for this lead since coach is taking over
+    await setLeadManualOverride({
+      leadId,
+      clientId,
+      enabled: true,
+      reason: "Coach replied from inbox",
+      actor: "coach",
+    }).catch(() => {});
+
+    return safeJson(res, 200, { ok: true });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
 app.get("/coach/api/leads", requireCoach, async (req, res) => {
   try {
     const { data: leads, error } = await supabase

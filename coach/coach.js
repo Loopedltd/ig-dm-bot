@@ -925,6 +925,7 @@ function renderLeadRow(lead) {
     <div class="leadIdent">
       <div class="leadName">${escHtml(name)}</div>
       <div class="leadSub">${escHtml(subLine)} · ${lastMsg}</div>
+      <button class="leadChatBtn" data-id="${lead.id}" data-name="${escHtml(name)}" data-sub="${escHtml(subLine)}">View chat</button>
     </div>
     <span class="badge stageBadge stage-${escHtml(stage)}">${escHtml(stageLabel)}</span>
     ${isPaused ? `<span class="badge leadPausedBadge">Bot paused</span>` : `<span class="badge leadPausedBadge leadPausedBadge--hidden"></span>`}
@@ -995,6 +996,7 @@ function renderLeadsList() {
 
   list.innerHTML = filtered.map(renderLeadRow).join("");
   wireLeadToggles();
+  wireInboxButtons();
 }
 
 async function loadManualTakeovers() {
@@ -1422,6 +1424,175 @@ function wireQueueRefreshButton() {
     };
   }
 
+  // ---- Conversation Inbox ----
+
+  let inboxLeadId = null;
+  let inboxPollInterval = null;
+  let inboxLastMessageCount = 0;
+
+  function fmtMsgTime(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    if (isToday) return time;
+    const date = d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    return `${date} ${time}`;
+  }
+
+  function renderInboxMessages(messages) {
+    const container = document.getElementById("inboxMessages");
+    if (!container) return;
+
+    if (!messages.length) {
+      container.innerHTML = '<div class="inboxEmpty">No messages yet.</div>';
+      inboxLastMessageCount = 0;
+      return;
+    }
+
+    const wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+    const isNewMessages = messages.length !== inboxLastMessageCount;
+
+    container.innerHTML = messages.map((m) => {
+      const dir = m.direction === "out" ? "out" : "in";
+      return `<div class="inboxBubbleRow inboxBubbleRow--${dir}">
+        <div class="inboxBubble inboxBubble--${dir}">${escHtml(m.text)}</div>
+        <div class="inboxTime">${fmtMsgTime(m.created_at)}</div>
+      </div>`;
+    }).join("");
+
+    if (wasAtBottom || isNewMessages) {
+      container.scrollTop = container.scrollHeight;
+    }
+    inboxLastMessageCount = messages.length;
+  }
+
+  async function loadInboxThread(leadId) {
+    if (leadId !== inboxLeadId) return;
+    try {
+      const data = await apiFetch(`${API}/leads/${leadId}/messages`, { method: "GET" });
+      if (!data || leadId !== inboxLeadId) return;
+      renderInboxMessages(data.messages || []);
+      const note = document.getElementById("inboxRefreshNote");
+      if (note) {
+        note.textContent = `Updated ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+      }
+    } catch (_) {
+      // Silently ignore poll errors
+    }
+  }
+
+  function openInbox(leadId, name, sub) {
+    inboxLeadId = leadId;
+    inboxLastMessageCount = 0;
+
+    const overlay = document.getElementById("inboxOverlay");
+    const panel = document.getElementById("inboxPanel");
+    const nameEl = document.getElementById("inboxLeadName");
+    const subEl = document.getElementById("inboxLeadSub");
+    const msgs = document.getElementById("inboxMessages");
+    const input = document.getElementById("inboxInput");
+
+    if (nameEl) nameEl.textContent = name || "Conversation";
+    if (subEl) subEl.textContent = sub || "";
+    if (msgs) msgs.innerHTML = '<div class="inboxEmpty">Loading…</div>';
+    if (input) { input.value = ""; input.disabled = false; }
+    if (overlay) overlay.style.display = "block";
+    if (panel) panel.style.display = "flex";
+    document.body.style.overflow = "hidden";
+
+    loadInboxThread(leadId);
+    if (inboxPollInterval) clearInterval(inboxPollInterval);
+    inboxPollInterval = setInterval(() => loadInboxThread(inboxLeadId), 5000);
+  }
+
+  function closeInbox() {
+    inboxLeadId = null;
+    if (inboxPollInterval) {
+      clearInterval(inboxPollInterval);
+      inboxPollInterval = null;
+    }
+    const overlay = document.getElementById("inboxOverlay");
+    const panel = document.getElementById("inboxPanel");
+    if (overlay) overlay.style.display = "none";
+    if (panel) panel.style.display = "none";
+    document.body.style.overflow = "";
+  }
+
+  async function sendInboxReply() {
+    const leadId = inboxLeadId;
+    if (!leadId) return;
+
+    const input = document.getElementById("inboxInput");
+    const btn = document.getElementById("inboxSendBtn");
+    const text = input ? String(input.value || "").trim() : "";
+    if (!text) return;
+
+    if (btn) { btn.disabled = true; btn.textContent = "Sending…"; }
+    if (input) input.disabled = true;
+
+    try {
+      await apiFetch(`${API}/leads/${leadId}/reply`, {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      });
+      if (input) { input.value = ""; input.disabled = false; input.focus(); }
+      await loadInboxThread(leadId);
+      // Refresh leads list so the bot-paused badge updates
+      loadManualTakeovers().catch(() => {});
+    } catch (e) {
+      setErr(String(e.message || e));
+      if (input) input.disabled = false;
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "Send"; }
+    }
+  }
+
+  function wireInboxPanel() {
+    const closeBtn = document.getElementById("inboxCloseBtn");
+    const overlay = document.getElementById("inboxOverlay");
+    const sendBtn = document.getElementById("inboxSendBtn");
+    const input = document.getElementById("inboxInput");
+
+    if (closeBtn && !closeBtn.__wired) {
+      closeBtn.__wired = true;
+      closeBtn.addEventListener("click", closeInbox);
+    }
+    if (overlay && !overlay.__wired) {
+      overlay.__wired = true;
+      overlay.addEventListener("click", closeInbox);
+    }
+    if (sendBtn && !sendBtn.__wired) {
+      sendBtn.__wired = true;
+      sendBtn.addEventListener("click", sendInboxReply);
+    }
+    if (input && !input.__wired) {
+      input.__wired = true;
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendInboxReply();
+        }
+      });
+    }
+  }
+
+  function wireInboxButtons() {
+    document.querySelectorAll(".leadChatBtn").forEach((btn) => {
+      if (btn.__wired) return;
+      btn.__wired = true;
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.getAttribute("data-id");
+        const name = btn.getAttribute("data-name");
+        const sub = btn.getAttribute("data-sub") || "";
+        openInbox(id, name, sub);
+      });
+    });
+  }
+
   async function loadDashboard() {
     if (!getToken()) {
       window.location.href = "/coach/login.html";
@@ -1435,6 +1606,7 @@ function wireQueueRefreshButton() {
     wireBroadcast();
     wireQueueRefreshButton();
     wireCommentActivityRefresh();
+    wireInboxPanel();
 
     connectActivityStream();
     startActivityTimestampRefresh();
