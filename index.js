@@ -2811,12 +2811,13 @@ async function subscribeIgWebhook(accessToken, igUserId) {
   return { ok: resp.ok && data?.success === true, httpStatus, data };
 }
 
-// Re-subscribe webhook for the current Instagram Login account (no OAuth round-trip needed)
+// Re-subscribe webhook for the current Instagram Login account (no OAuth round-trip needed).
+// Also self-heals a corrupted ig_user_id (float64 precision bug) using the /me API.
 app.post("/coach/api/instagram/resubscribe", requireCoach, async (req, res) => {
   try {
     const { data: rows } = await supabase
       .from("ig_accounts")
-      .select("ig_user_id, page_access_token")
+      .select("id, ig_user_id, page_access_token")
       .eq("client_id", req.coach.client_id)
       .eq("is_active", true)
       .is("page_id", null)
@@ -2828,13 +2829,32 @@ app.post("/coach/api/instagram/resubscribe", requireCoach, async (req, res) => {
       return safeJson(res, 404, { error: "No active Instagram Login account found" });
     }
 
-    const { ok, httpStatus, data } = await subscribeIgWebhook(acc.page_access_token, acc.ig_user_id);
+    // Get authoritative user ID from /me (string, no float64 precision issue)
+    const meResp = await fetch(
+      `https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${encodeURIComponent(acc.page_access_token)}`
+    );
+    const meData = await meResp.json().catch(() => ({}));
+    const correctId = meData?.id ? String(meData.id) : null;
+    const correctUsername = meData?.username || null;
 
-    if (!ok) {
-      return safeJson(res, 502, { error: "Webhook subscription failed", httpStatus, detail: data });
+    let idFixed = false;
+    if (correctId && correctId !== acc.ig_user_id) {
+      console.log("resubscribe: correcting ig_user_id", { stored: acc.ig_user_id, correct: correctId });
+      await supabase
+        .from("ig_accounts")
+        .update({ ig_user_id: correctId, ig_username: correctUsername || undefined })
+        .eq("id", acc.id);
+      idFixed = true;
     }
 
-    return safeJson(res, 200, { ok: true, detail: data });
+    const igUserId = correctId || acc.ig_user_id;
+    const { ok, httpStatus, data } = await subscribeIgWebhook(acc.page_access_token, igUserId);
+
+    if (!ok) {
+      return safeJson(res, 502, { error: "Webhook subscription failed", httpStatus, detail: data, idFixed });
+    }
+
+    return safeJson(res, 200, { ok: true, detail: data, idFixed, ig_user_id: igUserId });
   } catch (e) {
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
@@ -6991,7 +7011,9 @@ app.get("/auth/instagram/callback", async (req, res) => {
       }
 
       const shortToken = shortTokenData.access_token;
-      const igUserId = String(shortTokenData.user_id);
+      // NOTE: do NOT use shortTokenData.user_id directly — Instagram returns it as a JSON
+      // number and large Instagram IDs (> 2^53) lose precision when parsed as float64.
+      // We get the authoritative string ID from the /me call below instead.
 
       // Stage 2: exchange for long-lived token (~60 days)
       const longTokenResp = await fetch(
@@ -7003,12 +7025,21 @@ app.get("/auth/instagram/callback", async (req, res) => {
         console.warn("ig_signup: long-lived token exchange failed, using short-lived", longTokenData);
       }
 
-      // Get IG user info
+      // Get IG user info — id is returned as a string (no float64 precision loss)
       const igInfoResp = await fetch(
         `https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${encodeURIComponent(longToken)}`
       );
       const igInfo = await igInfoResp.json().catch(() => ({}));
       const igUsername = igInfo?.username || null;
+
+      if (!igInfo?.id) {
+        console.error("ig_signup: failed to get user id from /me", igInfo);
+        return res.redirect(
+          `/coach/login.html?instagram_error=${encodeURIComponent("Failed to retrieve Instagram account ID. Please try again.")}`
+        );
+      }
+      const igUserId = String(igInfo.id);
+      console.log("ig_signup: igUserId from /me", { igUserId, fromToken: String(shortTokenData.user_id) });
 
       // Check if this IG account is already linked to a coach
       const { data: existingIgRow } = await supabase
@@ -7122,7 +7153,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
     }
 
     const shortToken = shortTokenData.access_token;
-    const igUserId = String(shortTokenData.user_id);
+    // NOTE: do NOT use shortTokenData.user_id — large Instagram IDs lose precision as float64.
 
     // Stage 2: long-lived token (~60 days)
     const longTokenResp = await fetch(
@@ -7134,12 +7165,21 @@ app.get("/auth/instagram/callback", async (req, res) => {
       console.warn("ig_connect: long-lived token exchange failed, using short-lived", longTokenData);
     }
 
-    // Get IG user info
+    // Get IG user info — id is a string here, no float64 precision loss
     const igInfoResp = await fetch(
       `https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${encodeURIComponent(longToken)}`
     );
     const igInfo = await igInfoResp.json().catch(() => ({}));
     const igUsername = igInfo?.username || null;
+
+    if (!igInfo?.id) {
+      console.error("ig_connect: failed to get user id from /me", igInfo);
+      return res.redirect(
+        `/settings?instagram_error=${encodeURIComponent("Failed to retrieve Instagram account ID. Please try again.")}`
+      );
+    }
+    const igUserId = String(igInfo.id);
+    console.log("ig_connect: igUserId from /me", { igUserId, fromToken: String(shortTokenData.user_id), clientId });
 
     // Upsert on ig_user_id (page_id: null marks as Instagram Login flow)
     console.log("ig_connect: upsert ig_accounts", { clientId, igUserId });
