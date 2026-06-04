@@ -4282,6 +4282,80 @@ app.get("/coach/api/leads", requireCoach, async (req, res) => {
   }
 });
 
+// ── Debug: probe messages table schema and test insert ───────────────────
+app.get("/coach/api/debug/messages", requireCoach, async (req, res) => {
+  try {
+    const clientId = req.coach.client_id;
+
+    // 1. What columns does the messages table actually have?
+    const { data: columns, error: colErr } = await supabase
+      .rpc("get_messages_columns")
+      .catch(() => ({ data: null, error: "rpc not available" }));
+
+    // Fallback: query information_schema directly via raw SQL
+    const { data: schemaRows, error: schemaErr } = await supabase
+      .from("messages")
+      .select("*")
+      .limit(1);
+
+    // 2. How many rows exist for this client?
+    const { count, error: countErr } = await supabase
+      .from("messages")
+      .select("*", { count: "exact", head: true })
+      .eq("client_id", clientId);
+
+    // 3. Get the coach's first lead to test insert against
+    const { data: lead } = await supabase
+      .from("leads")
+      .select("id, client_id")
+      .eq("client_id", clientId)
+      .limit(1)
+      .maybeSingle();
+
+    // 4. Attempt a real insert with the exact same payload the webhook uses
+    let testInsertResult = null;
+    if (lead) {
+      const { data: inserted, error: insertErr } = await supabase
+        .from("messages")
+        .insert({
+          lead_id: lead.id,
+          client_id: lead.client_id,
+          direction: "in",
+          text: "[debug test message - safe to delete]",
+          created_at: new Date().toISOString(),
+        })
+        .select();
+
+      testInsertResult = {
+        ok: !insertErr,
+        error: insertErr ? JSON.stringify(insertErr) : null,
+        inserted: inserted || null,
+      };
+
+      // Clean up the test row immediately
+      if (inserted && inserted[0]?.id) {
+        await supabase.from("messages").delete().eq("id", inserted[0].id);
+      }
+    }
+
+    // 5. What columns are visible from a sample row?
+    const sampleRow = schemaRows?.[0] || null;
+    const visibleColumns = sampleRow ? Object.keys(sampleRow) : [];
+
+    return safeJson(res, 200, {
+      client_id: clientId,
+      messages_count_for_client: count ?? null,
+      count_error: countErr ? JSON.stringify(countErr) : null,
+      visible_columns: visibleColumns,
+      schema_error: schemaErr ? JSON.stringify(schemaErr) : null,
+      test_lead: lead ? { id: lead.id, client_id: lead.client_id } : null,
+      test_insert: testInsertResult,
+    });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
 // ── Debug: return what client_id the JWT has vs ig_accounts ──────────────
 app.get("/coach/api/instagram/debug", requireCoach, async (req, res) => {
   try {
@@ -6029,7 +6103,7 @@ async function processDmEvent(messaging, igAccount, overrideText) {
             });
 
           if (insertIncomingError) {
-            console.error("messages insert incoming failed:", insertIncomingError);
+            console.error("messages insert incoming failed:", JSON.stringify(insertIncomingError));
           }
 
           if (!isEcho) {
@@ -6234,7 +6308,7 @@ log("ig_trigger_opener_sent", {
               if (insertOutgoingError) {
                 console.error(
                   "trigger opener insert outgoing failed:",
-                  insertOutgoingError
+                  JSON.stringify(insertOutgoingError)
                 );
               }
 
@@ -6589,7 +6663,7 @@ log("ig_trigger_opener_sent", {
               });
 
             if (insertOutgoingError) {
-              console.error("messages insert outgoing failed:", insertOutgoingError);
+              console.error("messages insert outgoing failed:", JSON.stringify(insertOutgoingError));
             }
 
             try {
