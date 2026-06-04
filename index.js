@@ -4863,7 +4863,6 @@ app.get("/coach/api/stats", requireCoach, async (req, res) => {
         }
       : DEFAULT_TARGETS;
 
-    // Query messages directly by client_id using role column
     const [msgsRes, repliesRes, inboundRes] = await Promise.all([
       supabase
         .from("messages")
@@ -4874,12 +4873,12 @@ app.get("/coach/api/stats", requireCoach, async (req, res) => {
         .from("messages")
         .select("id", { count: "exact", head: true })
         .eq("client_id", clientId)
-        .eq("role", "assistant"),
+        .eq("direction", "out"),
       supabase
         .from("messages")
         .select("id", { count: "exact", head: true })
         .eq("client_id", clientId)
-        .eq("role", "user"),
+        .eq("direction", "in"),
     ]);
 
     if (msgsRes.error)   return safeJson(res, 500, msgsRes.error);
