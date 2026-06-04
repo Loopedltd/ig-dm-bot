@@ -239,6 +239,68 @@
       <div class="err" id="igError"></div>
     </div>
 
+<script>
+  // Inline login handler — runs independently of coach.js to guarantee reliability
+  (function () {
+    var form = document.getElementById("loginForm");
+    if (!form) return;
+    form.__wired = true; // prevents coach.js from double-wiring
+
+    var notice = document.getElementById("notice");
+    var params = new URLSearchParams(window.location.search);
+
+    if (notice) {
+      if (params.get("paid") === "1") {
+        notice.className = "notice ok";
+        notice.textContent = "Payment received. Your account may need a password setup first. If you haven\u2019t set one yet, use the \u201CSet password\u201D button below.";
+      } else if (params.get("password_set") === "1") {
+        notice.className = "notice ok";
+        notice.textContent = "Password set successfully. You can now log in.";
+      } else if (params.get("cancelled") === "1") {
+        notice.className = "notice warn";
+        notice.textContent = "Payment was cancelled. Complete payment first to access the dashboard.";
+      }
+    }
+
+    var igErr = params.get("instagram_error");
+    if (igErr) {
+      var igErrEl = document.getElementById("igError");
+      if (igErrEl) { igErrEl.textContent = decodeURIComponent(igErr); igErrEl.style.display = "block"; }
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var email = document.getElementById("email").value.trim();
+      var password = document.getElementById("password").value;
+      var err = document.getElementById("error");
+      if (err) err.style.display = "none";
+
+      fetch("/coach/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email, password: password }),
+      })
+        .then(function (r) {
+          return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+        })
+        .then(function (res) {
+          if (!res.ok) {
+            var msg = res.j && res.j.error === "subscription_inactive"
+              ? (res.j.message || "Subscription inactive. Complete payment before logging in.")
+              : (res.j && res.j.error || "Login failed");
+            if (err) { err.textContent = msg; err.style.display = "block"; }
+            return;
+          }
+          localStorage.setItem("coach_token", res.j.token);
+          window.location.href = "/dashboard";
+        })
+        .catch(function () {
+          if (err) { err.textContent = "Network error. Please try again."; err.style.display = "block"; }
+        });
+    });
+  })();
+</script>
 <script src="/coach/coach.js"></script>
   </body>
 </html>

@@ -538,6 +538,7 @@ function wireInstagramConnectButton() {
 
   btn.addEventListener("click", async () => {
     if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+    const originalText = btn.textContent;
     try {
       btn.disabled = true;
       btn.style.opacity = "0.75";
@@ -558,7 +559,7 @@ function wireInstagramConnectButton() {
       else { setErr(msg); }
       btn.disabled = false;
       btn.style.opacity = "1";
-      btn.textContent = "Connect Instagram";
+      btn.textContent = originalText;
     }
   });
 }

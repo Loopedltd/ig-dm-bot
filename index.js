@@ -2753,19 +2753,19 @@ function verifyInstagramState(state) {
 
 app.get("/coach/api/instagram/connect-url", requireCoach, async (req, res) => {
   try {
-    if (!META_APP_ID || !META_REDIRECT_URI || !META_CONFIG_ID) {
+    if (!META_APP_ID || !META_REDIRECT_URI) {
       return safeJson(res, 500, { error: "Meta env vars not configured" });
     }
 
     const state = signInstagramState(req.coach.client_id);
 
-    const authUrl = new URL("https://www.facebook.com/v23.0/dialog/oauth");
+    const authUrl = new URL("https://api.instagram.com/oauth/authorize");
     authUrl.searchParams.set("client_id", META_APP_ID);
     authUrl.searchParams.set("redirect_uri", META_REDIRECT_URI);
     authUrl.searchParams.set("response_type", "code");
-    authUrl.searchParams.set("config_id", META_CONFIG_ID);
+    authUrl.searchParams.set("scope", "instagram_business_basic,instagram_business_manage_messages");
+    authUrl.searchParams.set("enable_fb_login", "0");
     authUrl.searchParams.set("state", state);
-    authUrl.searchParams.set("auth_type", "rerequest");
 
     return safeJson(res, 200, {
       ok: true,
@@ -6949,82 +6949,60 @@ app.get("/auth/instagram/callback", async (req, res) => {
       return res.redirect(`/dashboard?token=${encodeURIComponent(token)}&instagram_connected=1`);
     }
 
-    // ── CONNECT FLOW: existing coach re-connecting via Facebook Login ─────────
-    // Check if this coach already has an active Instagram connection
-    const { data: existingIgAccount } = await supabase
-      .from("ig_accounts")
-      .select("id")
-      .eq("client_id", clientId)
-      .eq("is_active", true)
-      .maybeSingle();
-    const isFirstConnection = !existingIgAccount;
+    // ── CONNECT FLOW: authenticated coach reconnecting via Instagram Business Login ──
+    // Same Instagram OAuth token exchange as signup; just updates existing account.
 
-    const tokenResp = await fetch(
-      `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${encodeURIComponent(
-        META_APP_ID
-      )}&redirect_uri=${encodeURIComponent(
-        META_REDIRECT_URI
-      )}&client_secret=${encodeURIComponent(
-        META_APP_SECRET
-      )}&code=${encodeURIComponent(code)}`
-    );
+    // Stage 1: short-lived token
+    const shortTokenResp = await fetch("https://api.instagram.com/oauth/access_token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: META_APP_ID,
+        client_secret: META_APP_SECRET,
+        grant_type: "authorization_code",
+        redirect_uri: META_REDIRECT_URI,
+        code,
+      }).toString(),
+    });
+    const shortTokenData = await shortTokenResp.json().catch(() => ({}));
 
-    const tokenData = await tokenResp.json();
-
-    if (!tokenResp.ok || !tokenData?.access_token) {
-      return res
-        .status(500)
-        .send(`Failed to exchange code: ${JSON.stringify(tokenData)}`);
+    if (!shortTokenResp.ok || !shortTokenData?.access_token) {
+      console.error("ig_connect: short token exchange failed", shortTokenData);
+      return res.redirect(
+        `/settings?instagram_error=${encodeURIComponent("Failed to connect Instagram. Please try again.")}`
+      );
     }
 
-    const userAccessToken = tokenData.access_token;
+    const shortToken = shortTokenData.access_token;
+    const igUserId = String(shortTokenData.user_id);
 
-    const pagesResp = await fetch(
-      `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}&access_token=${encodeURIComponent(
-        userAccessToken
-      )}`
+    // Stage 2: long-lived token (~60 days)
+    const longTokenResp = await fetch(
+      `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${encodeURIComponent(META_APP_SECRET)}&access_token=${encodeURIComponent(shortToken)}`
     );
-
-    const pagesData = await pagesResp.json();
-
-    if (!pagesResp.ok) {
-      return res
-        .status(500)
-        .send(`Failed to fetch pages: ${JSON.stringify(pagesData)}`);
+    const longTokenData = await longTokenResp.json().catch(() => ({}));
+    const longToken = longTokenData?.access_token || shortToken;
+    if (!longTokenData?.access_token) {
+      console.warn("ig_connect: long-lived token exchange failed, using short-lived", longTokenData);
     }
 
-    const page = (pagesData?.data || []).find(
-      (p) =>
-        p?.instagram_business_account?.id ||
-        p?.connected_instagram_account?.id
+    // Get IG user info
+    const igInfoResp = await fetch(
+      `https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${encodeURIComponent(longToken)}`
     );
+    const igInfo = await igInfoResp.json().catch(() => ({}));
+    const igUsername = igInfo?.username || null;
 
-    if (!page) {
-      return res
-        .status(400)
-        .send(
-          `No Instagram professional account found. Full pages response: ${JSON.stringify(
-            pagesData
-          )}`
-        );
-    }
-
-    const ig =
-      page.instagram_business_account ||
-      page.connected_instagram_account;
-
-    // ── CONNECT FLOW: authenticated coach re-connecting / connecting ───────
-    // Upsert on ig_user_id (the unique key). Handles: same coach reconnecting,
-    // IG previously under different client_id, or genuinely new IG account.
-    console.log("ig_connect: upsert ig_accounts", { clientId, igUserId: ig.id });
+    // Upsert on ig_user_id (page_id: null marks as Instagram Login flow)
+    console.log("ig_connect: upsert ig_accounts", { clientId, igUserId });
     const { error: upsertErr } = await supabase
       .from("ig_accounts")
       .upsert({
         client_id: clientId,
-        ig_user_id: ig.id,
-        ig_username: ig.username || null,
-        page_id: page.id,
-        page_access_token: page.access_token,
+        ig_user_id: igUserId,
+        ig_username: igUsername,
+        page_id: null,
+        page_access_token: longToken,
         is_active: true,
       }, { onConflict: "ig_user_id" });
 
@@ -7033,7 +7011,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
       .from("ig_accounts")
       .update({ is_active: false })
       .eq("client_id", clientId)
-      .neq("ig_user_id", ig.id);
+      .neq("ig_user_id", igUserId);
 
     if (upsertErr) {
       return res
@@ -7041,25 +7019,24 @@ app.get("/auth/instagram/callback", async (req, res) => {
         .send(`Failed to save Instagram account: ${upsertErr.message}`);
     }
 
-    // Subscribe the page to webhook fields — non-blocking
+    // Subscribe webhook (non-blocking)
     void (async () => {
       try {
         const subResp = await fetch(
-          `https://graph.facebook.com/v21.0/${encodeURIComponent(page.id)}/subscribed_apps?subscribed_fields=messages,feed,messaging_postbacks,mention&access_token=${encodeURIComponent(page.access_token)}`,
+          `https://graph.instagram.com/v21.0/me/subscribed_apps?subscribed_fields=messages&access_token=${encodeURIComponent(longToken)}`,
           { method: "POST" }
         );
         const subData = await subResp.json().catch(() => ({}));
         if (subResp.ok && subData?.success) {
-          console.log(`Page webhook subscription successful for page ${page.id}`, { igUserId: ig.id, clientId });
+          console.log("ig_connect: webhook subscription successful", { igUserId, clientId });
         } else {
-          console.error(`Page webhook subscription FAILED for page ${page.id}`, { status: subResp.status, subData, clientId });
+          console.error("ig_connect: webhook subscription FAILED", { igUserId, subData, clientId });
         }
       } catch (subErr) {
-        console.error(`Page webhook subscription threw for page ${page.id}`, { error: subErr?.message || subErr, clientId });
+        console.error("ig_connect: webhook subscription threw", { error: subErr?.message || subErr, clientId });
       }
     })();
 
-    // Always land on the dashboard after connecting.
     return res.redirect("/dashboard?instagram_connected=1");
   } catch (e) {
     return res.status(500).send(String(e?.message || e));
