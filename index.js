@@ -2930,6 +2930,94 @@ app.get("/coach/api/instagram/subscription-debug", requireCoach, async (req, res
   }
 });
 
+// Backfill ig_name for existing leads that still show the raw IGSID placeholder or NULL.
+// Runs the same two-stage lookup (User Profile API → Conversations API) used for new leads.
+// Safe to call multiple times — skips leads that already have a resolved name.
+app.post("/coach/api/leads/backfill-names", requireCoach, async (req, res) => {
+  try {
+    // Get the coach's active Instagram Login account
+    const { data: accRows } = await supabase
+      .from("ig_accounts")
+      .select("ig_user_id, page_access_token, page_id")
+      .eq("client_id", req.coach.client_id)
+      .eq("is_active", true)
+      .is("page_id", null)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    const acc = Array.isArray(accRows) ? accRows[0] : null;
+    if (!acc?.page_access_token) {
+      return safeJson(res, 404, { error: "No active Instagram Login account found" });
+    }
+
+    // Find leads where ig_name is NULL or still equals the raw IGSID placeholder
+    const { data: leads, error: leadsErr } = await supabase
+      .from("leads")
+      .select("id, ig_psid, ig_name")
+      .eq("client_id", req.coach.client_id)
+      .or("ig_name.is.null,ig_name.eq.ig_psid")
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    if (leadsErr) {
+      return safeJson(res, 500, { error: leadsErr.message });
+    }
+
+    // Also catch leads where ig_name literally equals the ig_psid value (placeholder pattern)
+    const { data: placeholderLeads } = await supabase
+      .from("leads")
+      .select("id, ig_psid, ig_name")
+      .eq("client_id", req.coach.client_id)
+      .not("ig_name", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(500);
+
+    // Merge: any lead whose ig_name === ig_psid is still a placeholder
+    const allLeads = [...(leads || [])];
+    for (const l of (placeholderLeads || [])) {
+      if (l.ig_name === l.ig_psid && !allLeads.find(x => x.id === l.id)) {
+        allLeads.push(l);
+      }
+    }
+
+    if (!allLeads.length) {
+      return safeJson(res, 200, { updated: 0, skipped: 0, message: "All leads already have names" });
+    }
+
+    let updated = 0;
+    let skipped = 0;
+    const results = [];
+
+    for (const lead of allLeads) {
+      try {
+        const name = await lookupIgName(acc.page_access_token, lead.ig_psid, {
+          useInstagramApi: true,
+          coachIgUserId: acc.ig_user_id,
+        });
+
+        if (name && name !== lead.ig_name) {
+          await supabase.from("leads").update({ ig_name: name }).eq("id", lead.id);
+          results.push({ id: lead.id, ig_psid: lead.ig_psid, name });
+          updated++;
+        } else {
+          skipped++;
+        }
+
+        // Respect Instagram API rate limits — small delay between lookups
+        await new Promise(r => setTimeout(r, 300));
+      } catch (e) {
+        console.warn("backfill-names: lookup failed for", lead.ig_psid, e?.message || e);
+        skipped++;
+      }
+    }
+
+    console.log("backfill-names: done", { clientId: req.coach.client_id, updated, skipped });
+    return safeJson(res, 200, { updated, skipped, results });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
 app.get("/coach/api/instagram/status", requireCoach, async (req, res) => {
   try {
     const { data, error } = await supabase
