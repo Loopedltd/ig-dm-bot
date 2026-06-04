@@ -191,6 +191,9 @@ const META_APP_ID = process.env.META_APP_ID;
 const META_APP_SECRET = process.env.META_APP_SECRET;
 const META_REDIRECT_URI = process.env.META_REDIRECT_URI;
 const META_CONFIG_ID = process.env.META_CONFIG_ID;
+// Instagram App (separate from Meta App — created under Instagram > API setup with Instagram login)
+const INSTAGRAM_APP_ID = process.env.INSTAGRAM_APP_ID;
+const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET;
 
 const STRIPE_PRICE_SETUP =
   process.env.STRIPE_PRICE_SETUP || "price_1T7bDyCS3UXrJEm9cHGA2lrG";
@@ -2753,14 +2756,14 @@ function verifyInstagramState(state) {
 
 app.get("/coach/api/instagram/connect-url", requireCoach, async (req, res) => {
   try {
-    if (!META_APP_ID || !META_REDIRECT_URI) {
-      return safeJson(res, 500, { error: "Meta env vars not configured" });
+    if (!INSTAGRAM_APP_ID || !META_REDIRECT_URI) {
+      return safeJson(res, 500, { error: "Instagram app env vars not configured" });
     }
 
     const state = signInstagramState(req.coach.client_id);
 
-    const authUrl = new URL("https://api.instagram.com/oauth/authorize");
-    authUrl.searchParams.set("client_id", META_APP_ID);
+    const authUrl = new URL("https://www.instagram.com/oauth/authorize");
+    authUrl.searchParams.set("client_id", INSTAGRAM_APP_ID);
     authUrl.searchParams.set("redirect_uri", META_REDIRECT_URI);
     authUrl.searchParams.set("response_type", "code");
     authUrl.searchParams.set("scope", "instagram_business_basic,instagram_business_manage_messages");
@@ -6758,12 +6761,12 @@ log("ig_trigger_opener_sent", {
 // ── Instagram OAuth entry point for login/signup (no auth required) ──────
 app.get("/auth/instagram/start", (req, res) => {
   try {
-    if (!META_APP_ID || !META_REDIRECT_URI) {
-      return res.redirect("/coach/login.html?instagram_error=Meta+not+configured");
+    if (!INSTAGRAM_APP_ID || !META_REDIRECT_URI) {
+      return res.redirect("/coach/login.html?instagram_error=Instagram+app+not+configured");
     }
     const state = jwt.sign({ type: "instagram_signup" }, COACH_JWT_SECRET, { expiresIn: "15m" });
-    const authUrl = new URL("https://api.instagram.com/oauth/authorize");
-    authUrl.searchParams.set("client_id", META_APP_ID);
+    const authUrl = new URL("https://www.instagram.com/oauth/authorize");
+    authUrl.searchParams.set("client_id", INSTAGRAM_APP_ID);
     authUrl.searchParams.set("redirect_uri", META_REDIRECT_URI);
     authUrl.searchParams.set("response_type", "code");
     authUrl.searchParams.set("scope", "instagram_business_basic,instagram_business_manage_messages");
@@ -6777,8 +6780,8 @@ app.get("/auth/instagram/start", (req, res) => {
 
 app.get("/auth/instagram/callback", async (req, res) => {
   try {
-    if (!META_APP_ID || !META_APP_SECRET || !META_REDIRECT_URI) {
-      return res.status(500).send("Meta env vars not configured");
+    if (!INSTAGRAM_APP_ID || !INSTAGRAM_APP_SECRET || !META_REDIRECT_URI) {
+      return res.status(500).send("Instagram app env vars not configured");
     }
 
     const error = String(req.query.error || "");
@@ -6825,8 +6828,8 @@ app.get("/auth/instagram/callback", async (req, res) => {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
-          client_id: META_APP_ID,
-          client_secret: META_APP_SECRET,
+          client_id: INSTAGRAM_APP_ID,
+          client_secret: INSTAGRAM_APP_SECRET,
           grant_type: "authorization_code",
           redirect_uri: META_REDIRECT_URI,
           code,
@@ -6846,7 +6849,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
 
       // Stage 2: exchange for long-lived token (~60 days)
       const longTokenResp = await fetch(
-        `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${encodeURIComponent(META_APP_SECRET)}&access_token=${encodeURIComponent(shortToken)}`
+        `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${encodeURIComponent(INSTAGRAM_APP_SECRET)}&access_token=${encodeURIComponent(shortToken)}`
       );
       const longTokenData = await longTokenResp.json().catch(() => ({}));
       const longToken = longTokenData?.access_token || shortToken;
@@ -6957,8 +6960,8 @@ app.get("/auth/instagram/callback", async (req, res) => {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        client_id: META_APP_ID,
-        client_secret: META_APP_SECRET,
+        client_id: INSTAGRAM_APP_ID,
+        client_secret: INSTAGRAM_APP_SECRET,
         grant_type: "authorization_code",
         redirect_uri: META_REDIRECT_URI,
         code,
@@ -6978,7 +6981,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
 
     // Stage 2: long-lived token (~60 days)
     const longTokenResp = await fetch(
-      `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${encodeURIComponent(META_APP_SECRET)}&access_token=${encodeURIComponent(shortToken)}`
+      `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${encodeURIComponent(INSTAGRAM_APP_SECRET)}&access_token=${encodeURIComponent(shortToken)}`
     );
     const longTokenData = await longTokenResp.json().catch(() => ({}));
     const longToken = longTokenData?.access_token || shortToken;
