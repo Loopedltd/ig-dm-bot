@@ -2675,7 +2675,9 @@ async function setClientBotPaused({ clientId, enabled, reason, actor }) {
   return data;
 }
 
-async function lookupIgName(accessToken, igPsid) {
+async function lookupIgName(accessToken, igPsid, { useInstagramApi = false } = {}) {
+  // Instagram Login accounts don't support PSID-based name lookup via graph.facebook.com
+  if (useInstagramApi) return null;
   try {
     const resp = await fetch(
       `https://graph.facebook.com/v21.0/${encodeURIComponent(igPsid)}?fields=name&access_token=${encodeURIComponent(accessToken)}`
@@ -5646,8 +5648,8 @@ async function handlePostCommentKeyword(igAccountId, commentId, commenterId, com
       if (error) console.error("comment_activity_log insert failed:", error.message, error.code);
     });
 
-    // Optionally post a public reply to the comment
-    if (cfg.comment_keyword_reply_enabled) {
+    // Optionally post a public reply to the comment (Facebook Login accounts only)
+    if (cfg.comment_keyword_reply_enabled && igAccount.page_id) {
       const replyText = String(cfg.comment_keyword_reply_text || "").trim();
       if (replyText) {
         const { ok: replyOk, data: replyData } = await postPublicCommentReply(
@@ -5930,6 +5932,21 @@ function flushDmBuffer(bufferKey) {
 
 app.post("/webhook", async (req, res) => {
   try {
+    // X-Hub-Signature-256 verification
+    const sigHeader = req.headers["x-hub-signature-256"];
+    const secret = INSTAGRAM_APP_SECRET || META_APP_SECRET;
+    if (secret && req.rawBody) {
+      if (!sigHeader) {
+        console.warn("webhook: missing X-Hub-Signature-256 header — rejecting");
+        return res.sendStatus(403);
+      }
+      const expected = "sha256=" + crypto.createHmac("sha256", secret).update(req.rawBody).digest("hex");
+      if (sigHeader !== expected) {
+        console.warn("webhook: X-Hub-Signature-256 mismatch — rejecting");
+        return res.sendStatus(403);
+      }
+    }
+
     const body = req.body || {};
     const entryCount = Array.isArray(body.entry) ? body.entry.length : 0;
     const fields = (body.entry || []).flatMap((e) => (e.changes || []).map((c) => c.field)).filter(Boolean);
@@ -6096,7 +6113,7 @@ async function processDmEvent(messaging, igAccount, overrideText) {
               try {
                 const acc = await getIgAccountByClientId(lead.client_id).catch(() => null);
                 if (!acc?.page_access_token) return;
-                const name = await lookupIgName(acc.page_access_token, senderId);
+                const name = await lookupIgName(acc.page_access_token, senderId, { useInstagramApi: !acc.page_id });
                 if (name) {
                   await supabase.from("leads").update({ ig_name: name }).eq("id", lead.id);
                   lead = { ...lead, ig_name: name };
@@ -6895,6 +6912,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
           page_id: null,
           page_access_token: longToken,
           is_active: true,
+          token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
         }, { onConflict: "ig_user_id" });
         console.log("ig_signup: returning coach logged in", { resolvedClientId, igUserId });
       } else {
@@ -6913,7 +6931,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
 
         resolvedClientId = newClient.id;
 
-        await supabase.from("client_configs").insert({
+        const { error: configErr } = await supabase.from("client_configs").insert({
           client_id: resolvedClientId,
           stripe_subscription_status: "demo",
           system_prompt: "You are a helpful assistant that qualifies leads and books sales calls on behalf of this coach. Keep replies short, casual and conversational. Ask one question at a time to understand the lead's goals and situation before moving towards booking a call.",
@@ -6925,6 +6943,14 @@ app.get("/auth/instagram/callback", async (req, res) => {
           comment_reply_auto_dm_enabled: false,
           keyword_auto_dm_enabled: false,
         });
+        if (configErr) {
+          console.error("ig_signup: client_configs insert failed", configErr);
+          // Clean up the orphaned client row so signup can be retried
+          await supabase.from("clients").delete().eq("id", resolvedClientId);
+          return res.redirect(
+            `/coach/login.html?instagram_error=${encodeURIComponent("Failed to create account config. Please try again.")}`
+          );
+        }
 
         // page_id: null marks this as Instagram Login flow (uses graph.instagram.com for messaging)
         await supabase.from("ig_accounts").upsert({
@@ -6934,6 +6960,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
           page_id: null,
           page_access_token: longToken,
           is_active: true,
+          token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
         }, { onConflict: "ig_user_id" });
 
         console.log("ig_signup: new coach created", { resolvedClientId, igUsername });
@@ -7014,6 +7041,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
         page_id: null,
         page_access_token: longToken,
         is_active: true,
+        token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
       }, { onConflict: "ig_user_id" });
 
     // Deactivate any other active rows for this client (was using a different IG)
@@ -7642,6 +7670,62 @@ Start your response with { and end with }. Nothing else.`;
 // ─── End Daily Planner ───────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3000;
+// ---------------------------
+// TOKEN REFRESH JOB
+// ---------------------------
+async function refreshExpiringTokens() {
+  if (!INSTAGRAM_APP_SECRET) return; // nothing to do without the secret
+
+  const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  // Fetch Instagram Login accounts with tokens expiring within 7 days
+  const { data: accounts, error } = await supabase
+    .from("ig_accounts")
+    .select("id, ig_user_id, page_access_token, token_expires_at")
+    .is("page_id", null)
+    .eq("is_active", true)
+    .not("token_expires_at", "is", null)
+    .lt("token_expires_at", sevenDaysFromNow);
+
+  if (error) {
+    console.error("token_refresh: query failed", error.message);
+    return;
+  }
+
+  if (!accounts?.length) {
+    console.log("token_refresh: no tokens expiring within 7 days");
+    return;
+  }
+
+  console.log(`token_refresh: refreshing ${accounts.length} token(s)`);
+
+  for (const acc of accounts) {
+    try {
+      const resp = await fetch(
+        `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(acc.page_access_token)}`
+      );
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok || !data?.access_token) {
+        console.error("token_refresh: refresh failed", { ig_user_id: acc.ig_user_id, data });
+        continue;
+      }
+
+      const expiresIn = data.expires_in || 60 * 24 * 60 * 60; // default 60 days in seconds
+      const newExpiry = new Date(Date.now() + expiresIn * 1000).toISOString();
+
+      await supabase
+        .from("ig_accounts")
+        .update({ page_access_token: data.access_token, token_expires_at: newExpiry })
+        .eq("id", acc.id);
+
+      console.log("token_refresh: refreshed", { ig_user_id: acc.ig_user_id, newExpiry });
+    } catch (e) {
+      console.error("token_refresh: threw for account", acc.ig_user_id, e?.message || e);
+    }
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 
@@ -7669,5 +7753,12 @@ app.listen(PORT, () => {
       console.error("dm_queue: processor error", e?.message || e)
     );
   }, 30 * 1000);
+
+  // Token refresh job — runs every 12 hours, refreshes tokens expiring within 7 days
+  setInterval(() => {
+    refreshExpiringTokens().catch((e) =>
+      console.error("token_refresh: error", e?.message || e)
+    );
+  }, 12 * 60 * 60 * 1000);
 });
 
