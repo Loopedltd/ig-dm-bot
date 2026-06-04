@@ -2676,9 +2676,17 @@ async function setClientBotPaused({ clientId, enabled, reason, actor }) {
 }
 
 async function lookupIgName(accessToken, igPsid, { useInstagramApi = false } = {}) {
-  // Instagram Login accounts don't support PSID-based name lookup via graph.facebook.com
-  if (useInstagramApi) return null;
   try {
+    if (useInstagramApi) {
+      // Instagram Login: look up sender by IGSID via graph.instagram.com
+      const resp = await fetch(
+        `https://graph.instagram.com/v21.0/${encodeURIComponent(igPsid)}?fields=name,username&access_token=${encodeURIComponent(accessToken)}`
+      );
+      const data = await resp.json().catch(() => ({}));
+      // Prefer username (handle) over display name — more recognisable in the dashboard
+      return data?.username || data?.name || null;
+    }
+    // Facebook Login: look up by PSID via graph.facebook.com
     const resp = await fetch(
       `https://graph.facebook.com/v21.0/${encodeURIComponent(igPsid)}?fields=name&access_token=${encodeURIComponent(accessToken)}`
     );
@@ -6233,11 +6241,15 @@ async function processDmEvent(messaging, igAccount, overrideText) {
           }
 
           if (!lead) {
+            // For Instagram Login accounts, store the IGSID as a placeholder name immediately
+            // so the dashboard shows something while the background username lookup runs.
+            const isInstagramLogin = !igAccount.page_id;
             const { data: newLead, error: newLeadError } = await supabase
               .from("leads")
               .insert({
                 client_id: igAccount.client_id,
                 ig_psid: senderId,
+                ig_name: isInstagramLogin ? senderId : null,
                 stage: "new",
               })
               .select()
@@ -6250,7 +6262,7 @@ async function processDmEvent(messaging, igAccount, overrideText) {
 
             lead = newLead;
 
-            // Background: fetch and store lead's display name
+            // Background: fetch real username from Instagram API and replace the placeholder
             void (async () => {
               try {
                 const acc = await getIgAccountByClientId(lead.client_id).catch(() => null);
