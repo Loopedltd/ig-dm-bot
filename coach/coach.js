@@ -893,10 +893,15 @@ const STAGE_LABELS = {
 };
 
 function leadDisplayName(lead) {
-  if (lead.ig_name) return lead.ig_name;
+  if (lead.ig_name && lead.ig_name !== "Loading...") return lead.ig_name;
   if (lead.email) return lead.email;
+  if (lead.ig_name === "Loading...") return "Loading...";
   const psid = String(lead.ig_psid || "");
   return psid ? `···${psid.slice(-6)}` : "Unknown";
+}
+
+function isLoadingLead(lead) {
+  return lead.ig_name === "Loading...";
 }
 
 function leadLastActivity(lead) {
@@ -932,9 +937,10 @@ function renderLeadRow(lead) {
   const isPaused = lead.manual_override === true;
   const botOn = !isPaused;
 
-  return `<div class="leadRow${isPaused ? " leadRow--paused" : ""}" data-id="${lead.id}" data-paused="${isPaused ? "1" : "0"}">
+  const loading = isLoadingLead(lead);
+  return `<div class="leadRow${isPaused ? " leadRow--paused" : ""}" data-id="${lead.id}" data-paused="${isPaused ? "1" : "0"}"${loading ? ' data-loading="1"' : ""}>
     <div class="leadIdent">
-      <div class="leadName">${escHtml(name)}</div>
+      <div class="leadName${loading ? " leadName--loading" : ""}">${escHtml(name)}</div>
       <div class="leadSub">${escHtml(subLine)} · ${lastMsg}</div>
       <button class="leadChatBtn" data-id="${lead.id}" data-name="${escHtml(name)}" data-sub="${escHtml(subLine)}">View chat</button>
     </div>
@@ -1008,6 +1014,48 @@ function renderLeadsList() {
   list.innerHTML = filtered.map(renderLeadRow).join("");
   wireLeadToggles();
   wireInboxButtons();
+  startLoadingLeadPollers();
+}
+
+// ── Loading... lead poller ────────────────────────────────────────────────────
+// For each lead row marked data-loading="1", polls GET /leads/:id every 3s until
+// ig_name resolves, then updates the row in-place without a full list re-render.
+const _loadingPollers = new Map(); // leadId → intervalId
+
+function startLoadingLeadPollers() {
+  const loadingRows = document.querySelectorAll('[data-loading="1"]');
+  loadingRows.forEach((row) => {
+    const leadId = row.dataset.id;
+    if (!leadId || _loadingPollers.has(leadId)) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const data = await apiFetch(`${API}/leads/${leadId}`, { method: "GET" });
+        const lead = data?.lead;
+        if (!lead) return;
+
+        if (lead.ig_name && lead.ig_name !== "Loading...") {
+          // Name resolved — update allLeads cache, re-render the row in-place
+          const idx = allLeads.findIndex((l) => l.id === leadId);
+          if (idx !== -1) allLeads[idx] = { ...allLeads[idx], ...lead };
+
+          const liveRow = document.querySelector(`[data-id="${leadId}"]`);
+          if (liveRow) {
+            const newHtml = renderLeadRow(lead);
+            liveRow.outerHTML = newHtml;
+            // Re-wire the replaced row
+            wireLeadToggles();
+            wireInboxButtons();
+          }
+
+          clearInterval(intervalId);
+          _loadingPollers.delete(leadId);
+        }
+      } catch {}
+    }, 3000);
+
+    _loadingPollers.set(leadId, intervalId);
+  });
 }
 
 async function loadManualTakeovers() {

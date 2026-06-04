@@ -2933,6 +2933,23 @@ app.get("/coach/api/instagram/subscription-debug", requireCoach, async (req, res
 // Backfill ig_name for existing leads that still show the raw IGSID placeholder or NULL.
 // Runs the same two-stage lookup (User Profile API → Conversations API) used for new leads.
 // Safe to call multiple times — skips leads that already have a resolved name.
+// Single-lead fetch — used by the dashboard to poll until ig_name resolves from 'Loading...'
+app.get("/coach/api/leads/:leadId", requireCoach, async (req, res) => {
+  try {
+    const { data: lead, error } = await supabase
+      .from("leads")
+      .select("id,ig_psid,ig_name,stage,booking_sent,call_completed,manual_override,manual_override_reason,manual_override_by,manual_override_at,last_inbound_at,last_outbound_at,email,phone,followup_sent")
+      .eq("id", req.params.leadId)
+      .eq("client_id", req.coach.client_id)
+      .single();
+
+    if (error || !lead) return safeJson(res, 404, { error: "Lead not found" });
+    return safeJson(res, 200, { ok: true, lead });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
 app.post("/coach/api/leads/backfill-names", requireCoach, async (req, res) => {
   try {
     // Get the coach's active Instagram Login account
@@ -6354,15 +6371,16 @@ async function processDmEvent(messaging, igAccount, overrideText) {
           }
 
           if (!lead) {
-            // For Instagram Login accounts, store the IGSID as a placeholder name immediately
-            // so the dashboard shows something while the background username lookup runs.
+            // For Instagram Login accounts, store 'Loading...' as a placeholder so the
+            // dashboard never shows the raw IGSID. The background lookup replaces it with
+            // the real username. Facebook Login accounts stay null (lookup is synchronous enough).
             const isInstagramLogin = !igAccount.page_id;
             const { data: newLead, error: newLeadError } = await supabase
               .from("leads")
               .insert({
                 client_id: igAccount.client_id,
                 ig_psid: senderId,
-                ig_name: isInstagramLogin ? senderId : null,
+                ig_name: isInstagramLogin ? "Loading..." : null,
                 stage: "new",
               })
               .select()
