@@ -6756,6 +6756,7 @@ app.get("/auth/instagram/start", (req, res) => {
     authUrl.searchParams.set("response_type", "code");
     authUrl.searchParams.set("config_id", META_CONFIG_ID);
     authUrl.searchParams.set("state", state);
+    authUrl.searchParams.set("auth_type", "rerequest");
     return res.redirect(authUrl.toString());
   } catch (e) {
     return res.redirect(`/coach/login.html?instagram_error=${encodeURIComponent(String(e?.message || e))}`);
