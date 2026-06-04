@@ -2701,25 +2701,38 @@ async function lookupIgName(accessToken, igPsid, { useInstagramApi = false, coac
   } catch {}
 
   // Stage 2 — Conversations API: fetch the conversation thread and read from.username
-  // from the most recent message. This is the only reliable way to get the @handle.
-  if (!coachIgUserId) return null;
-  try {
-    const convResp = await fetch(
-      `https://graph.instagram.com/v21.0/${encodeURIComponent(coachIgUserId)}/conversations` +
-      `?user_id=${encodeURIComponent(igPsid)}&fields=messages&access_token=${encodeURIComponent(accessToken)}`
-    );
-    const convData = await convResp.json().catch(() => ({}));
-    const messageId = convData?.data?.[0]?.messages?.data?.[0]?.id;
-    if (!messageId) return null;
-
-    const msgResp = await fetch(
-      `https://graph.instagram.com/v21.0/${encodeURIComponent(messageId)}?fields=from&access_token=${encodeURIComponent(accessToken)}`
-    );
-    const msgData = await msgResp.json().catch(() => ({}));
-    return msgData?.from?.username || msgData?.from?.name || null;
-  } catch {
-    return null;
+  // from the most recent message.
+  if (coachIgUserId) {
+    try {
+      const convResp = await fetch(
+        `https://graph.instagram.com/v21.0/${encodeURIComponent(coachIgUserId)}/conversations` +
+        `?user_id=${encodeURIComponent(igPsid)}&fields=messages&access_token=${encodeURIComponent(accessToken)}`
+      );
+      const convData = await convResp.json().catch(() => ({}));
+      const messageId = convData?.data?.[0]?.messages?.data?.[0]?.id;
+      if (messageId) {
+        const msgResp = await fetch(
+          `https://graph.instagram.com/v21.0/${encodeURIComponent(messageId)}?fields=from&access_token=${encodeURIComponent(accessToken)}`
+        );
+        const msgData = await msgResp.json().catch(() => ({}));
+        const fromName = msgData?.from?.username || msgData?.from?.name;
+        if (fromName) return fromName;
+      }
+    } catch {}
   }
+
+  // Stage 3 — graph.facebook.com PSID lookup (the original Facebook Login endpoint).
+  // Instagram Login tokens can also resolve IGSIDs here and it returns `name` reliably
+  // for account types where Stage 1 and Stage 2 return nothing (e.g. personal accounts).
+  try {
+    const fbResp = await fetch(
+      `https://graph.facebook.com/v21.0/${encodeURIComponent(igPsid)}?fields=name&access_token=${encodeURIComponent(accessToken)}`
+    );
+    const fbData = await fbResp.json().catch(() => ({}));
+    if (fbData?.name) return fbData.name;
+  } catch {}
+
+  return null;
 }
 
 // ---------------------------
