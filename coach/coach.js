@@ -497,7 +497,7 @@ async function loadInstagramProfile() {
       contentEl.innerHTML = `
         ${avatarHtml}
         <div class="igProfileInfo">
-          <div class="igProfileName">${(p.name || "").replace(/</g, "&lt;")}</div>
+          <div class="igProfileName">${(p.name || p.username || "").replace(/</g, "&lt;")}</div>
           <div class="igProfileHandle">@${(p.username || "").replace(/</g, "&lt;")}</div>
           ${bioHtml}
           ${followersHtml}

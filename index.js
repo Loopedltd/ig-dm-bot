@@ -2794,15 +2794,16 @@ app.get("/coach/api/instagram/status", requireCoach, async (req, res) => {
       return safeJson(res, 200, { connected: false });
     }
 
-    // Auto-sync ig_username from Meta — connection is always ig_user_id based.
-    // If the coach renamed their Instagram account, this updates the stored name
-    // silently without any disconnection or error.
+    // Auto-sync ig_username — routes to graph.instagram.com for Instagram Login
+    // accounts (page_id is null) or graph.facebook.com for Facebook Login accounts.
     let currentUsername = data.ig_username || null;
     if (data.ig_user_id && data.page_access_token) {
       try {
-        const meResp = await fetch(
-          `https://graph.facebook.com/v21.0/${encodeURIComponent(data.ig_user_id)}?fields=username&access_token=${encodeURIComponent(data.page_access_token)}`
-        );
+        const useIgApi = !data.page_id;
+        const meUrl = useIgApi
+          ? `https://graph.instagram.com/v21.0/me?fields=username&access_token=${encodeURIComponent(data.page_access_token)}`
+          : `https://graph.facebook.com/v21.0/${encodeURIComponent(data.ig_user_id)}?fields=username&access_token=${encodeURIComponent(data.page_access_token)}`;
+        const meResp = await fetch(meUrl);
         if (meResp.ok) {
           const meData = await meResp.json();
           if (meData?.username && meData.username !== data.ig_username) {
@@ -2834,7 +2835,7 @@ app.get("/coach/api/instagram/profile", requireCoach, async (req, res) => {
   try {
     const { data: igAcc } = await supabase
       .from("ig_accounts")
-      .select("ig_user_id, page_access_token")
+      .select("ig_user_id, page_id, page_access_token")
       .eq("client_id", req.coach.client_id)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
@@ -2846,11 +2847,16 @@ app.get("/coach/api/instagram/profile", requireCoach, async (req, res) => {
     }
 
     const token = encodeURIComponent(igAcc.page_access_token);
-    const igId  = encodeURIComponent(igAcc.ig_user_id);
+    // Instagram Login accounts have page_id = null; use graph.instagram.com/me.
+    // Facebook Login accounts have a page_id; use graph.facebook.com/{ig_user_id}.
+    const useIgApi = !igAcc.page_id;
+    const base = useIgApi
+      ? "https://graph.instagram.com/v21.0/me"
+      : `https://graph.facebook.com/v21.0/${encodeURIComponent(igAcc.ig_user_id)}`;
 
     const [profileResp, mediaResp] = await Promise.all([
-      fetch(`https://graph.facebook.com/v21.0/${igId}?fields=username,name,biography,followers_count,profile_picture_url&access_token=${token}`),
-      fetch(`https://graph.facebook.com/v21.0/${igId}/media?fields=id,media_type,thumbnail_url,media_url,permalink&limit=9&access_token=${token}`),
+      fetch(`${base}?fields=username,biography,followers_count,profile_picture_url&access_token=${token}`),
+      fetch(`${base}/media?fields=id,media_type,thumbnail_url,media_url,permalink&limit=9&access_token=${token}`),
     ]);
 
     const [profileData, mediaData] = await Promise.all([
@@ -2862,7 +2868,6 @@ app.get("/coach/api/instagram/profile", requireCoach, async (req, res) => {
       connected: true,
       profile: {
         username:            profileData.username            || null,
-        name:                profileData.name                || null,
         biography:           profileData.biography           || null,
         followers_count:     profileData.followers_count     ?? null,
         profile_picture_url: profileData.profile_picture_url || null,
