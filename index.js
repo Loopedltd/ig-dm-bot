@@ -2675,23 +2675,48 @@ async function setClientBotPaused({ clientId, enabled, reason, actor }) {
   return data;
 }
 
-async function lookupIgName(accessToken, igPsid, { useInstagramApi = false } = {}) {
-  try {
-    if (useInstagramApi) {
-      // Instagram Login: look up sender by IGSID via graph.instagram.com
+async function lookupIgName(accessToken, igPsid, { useInstagramApi = false, coachIgUserId = null } = {}) {
+  if (!useInstagramApi) {
+    // Facebook Login: look up by PSID via graph.facebook.com
+    try {
       const resp = await fetch(
-        `https://graph.instagram.com/v21.0/${encodeURIComponent(igPsid)}?fields=name,username&access_token=${encodeURIComponent(accessToken)}`
+        `https://graph.facebook.com/v21.0/${encodeURIComponent(igPsid)}?fields=name&access_token=${encodeURIComponent(accessToken)}`
       );
       const data = await resp.json().catch(() => ({}));
-      // Prefer username (handle) over display name — more recognisable in the dashboard
-      return data?.username || data?.name || null;
+      return data?.name || null;
+    } catch {
+      return null;
     }
-    // Facebook Login: look up by PSID via graph.facebook.com
-    const resp = await fetch(
-      `https://graph.facebook.com/v21.0/${encodeURIComponent(igPsid)}?fields=name&access_token=${encodeURIComponent(accessToken)}`
+  }
+
+  // Instagram Login:
+  // Stage 1 — User Profile API (works after the user has messaged; username may be restricted)
+  try {
+    const profileResp = await fetch(
+      `https://graph.instagram.com/v21.0/${encodeURIComponent(igPsid)}?fields=name,username&access_token=${encodeURIComponent(accessToken)}`
     );
-    const data = await resp.json().catch(() => ({}));
-    return data?.name || null;
+    const profileData = await profileResp.json().catch(() => ({}));
+    if (profileData?.username) return profileData.username;
+    if (profileData?.name) return profileData.name;
+  } catch {}
+
+  // Stage 2 — Conversations API: fetch the conversation thread and read from.username
+  // from the most recent message. This is the only reliable way to get the @handle.
+  if (!coachIgUserId) return null;
+  try {
+    const convResp = await fetch(
+      `https://graph.instagram.com/v21.0/${encodeURIComponent(coachIgUserId)}/conversations` +
+      `?user_id=${encodeURIComponent(igPsid)}&fields=messages&access_token=${encodeURIComponent(accessToken)}`
+    );
+    const convData = await convResp.json().catch(() => ({}));
+    const messageId = convData?.data?.[0]?.messages?.data?.[0]?.id;
+    if (!messageId) return null;
+
+    const msgResp = await fetch(
+      `https://graph.instagram.com/v21.0/${encodeURIComponent(messageId)}?fields=from&access_token=${encodeURIComponent(accessToken)}`
+    );
+    const msgData = await msgResp.json().catch(() => ({}));
+    return msgData?.from?.username || msgData?.from?.name || null;
   } catch {
     return null;
   }
@@ -6267,7 +6292,10 @@ async function processDmEvent(messaging, igAccount, overrideText) {
               try {
                 const acc = await getIgAccountByClientId(lead.client_id).catch(() => null);
                 if (!acc?.page_access_token) return;
-                const name = await lookupIgName(acc.page_access_token, senderId, { useInstagramApi: !acc.page_id });
+                const name = await lookupIgName(acc.page_access_token, senderId, {
+                  useInstagramApi: !acc.page_id,
+                  coachIgUserId: acc.ig_user_id,
+                });
                 if (name) {
                   await supabase.from("leads").update({ ig_name: name }).eq("id", lead.id);
                   lead = { ...lead, ig_name: name };
