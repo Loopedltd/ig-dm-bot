@@ -1025,15 +1025,20 @@ async function sendInstagramTextMessage({
   accessToken,
   recipientId,
   text,
+  useInstagramApi = false,
 }) {
   const payload = {
     recipient: { id: recipientId },
     message: { text: String(text || "").trim() },
   };
 
+  const baseUrl = useInstagramApi
+    ? "https://graph.instagram.com/v21.0/me/messages"
+    : "https://graph.facebook.com/v21.0/me/messages";
+
   return sendWithRetry(async () => {
     const sendResp = await fetch(
-      `https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(accessToken)}`,
+      `${baseUrl}?access_token=${encodeURIComponent(accessToken)}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -4215,7 +4220,7 @@ app.post("/coach/api/leads/:leadId/reply", requireCoach, async (req, res) => {
 
     const { data: igAccount, error: igErr } = await supabase
       .from("ig_accounts")
-      .select("page_access_token")
+      .select("page_access_token, page_id")
       .eq("client_id", clientId)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
@@ -4231,6 +4236,7 @@ app.post("/coach/api/leads/:leadId/reply", requireCoach, async (req, res) => {
       accessToken: igAccount.page_access_token,
       recipientId: lead.ig_psid,
       text,
+      useInstagramApi: !igAccount.page_id,
     });
 
     if (!sendResp.ok) {
@@ -5508,6 +5514,7 @@ async function handleNewFollowerDm(igAccountId, followerId) {
       accessToken: igAccount.page_access_token,
       recipientId: followerId,
       text: followDmText,
+      useInstagramApi: !igAccount.page_id,
     });
 
     log("ig_follow_dm_sent", {
@@ -5607,6 +5614,7 @@ async function handlePostCommentKeyword(igAccountId, commentId, commenterId, com
       accessToken: igAccount.page_access_token,
       recipientId: commenterId,
       text: dmText,
+      useInstagramApi: !igAccount.page_id,
     });
 
     log("ig_comment_keyword_dm_sent", {
@@ -5701,6 +5709,7 @@ async function handlePostCommentAutoDm(igAccountId, commentId, commenterId, comm
       accessToken: igAccount.page_access_token,
       recipientId: commenterId,
       text: dmText,
+      useInstagramApi: !igAccount.page_id,
     });
 
     console.log("comment_auto_dm: DM sent", {
@@ -5823,6 +5832,7 @@ async function processDmQueue() {
           accessToken: igAccount.page_access_token,
           recipientId: item.ig_psid,
           text: item.message,
+          useInstagramApi: !igAccount.page_id,
         });
 
         tracker.count += 1;
@@ -6170,6 +6180,7 @@ async function processDmEvent(messaging, igAccount, overrideText) {
                 accessToken: voiceAcc.page_access_token,
                 recipientId: senderId,
                 text: "Hey, I can't listen to voice notes right now — what's on your mind? Just type it out and I'll get back to you! 💬",
+                useInstagramApi: !voiceAcc.page_id,
               });
             }
             return;
@@ -6266,6 +6277,7 @@ if (storyAutoDmMatched || commentAutoDmMatched || keywordAutoDmMatched) {
                 accessToken: activeIgAccount.page_access_token,
                 recipientId: senderId,
                 text: opener,
+                useInstagramApi: !activeIgAccount.page_id,
               });
 
               // Emit: opener DM sent
@@ -6746,17 +6758,17 @@ log("ig_trigger_opener_sent", {
 // ── Instagram OAuth entry point for login/signup (no auth required) ──────
 app.get("/auth/instagram/start", (req, res) => {
   try {
-    if (!META_APP_ID || !META_REDIRECT_URI || !META_CONFIG_ID) {
+    if (!META_APP_ID || !META_REDIRECT_URI) {
       return res.redirect("/coach/login.html?instagram_error=Meta+not+configured");
     }
     const state = jwt.sign({ type: "instagram_signup" }, COACH_JWT_SECRET, { expiresIn: "15m" });
-    const authUrl = new URL("https://www.facebook.com/v23.0/dialog/oauth");
+    const authUrl = new URL("https://api.instagram.com/oauth/authorize");
     authUrl.searchParams.set("client_id", META_APP_ID);
     authUrl.searchParams.set("redirect_uri", META_REDIRECT_URI);
     authUrl.searchParams.set("response_type", "code");
-    authUrl.searchParams.set("config_id", META_CONFIG_ID);
+    authUrl.searchParams.set("scope", "instagram_business_basic,instagram_business_manage_messages");
+    authUrl.searchParams.set("enable_fb_login", "0");
     authUrl.searchParams.set("state", state);
-    authUrl.searchParams.set("auth_type", "rerequest");
     return res.redirect(authUrl.toString());
   } catch (e) {
     return res.redirect(`/coach/login.html?instagram_error=${encodeURIComponent(String(e?.message || e))}`);
@@ -6806,76 +6818,54 @@ app.get("/auth/instagram/callback", async (req, res) => {
     const isSignupFlow = decoded.type === "instagram_signup";
     const clientId = decoded.client_id; // undefined for signup flow
 
-    // Check if this coach already has an active Instagram connection (connect flow only)
-    const { data: existingIgAccount } = !isSignupFlow ? await supabase
-      .from("ig_accounts")
-      .select("id")
-      .eq("client_id", clientId)
-      .eq("is_active", true)
-      .maybeSingle() : { data: null };
-    const isFirstConnection = !existingIgAccount;
-
-const tokenResp = await fetch(
-  `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${encodeURIComponent(
-    META_APP_ID
-  )}&redirect_uri=${encodeURIComponent(
-    META_REDIRECT_URI
-  )}&client_secret=${encodeURIComponent(
-    META_APP_SECRET
-  )}&code=${encodeURIComponent(code)}`
-);
-
-const tokenData = await tokenResp.json();
-
-if (!tokenResp.ok || !tokenData?.access_token) {
-  return res
-    .status(500)
-    .send(`Failed to exchange code: ${JSON.stringify(tokenData)}`);
-}
-
-const userAccessToken = tokenData.access_token;
-
-const pagesResp = await fetch(
-  `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}&access_token=${encodeURIComponent(
-    userAccessToken
-  )}`
-);
-
-const pagesData = await pagesResp.json();
-
-if (!pagesResp.ok) {
-  return res
-    .status(500)
-    .send(`Failed to fetch pages: ${JSON.stringify(pagesData)}`);
-}
-
-const page = (pagesData?.data || []).find(
-  (p) =>
-    p?.instagram_business_account?.id ||
-    p?.connected_instagram_account?.id
-);
-
-if (!page) {
-  return res
-    .status(400)
-    .send(
-      `No Instagram professional account found. Full pages response: ${JSON.stringify(
-        pagesData
-      )}`
-    );
-}
-
-const ig =
-  page.instagram_business_account ||
-  page.connected_instagram_account;
-
-    // ── SIGNUP FLOW: find or create coach account from IG identity ────────
+    // ── SIGNUP FLOW: Instagram Business Login (api.instagram.com) ────────────
     if (isSignupFlow) {
+      // Stage 1: exchange code for short-lived token
+      const shortTokenResp = await fetch("https://api.instagram.com/oauth/access_token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: META_APP_ID,
+          client_secret: META_APP_SECRET,
+          grant_type: "authorization_code",
+          redirect_uri: META_REDIRECT_URI,
+          code,
+        }).toString(),
+      });
+      const shortTokenData = await shortTokenResp.json().catch(() => ({}));
+
+      if (!shortTokenResp.ok || !shortTokenData?.access_token) {
+        console.error("ig_signup: short token exchange failed", shortTokenData);
+        return res.redirect(
+          `/coach/login.html?instagram_error=${encodeURIComponent("Failed to connect Instagram. Please try again.")}`
+        );
+      }
+
+      const shortToken = shortTokenData.access_token;
+      const igUserId = String(shortTokenData.user_id);
+
+      // Stage 2: exchange for long-lived token (~60 days)
+      const longTokenResp = await fetch(
+        `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${encodeURIComponent(META_APP_SECRET)}&access_token=${encodeURIComponent(shortToken)}`
+      );
+      const longTokenData = await longTokenResp.json().catch(() => ({}));
+      const longToken = longTokenData?.access_token || shortToken;
+      if (!longTokenData?.access_token) {
+        console.warn("ig_signup: long-lived token exchange failed, using short-lived", longTokenData);
+      }
+
+      // Get IG user info
+      const igInfoResp = await fetch(
+        `https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${encodeURIComponent(longToken)}`
+      );
+      const igInfo = await igInfoResp.json().catch(() => ({}));
+      const igUsername = igInfo?.username || null;
+
       // Check if this IG account is already linked to a coach
       const { data: existingIgRow } = await supabase
         .from("ig_accounts")
         .select("client_id")
-        .eq("ig_user_id", ig.id)
+        .eq("ig_user_id", igUserId)
         .maybeSingle();
 
       let resolvedClientId;
@@ -6887,24 +6877,29 @@ const ig =
         if (!isAllowedStripeStatus(cfg?.stripe_subscription_status)) {
           return res.redirect("/coach/login.html?instagram_error=Your+subscription+is+inactive.+Please+contact+support.");
         }
-        // Refresh tokens
+        // Refresh token (page_id: null marks this as Instagram Login flow)
         await supabase.from("ig_accounts").upsert({
           client_id: resolvedClientId,
-          ig_user_id: ig.id,
-          ig_username: ig.username || null,
-          page_id: page.id,
-          page_access_token: page.access_token,
+          ig_user_id: igUserId,
+          ig_username: igUsername,
+          page_id: null,
+          page_access_token: longToken,
           is_active: true,
         }, { onConflict: "ig_user_id" });
-        console.log("ig_signup: returning coach logged in", { resolvedClientId, igUserId: ig.id });
+        console.log("ig_signup: returning coach logged in", { resolvedClientId, igUserId });
       } else {
         // New coach — create client + config + ig_account
         const { data: newClient, error: clientErr } = await supabase
           .from("clients")
-          .insert({ name: ig.username || "New Coach", timezone: "Europe/London" })
+          .insert({ name: igUsername || "New Coach", timezone: "Europe/London" })
           .select()
           .single();
-        if (clientErr) return res.status(500).send("Failed to create account: " + clientErr.message);
+        if (clientErr) {
+          console.error("ig_signup: client insert failed", clientErr);
+          return res.redirect(
+            `/coach/login.html?instagram_error=${encodeURIComponent("Failed to create account. Please try again.")}`
+          );
+        }
 
         resolvedClientId = newClient.id;
 
@@ -6921,28 +6916,29 @@ const ig =
           keyword_auto_dm_enabled: false,
         });
 
+        // page_id: null marks this as Instagram Login flow (uses graph.instagram.com for messaging)
         await supabase.from("ig_accounts").upsert({
           client_id: resolvedClientId,
-          ig_user_id: ig.id,
-          ig_username: ig.username || null,
-          page_id: page.id,
-          page_access_token: page.access_token,
+          ig_user_id: igUserId,
+          ig_username: igUsername,
+          page_id: null,
+          page_access_token: longToken,
           is_active: true,
         }, { onConflict: "ig_user_id" });
 
-        console.log("ig_signup: new coach created", { resolvedClientId, igUsername: ig.username });
+        console.log("ig_signup: new coach created", { resolvedClientId, igUsername });
       }
 
-      // Subscribe webhook non-blocking
+      // Subscribe webhook (non-blocking) — Instagram Business Login uses graph.instagram.com
       void (async () => {
         try {
           const subResp = await fetch(
-            `https://graph.facebook.com/v21.0/${encodeURIComponent(page.id)}/subscribed_apps?subscribed_fields=messages,feed,messaging_postbacks,mention&access_token=${encodeURIComponent(page.access_token)}`,
+            `https://graph.instagram.com/v21.0/me/subscribed_apps?subscribed_fields=messages&access_token=${encodeURIComponent(longToken)}`,
             { method: "POST" }
           );
           const subData = await subResp.json().catch(() => ({}));
           if (!subResp.ok || !subData?.success) {
-            console.error("ig_signup: webhook subscription failed", { page: page.id, subData });
+            console.error("ig_signup: webhook subscription failed", { igUserId, subData });
           }
         } catch (e) {
           console.error("ig_signup: webhook subscription threw", e?.message || e);
@@ -6952,6 +6948,70 @@ const ig =
       const token = signCoachToken(resolvedClientId);
       return res.redirect(`/dashboard?token=${encodeURIComponent(token)}&instagram_connected=1`);
     }
+
+    // ── CONNECT FLOW: existing coach re-connecting via Facebook Login ─────────
+    // Check if this coach already has an active Instagram connection
+    const { data: existingIgAccount } = await supabase
+      .from("ig_accounts")
+      .select("id")
+      .eq("client_id", clientId)
+      .eq("is_active", true)
+      .maybeSingle();
+    const isFirstConnection = !existingIgAccount;
+
+    const tokenResp = await fetch(
+      `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${encodeURIComponent(
+        META_APP_ID
+      )}&redirect_uri=${encodeURIComponent(
+        META_REDIRECT_URI
+      )}&client_secret=${encodeURIComponent(
+        META_APP_SECRET
+      )}&code=${encodeURIComponent(code)}`
+    );
+
+    const tokenData = await tokenResp.json();
+
+    if (!tokenResp.ok || !tokenData?.access_token) {
+      return res
+        .status(500)
+        .send(`Failed to exchange code: ${JSON.stringify(tokenData)}`);
+    }
+
+    const userAccessToken = tokenData.access_token;
+
+    const pagesResp = await fetch(
+      `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}&access_token=${encodeURIComponent(
+        userAccessToken
+      )}`
+    );
+
+    const pagesData = await pagesResp.json();
+
+    if (!pagesResp.ok) {
+      return res
+        .status(500)
+        .send(`Failed to fetch pages: ${JSON.stringify(pagesData)}`);
+    }
+
+    const page = (pagesData?.data || []).find(
+      (p) =>
+        p?.instagram_business_account?.id ||
+        p?.connected_instagram_account?.id
+    );
+
+    if (!page) {
+      return res
+        .status(400)
+        .send(
+          `No Instagram professional account found. Full pages response: ${JSON.stringify(
+            pagesData
+          )}`
+        );
+    }
+
+    const ig =
+      page.instagram_business_account ||
+      page.connected_instagram_account;
 
     // ── CONNECT FLOW: authenticated coach re-connecting / connecting ───────
     // Upsert on ig_user_id (the unique key). Handles: same coach reconnecting,
@@ -7081,6 +7141,7 @@ async function runFollowUpJob() {
         accessToken: igAccount.page_access_token,
         recipientId: lead.ig_psid,
         text,
+        useInstagramApi: !igAccount.page_id,
       });
 
       log("followup_dm_sent", {
