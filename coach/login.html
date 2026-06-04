@@ -179,6 +179,48 @@
 
       <div class="notice" id="notice"></div>
 
+      <a href="/auth/instagram/start" id="igLoginBtn" style="
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        gap:10px;
+        width:100%;
+        padding:13px;
+        border-radius:14px;
+        border:1px solid rgba(15,23,42,0.14);
+        background:#fff;
+        color:#0f172a;
+        font-weight:800;
+        font-size:14px;
+        text-decoration:none;
+        box-sizing:border-box;
+        margin-bottom:14px;
+        box-shadow:0 1px 0 rgba(15,23,42,0.04);
+        transition:filter .12s;
+      " onmouseover="this.style.filter='brightness(0.97)'" onmouseout="this.style.filter=''">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="ig-grad-login" cx="30%" cy="107%" r="150%">
+              <stop offset="0%" stop-color="#fdf497"/>
+              <stop offset="5%" stop-color="#fdf497"/>
+              <stop offset="45%" stop-color="#fd5949"/>
+              <stop offset="60%" stop-color="#d6249f"/>
+              <stop offset="90%" stop-color="#285AEB"/>
+            </radialGradient>
+          </defs>
+          <rect x="2" y="2" width="20" height="20" rx="6" fill="url(#ig-grad-login)"/>
+          <circle cx="12" cy="12" r="4.5" stroke="white" stroke-width="1.8" fill="none"/>
+          <circle cx="17" cy="7" r="1.1" fill="white"/>
+        </svg>
+        Continue with Instagram
+      </a>
+
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <div style="flex:1;height:1px;background:rgba(15,23,42,0.10);"></div>
+        <span style="font-size:12px;color:rgba(15,23,42,0.45);font-weight:600;">or</span>
+        <div style="flex:1;height:1px;background:rgba(15,23,42,0.10);"></div>
+      </div>
+
       <form id="loginForm">
         <label>Email</label>
         <input id="email" type="email" required />
@@ -194,6 +236,7 @@
       </div>
 
       <div class="err" id="error"></div>
+      <div class="err" id="igError"></div>
     </div>
 
 <script src="/coach/coach.js"></script>

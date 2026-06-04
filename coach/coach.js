@@ -12,19 +12,29 @@ document.addEventListener("DOMContentLoaded", () => {
   const params = new URLSearchParams(window.location.search);
 
   if (notice) {
-    if (params.get("paid") === "1") {
-      notice.className = "notice ok";
+    if (params.get(“paid”) === “1”) {
+      notice.className = “notice ok”;
       notice.textContent =
-        "Payment received. Your account may need a password setup first. If you haven’t set one yet, use the “Set password” button below.";
-    } else if (params.get("password_set") === "1") {
-      notice.className = "notice ok";
+        “Payment received. Your account may need a password setup first. If you haven’t set one yet, use the “Set password” button below.”;
+    } else if (params.get(“password_set”) === “1”) {
+      notice.className = “notice ok”;
       notice.textContent =
-        "Password set successfully. You can now log in.";
-    } else if (params.get("cancelled") === "1") {
-      notice.className = "notice warn";
+        “Password set successfully. You can now log in.”;
+    } else if (params.get(“cancelled”) === “1”) {
+      notice.className = “notice warn”;
       notice.textContent =
-        "Payment was cancelled. Complete payment first to access the dashboard.";
+        “Payment was cancelled. Complete payment first to access the dashboard.”;
     }
+  }
+
+  const igErr = params.get(“instagram_error”);
+  if (igErr) {
+    const igErrEl = document.getElementById(“igError”);
+    if (igErrEl) {
+      igErrEl.textContent = decodeURIComponent(igErr);
+      igErrEl.style.display = “block”;
+    }
+    window.history.replaceState({}, “”, window.location.pathname);
   }
 
   form.addEventListener("submit", async (e) => {
@@ -1673,6 +1683,17 @@ function wireQueueRefreshButton() {
   // which causes an infinite reload loop on those pages.
   const isAuthPage = !!document.getElementById("loginForm") || !!document.getElementById("setPasswordForm");
   if (!isAuthPage) {
+    // If redirected here from Instagram OAuth signup, the token arrives as ?token=...
+    // Store it before loadDashboard checks for it, then clean the URL.
+    const _oauthParams = new URLSearchParams(window.location.search);
+    const _oauthToken = _oauthParams.get("token");
+    if (_oauthToken) {
+      setToken(_oauthToken);
+      _oauthParams.delete("token");
+      const _newSearch = _oauthParams.toString();
+      window.history.replaceState({}, "", window.location.pathname + (_newSearch ? "?" + _newSearch : ""));
+    }
+
     wireTopbarButtons();
     loadDashboard();
   }

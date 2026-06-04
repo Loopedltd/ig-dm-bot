@@ -2736,7 +2736,11 @@ function signInstagramState(clientId) {
 
 function verifyInstagramState(state) {
   const decoded = jwt.verify(state, COACH_JWT_SECRET);
-  if (!decoded || decoded.type !== "instagram_connect" || !decoded.client_id) {
+  const validTypes = ["instagram_connect", "instagram_signup"];
+  if (!decoded || !validTypes.includes(decoded.type)) {
+    throw new Error("invalid state");
+  }
+  if (decoded.type === "instagram_connect" && !decoded.client_id) {
     throw new Error("invalid state");
   }
   return decoded;
@@ -6739,8 +6743,23 @@ log("ig_trigger_opener_sent", {
  * ===========================
  */
 
+// ── Instagram OAuth entry point for login/signup (no auth required) ──────
 app.get("/auth/instagram/start", (req, res) => {
-  return res.status(400).send("Use the dashboard Connect Instagram button.");
+  try {
+    if (!META_APP_ID || !META_REDIRECT_URI || !META_CONFIG_ID) {
+      return res.redirect("/coach/login.html?instagram_error=Meta+not+configured");
+    }
+    const state = jwt.sign({ type: "instagram_signup" }, COACH_JWT_SECRET, { expiresIn: "15m" });
+    const authUrl = new URL("https://www.facebook.com/v23.0/dialog/oauth");
+    authUrl.searchParams.set("client_id", META_APP_ID);
+    authUrl.searchParams.set("redirect_uri", META_REDIRECT_URI);
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("config_id", META_CONFIG_ID);
+    authUrl.searchParams.set("state", state);
+    return res.redirect(authUrl.toString());
+  } catch (e) {
+    return res.redirect(`/coach/login.html?instagram_error=${encodeURIComponent(String(e?.message || e))}`);
+  }
 });
 
 app.get("/auth/instagram/callback", async (req, res) => {
@@ -6754,10 +6773,14 @@ app.get("/auth/instagram/callback", async (req, res) => {
     const errorDescription = String(req.query.error_description || "");
 
     if (error) {
+      // Route error back to the right page based on which flow initiated it
+      let errorDest = "/coach/login.html";
+      try {
+        const maybeDecoded = jwt.verify(String(req.query.state || ""), COACH_JWT_SECRET);
+        if (maybeDecoded?.type === "instagram_connect") errorDest = "/settings";
+      } catch {}
       return res.redirect(
-        `/settings?instagram_connected=0&error=${encodeURIComponent(
-          errorDescription || errorReason || error
-        )}`
+        `${errorDest}?instagram_error=${encodeURIComponent(errorDescription || errorReason || error)}`
       );
     }
 
@@ -6779,15 +6802,16 @@ app.get("/auth/instagram/callback", async (req, res) => {
       return res.status(400).send("Invalid or expired state");
     }
 
-    const clientId = decoded.client_id;
+    const isSignupFlow = decoded.type === "instagram_signup";
+    const clientId = decoded.client_id; // undefined for signup flow
 
-    // Check if this coach already has an active Instagram connection
-    const { data: existingIgAccount } = await supabase
+    // Check if this coach already has an active Instagram connection (connect flow only)
+    const { data: existingIgAccount } = !isSignupFlow ? await supabase
       .from("ig_accounts")
       .select("id")
       .eq("client_id", clientId)
       .eq("is_active", true)
-      .maybeSingle();
+      .maybeSingle() : { data: null };
     const isFirstConnection = !existingIgAccount;
 
 const tokenResp = await fetch(
@@ -6844,31 +6868,111 @@ const ig =
   page.instagram_business_account ||
   page.connected_instagram_account;
 
-// Upsert on ig_user_id (the unique key). This handles all three cases atomically:
-//  - Same coach reconnecting their IG: updates tokens in place, no duplicate error.
-//  - IG was previously under a different client_id: updates that row, transferring
-//    ownership to this coach (client_id changes to clientId). Leads/config untouched.
-//  - Genuinely new IG account: inserts fresh.
-// client_configs and leads are NEVER touched — they stay exactly as they were.
+    // ── SIGNUP FLOW: find or create coach account from IG identity ────────
+    if (isSignupFlow) {
+      // Check if this IG account is already linked to a coach
+      const { data: existingIgRow } = await supabase
+        .from("ig_accounts")
+        .select("client_id")
+        .eq("ig_user_id", ig.id)
+        .maybeSingle();
 
-console.log("ig_connect: upsert ig_accounts", { clientId, igUserId: ig.id });
-const { error: upsertErr } = await supabase
-  .from("ig_accounts")
-  .upsert({
-    client_id: clientId,
-    ig_user_id: ig.id,
-    ig_username: ig.username || null,
-    page_id: page.id,
-    page_access_token: page.access_token,
-    is_active: true,
-  }, { onConflict: "ig_user_id" });
+      let resolvedClientId;
 
-// Deactivate any other active rows for this client (coach was previously using a different IG)
-await supabase
-  .from("ig_accounts")
-  .update({ is_active: false })
-  .eq("client_id", clientId)
-  .neq("ig_user_id", ig.id);
+      if (existingIgRow?.client_id) {
+        // Returning coach — verify subscription then log them in
+        resolvedClientId = existingIgRow.client_id;
+        const cfg = await getClientConfig(resolvedClientId);
+        if (!isAllowedStripeStatus(cfg?.stripe_subscription_status)) {
+          return res.redirect("/coach/login.html?instagram_error=Your+subscription+is+inactive.+Please+contact+support.");
+        }
+        // Refresh tokens
+        await supabase.from("ig_accounts").upsert({
+          client_id: resolvedClientId,
+          ig_user_id: ig.id,
+          ig_username: ig.username || null,
+          page_id: page.id,
+          page_access_token: page.access_token,
+          is_active: true,
+        }, { onConflict: "ig_user_id" });
+        console.log("ig_signup: returning coach logged in", { resolvedClientId, igUserId: ig.id });
+      } else {
+        // New coach — create client + config + ig_account
+        const { data: newClient, error: clientErr } = await supabase
+          .from("clients")
+          .insert({ name: ig.username || "New Coach", timezone: "Europe/London" })
+          .select()
+          .single();
+        if (clientErr) return res.status(500).send("Failed to create account: " + clientErr.message);
+
+        resolvedClientId = newClient.id;
+
+        await supabase.from("client_configs").insert({
+          client_id: resolvedClientId,
+          stripe_subscription_status: "demo",
+          system_prompt: "You are a helpful assistant that qualifies leads and books sales calls on behalf of this coach. Keep replies short, casual and conversational. Ask one question at a time to understand the lead's goals and situation before moving towards booking a call.",
+          tone: "direct",
+          style: "short, punchy",
+          vocabulary: "casual UK coach",
+          niche: "generic",
+          story_reply_auto_dm_enabled: false,
+          comment_reply_auto_dm_enabled: false,
+          keyword_auto_dm_enabled: false,
+        });
+
+        await supabase.from("ig_accounts").upsert({
+          client_id: resolvedClientId,
+          ig_user_id: ig.id,
+          ig_username: ig.username || null,
+          page_id: page.id,
+          page_access_token: page.access_token,
+          is_active: true,
+        }, { onConflict: "ig_user_id" });
+
+        console.log("ig_signup: new coach created", { resolvedClientId, igUsername: ig.username });
+      }
+
+      // Subscribe webhook non-blocking
+      void (async () => {
+        try {
+          const subResp = await fetch(
+            `https://graph.facebook.com/v21.0/${encodeURIComponent(page.id)}/subscribed_apps?subscribed_fields=messages,feed,messaging_postbacks,mention&access_token=${encodeURIComponent(page.access_token)}`,
+            { method: "POST" }
+          );
+          const subData = await subResp.json().catch(() => ({}));
+          if (!subResp.ok || !subData?.success) {
+            console.error("ig_signup: webhook subscription failed", { page: page.id, subData });
+          }
+        } catch (e) {
+          console.error("ig_signup: webhook subscription threw", e?.message || e);
+        }
+      })();
+
+      const token = signCoachToken(resolvedClientId);
+      return res.redirect(`/dashboard?token=${encodeURIComponent(token)}&instagram_connected=1`);
+    }
+
+    // ── CONNECT FLOW: authenticated coach re-connecting / connecting ───────
+    // Upsert on ig_user_id (the unique key). Handles: same coach reconnecting,
+    // IG previously under different client_id, or genuinely new IG account.
+    console.log("ig_connect: upsert ig_accounts", { clientId, igUserId: ig.id });
+    const { error: upsertErr } = await supabase
+      .from("ig_accounts")
+      .upsert({
+        client_id: clientId,
+        ig_user_id: ig.id,
+        ig_username: ig.username || null,
+        page_id: page.id,
+        page_access_token: page.access_token,
+        is_active: true,
+      }, { onConflict: "ig_user_id" });
+
+    // Deactivate any other active rows for this client (was using a different IG)
+    await supabase
+      .from("ig_accounts")
+      .update({ is_active: false })
+      .eq("client_id", clientId)
+      .neq("ig_user_id", ig.id);
 
     if (upsertErr) {
       return res
@@ -6876,7 +6980,7 @@ await supabase
         .send(`Failed to save Instagram account: ${upsertErr.message}`);
     }
 
-    // Subscribe the page to webhook fields — non-blocking, errors are logged only
+    // Subscribe the page to webhook fields — non-blocking
     void (async () => {
       try {
         const subResp = await fetch(
@@ -6894,8 +6998,7 @@ await supabase
       }
     })();
 
-    // Always land on the dashboard after connecting, so the coach can see
-    // the Connected Instagram Profile section with live account data.
+    // Always land on the dashboard after connecting.
     return res.redirect("/dashboard?instagram_connected=1");
   } catch (e) {
     return res.status(500).send(String(e?.message || e));
