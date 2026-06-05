@@ -194,6 +194,8 @@ const META_CONFIG_ID = process.env.META_CONFIG_ID;
 // Instagram App (separate from Meta App — created under Instagram > API setup with Instagram login)
 const INSTAGRAM_APP_ID = process.env.INSTAGRAM_APP_ID;
 const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET;
+// Redirect URI for the Facebook Login for Business callback (must be registered in Meta App Dashboard)
+const META_FB_REDIRECT_URI = process.env.META_FB_REDIRECT_URI;
 
 const STRIPE_PRICE_SETUP =
   process.env.STRIPE_PRICE_SETUP || "price_1T7bDyCS3UXrJEm9cHGA2lrG";
@@ -2802,6 +2804,40 @@ function verifyInstagramState(state) {
   return decoded;
 }
 
+// ── Facebook Login for Business chain helpers ──────────────────────────────
+function signFbChainState({ clientId, isNew }) {
+  return jwt.sign(
+    { type: "facebook_chain", client_id: clientId, is_new: !!isNew },
+    COACH_JWT_SECRET,
+    { expiresIn: "15m" }
+  );
+}
+
+function verifyFbChainState(state) {
+  const decoded = jwt.verify(state, COACH_JWT_SECRET);
+  if (!decoded || decoded.type !== "facebook_chain" || !decoded.client_id) {
+    throw new Error("invalid facebook chain state");
+  }
+  return decoded;
+}
+
+function buildFacebookOAuthUrl(state) {
+  const url = new URL("https://www.facebook.com/v23.0/dialog/oauth");
+  url.searchParams.set("client_id", META_APP_ID);
+  url.searchParams.set("redirect_uri", META_FB_REDIRECT_URI);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", [
+    "instagram_basic",
+    "instagram_manage_comments",
+    "pages_show_list",
+    "pages_manage_metadata",
+    "pages_messaging",
+    "pages_read_engagement",
+  ].join(","));
+  url.searchParams.set("state", state);
+  return url.toString();
+}
+
 app.get("/coach/api/instagram/connect-url", requireCoach, async (req, res) => {
   try {
     if (!INSTAGRAM_APP_ID || !META_REDIRECT_URI) {
@@ -2814,7 +2850,7 @@ app.get("/coach/api/instagram/connect-url", requireCoach, async (req, res) => {
     authUrl.searchParams.set("client_id", INSTAGRAM_APP_ID);
     authUrl.searchParams.set("redirect_uri", META_REDIRECT_URI);
     authUrl.searchParams.set("response_type", "code");
-    authUrl.searchParams.set("scope", "instagram_business_basic,instagram_business_manage_messages");
+    authUrl.searchParams.set("scope", "instagram_business_basic,instagram_business_manage_messages,instagram_manage_comments,instagram_manage_insights");
     authUrl.searchParams.set("enable_fb_login", "0");
     authUrl.searchParams.set("force_reauth", "0");
     authUrl.searchParams.set("state", state);
@@ -5915,12 +5951,13 @@ async function handlePostCommentKeyword(igAccountId, commentId, commenterId, com
       if (error) console.error("comment_activity_log insert failed:", error.message, error.code);
     });
 
-    // Optionally post a public reply to the comment (Facebook Login accounts only)
-    if (cfg.comment_keyword_reply_enabled && igAccount.page_id) {
+    // Optionally post a public reply to the comment (Facebook Login or chained Instagram+Facebook accounts)
+    const commentReplyToken = igAccount.fb_page_token || igAccount.page_access_token;
+    if (cfg.comment_keyword_reply_enabled && (igAccount.fb_page_token || igAccount.page_id)) {
       const replyText = String(cfg.comment_keyword_reply_text || "").trim();
       if (replyText) {
         const { ok: replyOk, data: replyData } = await postPublicCommentReply(
-          igAccount.page_access_token,
+          commentReplyToken,
           commentId,
           replyText
         );
@@ -7093,7 +7130,7 @@ app.get("/auth/instagram/start", (req, res) => {
     authUrl.searchParams.set("client_id", INSTAGRAM_APP_ID);
     authUrl.searchParams.set("redirect_uri", META_REDIRECT_URI);
     authUrl.searchParams.set("response_type", "code");
-    authUrl.searchParams.set("scope", "instagram_business_basic,instagram_business_manage_messages");
+    authUrl.searchParams.set("scope", "instagram_business_basic,instagram_business_manage_messages,instagram_manage_comments,instagram_manage_insights");
     authUrl.searchParams.set("enable_fb_login", "0");
     authUrl.searchParams.set("force_reauth", "0");
     authUrl.searchParams.set("state", state);
@@ -7283,6 +7320,12 @@ app.get("/auth/instagram/callback", async (req, res) => {
         console.error("ig_signup: webhook subscription threw", e?.message || e)
       );
 
+      // Chain into Facebook Login for Business — stores fb_page_token on the same row
+      if (META_APP_ID && META_FB_REDIRECT_URI) {
+        const chainState = signFbChainState({ clientId: resolvedClientId, isNew: !existingIgRow?.client_id });
+        return res.redirect(buildFacebookOAuthUrl(chainState));
+      }
+      // Facebook not configured — fall back to dashboard directly
       const token = signCoachToken(resolvedClientId);
       return res.redirect(`/dashboard?token=${encodeURIComponent(token)}&instagram_connected=1`);
     }
@@ -7372,9 +7415,137 @@ app.get("/auth/instagram/callback", async (req, res) => {
       console.error("ig_connect: webhook subscription threw", e?.message || e)
     );
 
+    // Chain into Facebook Login for Business
+    if (META_APP_ID && META_FB_REDIRECT_URI) {
+      const chainState = signFbChainState({ clientId, isNew: false });
+      return res.redirect(buildFacebookOAuthUrl(chainState));
+    }
     return res.redirect("/dashboard?instagram_connected=1");
   } catch (e) {
     return res.status(500).send(String(e?.message || e));
+  }
+});
+
+// ── Facebook Login for Business callback ─────────────────────────────────────
+// Called after the user completes the Meta business asset selection.
+// Exchanges the code for a page access token and stores it alongside the
+// already-stored Instagram Login token on the same ig_accounts row.
+app.get("/auth/facebook/callback", async (req, res) => {
+  // Determine fallback destination before touching anything
+  let errorDest = "/dashboard";
+  let clientId = null;
+  let isNew = false;
+
+  try {
+    const stateParam = String(req.query.state || "");
+    const decoded = verifyFbChainState(stateParam);
+    clientId = decoded.client_id;
+    isNew = !!decoded.is_new;
+    errorDest = isNew ? "/coach/login.html" : "/dashboard";
+  } catch {
+    return res.redirect("/dashboard?facebook_error=Invalid+or+expired+state");
+  }
+
+  // Helper: redirect to final destination (different for new vs returning coach)
+  const finishRedirect = (extra = "") => {
+    if (isNew) {
+      const token = signCoachToken(clientId);
+      return res.redirect(`/dashboard?token=${encodeURIComponent(token)}&instagram_connected=1${extra}`);
+    }
+    return res.redirect(`/dashboard?instagram_connected=1${extra}`);
+  };
+
+  const error = String(req.query.error || "");
+  if (error) {
+    // User cancelled or denied — Instagram token already stored, so account is usable.
+    // Complete onboarding without Facebook features.
+    console.warn("fb_callback: user denied Facebook OAuth", { error, clientId });
+    return finishRedirect("&facebook_skipped=1");
+  }
+
+  const code = String(req.query.code || "");
+  if (!code) return finishRedirect("&facebook_skipped=1");
+
+  try {
+    // Stage 1: exchange code for short-lived user token
+    const shortResp = await fetch(
+      `https://graph.facebook.com/v23.0/oauth/access_token` +
+      `?client_id=${encodeURIComponent(META_APP_ID)}` +
+      `&redirect_uri=${encodeURIComponent(META_FB_REDIRECT_URI)}` +
+      `&client_secret=${encodeURIComponent(META_APP_SECRET)}` +
+      `&code=${encodeURIComponent(code)}`
+    );
+    const shortData = await shortResp.json().catch(() => ({}));
+    if (!shortResp.ok || !shortData?.access_token) {
+      console.error("fb_callback: short token exchange failed", shortData);
+      return finishRedirect("&facebook_error=1");
+    }
+
+    // Stage 2: exchange for long-lived user token (~60 days)
+    // Long-lived user tokens yield non-expiring page access tokens.
+    const longResp = await fetch(
+      `https://graph.facebook.com/v23.0/oauth/access_token` +
+      `?grant_type=fb_exchange_token` +
+      `&client_id=${encodeURIComponent(META_APP_ID)}` +
+      `&client_secret=${encodeURIComponent(META_APP_SECRET)}` +
+      `&fb_exchange_token=${encodeURIComponent(shortData.access_token)}`
+    );
+    const longData = await longResp.json().catch(() => ({}));
+    const userToken = longData?.access_token || shortData.access_token;
+    if (!longData?.access_token) {
+      console.warn("fb_callback: long token exchange failed, using short-lived", longData);
+    }
+
+    // Stage 3: get pages list — each page includes its own long-lived access_token
+    const pagesResp = await fetch(
+      `https://graph.facebook.com/v23.0/me/accounts` +
+      `?fields=id,name,access_token,instagram_business_account` +
+      `&access_token=${encodeURIComponent(userToken)}`
+    );
+    const pagesData = await pagesResp.json().catch(() => ({}));
+    const pages = Array.isArray(pagesData?.data) ? pagesData.data : [];
+
+    if (!pages.length) {
+      console.warn("fb_callback: no Facebook pages returned", { clientId, pagesData });
+      return finishRedirect("&facebook_error=no_pages");
+    }
+
+    // Match the page whose instagram_business_account.id matches the stored ig_user_id
+    const { data: igRows } = await supabase
+      .from("ig_accounts")
+      .select("id, ig_user_id")
+      .eq("client_id", clientId)
+      .eq("is_active", true)
+      .is("page_id", null)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    const igRow = Array.isArray(igRows) ? igRows[0] : null;
+    const matchedPage = igRow
+      ? pages.find(p => String(p.instagram_business_account?.id) === igRow.ig_user_id)
+      : null;
+    const page = matchedPage || pages[0];
+
+    console.log("fb_callback: page matched", {
+      clientId,
+      pageId: page?.id,
+      pageName: page?.name,
+      matched: !!matchedPage,
+      igUserId: igRow?.ig_user_id,
+    });
+
+    // Store fb_page_id and fb_page_token on the Instagram Login row
+    if (igRow?.id && page?.access_token && page?.id) {
+      await supabase
+        .from("ig_accounts")
+        .update({ fb_page_id: page.id, fb_page_token: page.access_token })
+        .eq("id", igRow.id);
+    }
+
+    return finishRedirect();
+  } catch (e) {
+    console.error("fb_callback: error", e?.message || e);
+    return finishRedirect("&facebook_error=1");
   }
 });
 
