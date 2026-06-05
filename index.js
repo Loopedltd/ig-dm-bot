@@ -2827,12 +2827,8 @@ function buildFacebookOAuthUrl(state) {
   url.searchParams.set("redirect_uri", META_FB_REDIRECT_URI);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", [
-    "instagram_basic",
-    "instagram_manage_comments",
-    "pages_show_list",
-    "pages_manage_metadata",
-    "pages_messaging",
-    "pages_read_engagement",
+    "instagram_business_basic",
+    "instagram_business_manage_messages",
   ].join(","));
   url.searchParams.set("state", state);
   return url.toString();
