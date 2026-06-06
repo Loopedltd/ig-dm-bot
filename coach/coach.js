@@ -359,6 +359,7 @@ async function loadInstagramConnectionStatus() {
       method: "GET",
     });
 
+    const webhookBadge = qs("#asBadgeWebhook");
     if (data?.connected) {
       badgeEl.className = "badge connected";
       badgeEl.textContent = "Connected";
@@ -370,6 +371,8 @@ async function loadInstagramConnectionStatus() {
       btn.textContent = "Reconnect Instagram";
       btn.disabled = false;
       btn.style.opacity = "1";
+
+      if (webhookBadge) webhookBadge.className = "asBadge asBadge--green";
     } else {
       badgeEl.className = "badge warn";
       badgeEl.textContent = "Not connected";
@@ -379,6 +382,8 @@ async function loadInstagramConnectionStatus() {
       btn.textContent = "Connect Instagram";
       btn.disabled = false;
       btn.style.opacity = "1";
+
+      if (webhookBadge) webhookBadge.className = "asBadge asBadge--grey";
     }
   } catch (e) {
     // Real auth failure — clear stale token then send back to login
