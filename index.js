@@ -7549,7 +7549,7 @@ app.get("/auth/facebook/callback", async (req, res) => {
     // Match the page whose instagram_business_account.id matches the stored ig_user_id
     const { data: igRows } = await supabase
       .from("ig_accounts")
-      .select("id, ig_user_id")
+      .select("id, ig_user_id, page_access_token")
       .eq("client_id", clientId)
       .eq("is_active", true)
       .is("page_id", null)
@@ -7576,6 +7576,13 @@ app.get("/auth/facebook/callback", async (req, res) => {
         .from("ig_accounts")
         .update({ fb_page_id: page.id, fb_page_token: page.access_token })
         .eq("id", igRow.id);
+    }
+
+    // Resubscribe webhook now that both tokens are stored (non-blocking)
+    if (igRow?.page_access_token && igRow?.ig_user_id) {
+      void subscribeIgWebhook(igRow.page_access_token, igRow.ig_user_id).catch((e) =>
+        console.error("fb_callback: webhook resubscribe threw", e?.message || e)
+      );
     }
 
     return finishRedirect();
