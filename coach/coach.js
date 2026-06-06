@@ -1516,6 +1516,24 @@ function wireQueueRefreshButton() {
 
     container.innerHTML = messages.map((m) => {
       const dir = m.direction === "out" ? "out" : "in";
+
+      if (m.message_type === "story_reply") {
+        const hasMedia = !!m.story_media_url;
+        const thumbnailHtml = hasMedia
+          ? `<img class="storyReplyThumb" src="${escHtml(m.story_media_url)}" alt="Story" loading="lazy">`
+          : "";
+        const storyLabel = hasMedia
+          ? "Replied to your story"
+          : "Replied to your story <span class=\"storyExpired\">(story expired)</span>";
+        return `<div class="inboxBubbleRow inboxBubbleRow--${dir}">
+          <div class="inboxBubble inboxBubble--${dir} inboxBubble--storyReply">
+            <div class="storyReplyContext">${thumbnailHtml}<span class="storyReplyLabel">${storyLabel}</span></div>
+            ${m.text && m.text !== "[non-text message]" ? `<div class="storyReplyText">${escHtml(m.text)}</div>` : ""}
+          </div>
+          <div class="inboxTime">${fmtMsgTime(m.created_at)}</div>
+        </div>`;
+      }
+
       return `<div class="inboxBubbleRow inboxBubbleRow--${dir}">
         <div class="inboxBubble inboxBubble--${dir}">${escHtml(m.text)}</div>
         <div class="inboxTime">${fmtMsgTime(m.created_at)}</div>

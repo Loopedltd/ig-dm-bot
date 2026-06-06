@@ -4493,7 +4493,7 @@ app.get("/coach/api/leads/:leadId/messages", requireCoach, async (req, res) => {
 
     const { data: messages, error: msgErr } = await supabase
       .from("messages")
-      .select("id, direction, text, created_at")
+      .select("id, direction, text, created_at, message_type, story_id, story_url, story_media_url")
       .eq("lead_id", leadId)
       .order("created_at", { ascending: true })
       .limit(200);
@@ -6394,6 +6394,34 @@ log("ig_event_debug", {
   }
 });
 
+// ─── Story media fetch helper ─────────────────────────────────────────────────
+// Returns { storyId, storyUrl, storyMediaUrl } — any field may be null if the
+// story has expired or the API call fails.
+async function fetchStoryContext(accessToken, messaging) {
+  const replyToStory = messaging?.message?.reply_to?.story || null;
+  if (!replyToStory) return { storyId: null, storyUrl: null, storyMediaUrl: null };
+
+  // reply_to.story may contain { id, url } directly in the webhook payload
+  const storyId = replyToStory.id || null;
+  const webhookUrl = replyToStory.url || null;
+
+  if (!storyId || !accessToken) {
+    return { storyId, storyUrl: webhookUrl, storyMediaUrl: null };
+  }
+
+  try {
+    const resp = await fetch(
+      `https://graph.instagram.com/v21.0/${encodeURIComponent(storyId)}?fields=media_url,thumbnail_url,media_type&access_token=${encodeURIComponent(accessToken)}`
+    );
+    const data = await resp.json().catch(() => ({}));
+    const storyMediaUrl = data?.media_url || data?.thumbnail_url || null;
+    return { storyId, storyUrl: webhookUrl, storyMediaUrl };
+  } catch (e) {
+    console.warn("fetchStoryContext: API call failed", e?.message || e);
+    return { storyId, storyUrl: webhookUrl, storyMediaUrl: null };
+  }
+}
+
 // ─── DM processing (called either directly or after debounce flush) ───────────
 async function processDmEvent(messaging, igAccount, overrideText) {
   try {
@@ -6455,15 +6483,30 @@ async function processDmEvent(messaging, igAccount, overrideText) {
             })();
           }
 
+          // Detect story reply and fetch media context (non-blocking on failure)
+          const isStoryReply = !isEcho && isStoryReplyTrigger(messaging);
+          let storyContext = { storyId: null, storyUrl: null, storyMediaUrl: null };
+          if (isStoryReply) {
+            storyContext = await fetchStoryContext(igAccount.page_access_token, messaging).catch(() => storyContext);
+          }
+
+          const messageRow = {
+            lead_id: lead.id,
+            client_id: lead.client_id,
+            direction: isEcho ? "out" : "in",
+            text: text || "[non-text message]",
+            created_at: new Date().toISOString(),
+            message_type: isStoryReply ? "story_reply" : "dm",
+            ...(isStoryReply && {
+              story_id: storyContext.storyId,
+              story_url: storyContext.storyUrl,
+              story_media_url: storyContext.storyMediaUrl,
+            }),
+          };
+
           const { error: insertIncomingError } = await supabase
             .from("messages")
-            .insert({
-              lead_id: lead.id,
-              client_id: lead.client_id,
-              direction: isEcho ? "out" : "in",
-              text: text || "[non-text message]",
-              created_at: new Date().toISOString(),
-            });
+            .insert(messageRow);
 
           if (insertIncomingError) {
             console.error("messages insert incoming failed:", JSON.stringify(insertIncomingError));
