@@ -2904,20 +2904,33 @@ app.post("/coach/api/instagram/resubscribe", requireCoach, async (req, res) => {
       return safeJson(res, 404, { error: "No active Instagram Login account found" });
     }
 
+    // If the caller knows the correct webhook recipient ID (IGBID), accept it as an
+    // override. This handles the ASID vs IGBID namespace mismatch: the /me endpoint
+    // returns the App-Scoped User ID but the webhook delivers the Instagram Business
+    // Account ID — they differ and the webhook recipient ID is authoritative for routing.
+    const overrideId = req.body?.webhook_recipient_id
+      ? String(req.body.webhook_recipient_id).trim()
+      : null;
+
     // Get authoritative user ID from /me (string, no float64 precision issue)
     const meResp = await fetch(
       `https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${encodeURIComponent(acc.page_access_token)}`
     );
     const meData = await meResp.json().catch(() => ({}));
-    const correctId = meData?.id ? String(meData.id) : null;
+    const meId = meData?.id ? String(meData.id) : null;
+    const correctId = overrideId || meId;
     const correctUsername = meData?.username || null;
 
     let idFixed = false;
     if (correctId && correctId !== acc.ig_user_id) {
-      console.log("resubscribe: correcting ig_user_id", { stored: acc.ig_user_id, correct: correctId });
+      console.log("resubscribe: correcting ig_user_id", {
+        stored: acc.ig_user_id,
+        correct: correctId,
+        source: overrideId ? "webhook_recipient_override" : "me_endpoint",
+      });
       await supabase
         .from("ig_accounts")
-        .update({ ig_user_id: correctId, ig_username: correctUsername || undefined })
+        .update({ ig_user_id: correctId, ...(correctUsername ? { ig_username: correctUsername } : {}) })
         .eq("id", acc.id);
       idFixed = true;
     }
@@ -2929,7 +2942,7 @@ app.post("/coach/api/instagram/resubscribe", requireCoach, async (req, res) => {
       return safeJson(res, 502, { error: "Webhook subscription failed", httpStatus, detail: data, idFixed });
     }
 
-    return safeJson(res, 200, { ok: true, detail: data, idFixed, ig_user_id: igUserId });
+    return safeJson(res, 200, { ok: true, detail: data, idFixed, ig_user_id: igUserId, me_id: meId });
   } catch (e) {
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
@@ -6328,13 +6341,13 @@ log("ig_event_debug", {
           // don't cause an error — we just take the most recently created active row.
           const { data: igRows, error: igLookupError } = await supabase
             .from("ig_accounts")
-            .select("client_id, ig_user_id, page_id")
+            .select("id, client_id, ig_user_id, page_id, page_access_token")
             .eq("is_active", true)
             .or(`page_id.eq.${recipientId},ig_user_id.eq.${recipientId}`)
             .order("created_at", { ascending: false })
             .limit(1);
 
-          const igAccount = Array.isArray(igRows) ? igRows[0] : null;
+          let igAccount = Array.isArray(igRows) ? igRows[0] : null;
 
           console.log("webhook: ig_accounts lookup", {
             recipientId,
@@ -6347,6 +6360,35 @@ log("ig_event_debug", {
             lookupError: igLookupError?.message || null,
             lookupErrorCode: igLookupError?.code || null,
           });
+
+          // Self-heal: Instagram Business Login returns an App-Scoped User ID (ASID)
+          // from /me, but the webhook delivers the Instagram Business Account ID (IGBID)
+          // as recipient.id — different namespaces. When the lookup fails and there is
+          // exactly one active Instagram Login account, update ig_user_id to the webhook
+          // recipient ID so all future webhooks match correctly.
+          if (!igLookupError && !igAccount?.client_id) {
+            const { data: fallbackRows } = await supabase
+              .from("ig_accounts")
+              .select("id, client_id, ig_user_id, page_id, page_access_token")
+              .eq("is_active", true)
+              .is("page_id", null)
+              .order("created_at", { ascending: false })
+              .limit(2);
+
+            if (Array.isArray(fallbackRows) && fallbackRows.length === 1) {
+              const fallback = fallbackRows[0];
+              console.warn("webhook: ig_user_id mismatch — self-healing", {
+                recipientId,
+                storedId: fallback.ig_user_id,
+                accountId: fallback.id,
+              });
+              await supabase
+                .from("ig_accounts")
+                .update({ ig_user_id: recipientId })
+                .eq("id", fallback.id);
+              igAccount = { ...fallback, ig_user_id: recipientId };
+            }
+          }
 
           if (igLookupError || !igAccount?.client_id) {
             console.error("No active Instagram account/client mapping found", {
