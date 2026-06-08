@@ -4519,6 +4519,88 @@ app.get("/coach/api/leads/:leadId/messages", requireCoach, async (req, res) => {
   }
 });
 
+// On-demand story media fetch — called by the inbox when story_media_url is null.
+// Uses the coach's current access token from ig_accounts (fresher than the one
+// available at webhook time). Updates the message row if media is found.
+app.get("/coach/api/messages/:messageId/story-media", requireCoach, async (req, res) => {
+  try {
+    const clientId = req.coach.client_id;
+    const messageId = req.params.messageId;
+
+    // Verify message belongs to this client and is a story reply
+    const { data: msg, error: msgErr } = await supabase
+      .from("messages")
+      .select("id, story_id, story_url, story_media_url, message_type, lead_id")
+      .eq("id", messageId)
+      .eq("client_id", clientId)
+      .maybeSingle();
+
+    if (msgErr) return safeJson(res, 500, { error: msgErr.message });
+    if (!msg) return safeJson(res, 404, { error: "Message not found" });
+    if (msg.message_type !== "story_reply") return safeJson(res, 400, { error: "Not a story reply" });
+
+    // If already resolved, return immediately
+    if (msg.story_media_url) {
+      return safeJson(res, 200, { ok: true, story_media_url: msg.story_media_url, story_url: msg.story_url, source: "cached" });
+    }
+
+    if (!msg.story_id) {
+      return safeJson(res, 200, { ok: true, story_media_url: null, story_url: msg.story_url, source: "no_story_id" });
+    }
+
+    // Get coach's current access token
+    const { data: igRows } = await supabase
+      .from("ig_accounts")
+      .select("page_access_token, fb_page_token")
+      .eq("client_id", clientId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    const igAccount = Array.isArray(igRows) ? igRows[0] : null;
+    const accessToken = igAccount?.page_access_token || null;
+
+    if (!accessToken) {
+      return safeJson(res, 200, { ok: true, story_media_url: null, story_url: msg.story_url, source: "no_token" });
+    }
+
+    // Try graph.instagram.com
+    let storyMediaUrl = null;
+    let source = "not_found";
+
+    const igApiUrl = `https://graph.instagram.com/v21.0/${encodeURIComponent(msg.story_id)}?fields=media_url,thumbnail_url,media_type&access_token=${encodeURIComponent(accessToken)}`;
+    console.log("story-media endpoint: calling graph.instagram.com", { messageId, storyId: msg.story_id });
+    const igResp = await fetch(igApiUrl);
+    const igData = await igResp.json().catch(() => ({}));
+    console.log("story-media endpoint: graph.instagram.com response", { messageId, storyId: msg.story_id, status: igResp.status, data: igData });
+
+    storyMediaUrl = igData?.media_url || igData?.thumbnail_url || null;
+    if (storyMediaUrl) source = "graph.instagram.com";
+
+    // Fallback: graph.facebook.com
+    if (!storyMediaUrl) {
+      const fbApiUrl = `https://graph.facebook.com/v23.0/${encodeURIComponent(msg.story_id)}?fields=media_url,thumbnail_url,media_type&access_token=${encodeURIComponent(accessToken)}`;
+      console.log("story-media endpoint: calling graph.facebook.com fallback", { messageId, storyId: msg.story_id });
+      const fbResp = await fetch(fbApiUrl);
+      const fbData = await fbResp.json().catch(() => ({}));
+      console.log("story-media endpoint: graph.facebook.com response", { messageId, storyId: msg.story_id, status: fbResp.status, data: fbData });
+
+      storyMediaUrl = fbData?.media_url || fbData?.thumbnail_url || null;
+      if (storyMediaUrl) source = "graph.facebook.com";
+    }
+
+    // Persist if found so future loads use cached value
+    if (storyMediaUrl) {
+      await supabase.from("messages").update({ story_media_url: storyMediaUrl }).eq("id", messageId);
+    }
+
+    return safeJson(res, 200, { ok: true, story_media_url: storyMediaUrl, story_url: msg.story_url, source });
+  } catch (e) {
+    console.error("story-media endpoint error", e?.message || e);
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
 app.post("/coach/api/leads/:leadId/reply", requireCoach, async (req, res) => {
   try {
     const leadId = req.params.leadId;
@@ -6447,21 +6529,51 @@ async function fetchStoryContext(accessToken, messaging) {
   const storyId = replyToStory.id || null;
   const webhookUrl = replyToStory.url || null;
 
+  console.log("fetchStoryContext: entry", { storyId, webhookUrl, hasToken: !!accessToken });
+
   if (!storyId || !accessToken) {
+    console.warn("fetchStoryContext: missing storyId or accessToken — skipping API call", { storyId, hasToken: !!accessToken });
     return { storyId, storyUrl: webhookUrl, storyMediaUrl: null };
   }
 
+  // Try graph.instagram.com first (Instagram Business Login token)
   try {
-    const resp = await fetch(
-      `https://graph.instagram.com/v21.0/${encodeURIComponent(storyId)}?fields=media_url,thumbnail_url,media_type&access_token=${encodeURIComponent(accessToken)}`
-    );
-    const data = await resp.json().catch(() => ({}));
-    const storyMediaUrl = data?.media_url || data?.thumbnail_url || null;
-    return { storyId, storyUrl: webhookUrl, storyMediaUrl };
+    const igUrl = `https://graph.instagram.com/v21.0/${encodeURIComponent(storyId)}?fields=media_url,thumbnail_url,media_type&access_token=${encodeURIComponent(accessToken)}`;
+    console.log("fetchStoryContext: calling graph.instagram.com", { storyId, url: igUrl.replace(accessToken, "[REDACTED]") });
+    const igResp = await fetch(igUrl);
+    const igData = await igResp.json().catch(() => ({}));
+    console.log("fetchStoryContext: graph.instagram.com raw response", { storyId, status: igResp.status, data: igData });
+
+    const storyMediaUrl = igData?.media_url || igData?.thumbnail_url || null;
+    if (storyMediaUrl) {
+      console.log("fetchStoryContext: got media URL from graph.instagram.com", { storyId, storyMediaUrl });
+      return { storyId, storyUrl: webhookUrl, storyMediaUrl };
+    }
   } catch (e) {
-    console.warn("fetchStoryContext: API call failed", e?.message || e);
-    return { storyId, storyUrl: webhookUrl, storyMediaUrl: null };
+    console.warn("fetchStoryContext: graph.instagram.com threw", e?.message || e);
   }
+
+  // Fallback: try graph.facebook.com (works with some token types)
+  try {
+    const fbUrl = `https://graph.facebook.com/v23.0/${encodeURIComponent(storyId)}?fields=media_url,thumbnail_url,media_type&access_token=${encodeURIComponent(accessToken)}`;
+    console.log("fetchStoryContext: calling graph.facebook.com fallback", { storyId });
+    const fbResp = await fetch(fbUrl);
+    const fbData = await fbResp.json().catch(() => ({}));
+    console.log("fetchStoryContext: graph.facebook.com raw response", { storyId, status: fbResp.status, data: fbData });
+
+    const storyMediaUrl = fbData?.media_url || fbData?.thumbnail_url || null;
+    if (storyMediaUrl) {
+      console.log("fetchStoryContext: got media URL from graph.facebook.com", { storyId, storyMediaUrl });
+      return { storyId, storyUrl: webhookUrl, storyMediaUrl };
+    }
+  } catch (e) {
+    console.warn("fetchStoryContext: graph.facebook.com threw", e?.message || e);
+  }
+
+  // Both APIs returned no media — story may have expired or token lacks permission.
+  // The webhook CDN url (story_url) is stored and used as a display fallback.
+  console.warn("fetchStoryContext: no media URL from either API", { storyId });
+  return { storyId, storyUrl: webhookUrl, storyMediaUrl: null };
 }
 
 // ─── DM processing (called either directly or after debounce flush) ───────────

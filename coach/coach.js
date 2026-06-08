@@ -1506,6 +1506,31 @@ function wireQueueRefreshButton() {
     return `${date} ${time}`;
   }
 
+  async function loadStoryMedia(messageId, thumbElId, labelElId) {
+    try {
+      const data = await apiFetch(`${API}/messages/${messageId}/story-media`, { method: "GET" });
+      if (!data?.story_media_url && !data?.story_url) return; // still expired
+
+      const mediaUrl = data.story_media_url || data.story_url;
+      const thumbEl = document.getElementById(thumbElId);
+      const labelEl = document.getElementById(labelElId);
+
+      if (thumbEl) {
+        const img = document.createElement("img");
+        img.className = "storyReplyThumb";
+        img.src = mediaUrl;
+        img.alt = "Story";
+        img.loading = "lazy";
+        thumbEl.replaceWith(img);
+      }
+      if (labelEl) {
+        labelEl.outerHTML = "";
+      }
+    } catch (_) {
+      // Silently ignore — expired label stays
+    }
+  }
+
   function renderInboxMessages(messages) {
     const container = document.getElementById("inboxMessages");
     if (!container) return;
@@ -1523,20 +1548,34 @@ function wireQueueRefreshButton() {
       const dir = m.direction === "out" ? "out" : "in";
 
       if (m.message_type === "story_reply") {
-        const hasMedia = !!m.story_media_url;
-        const thumbnailHtml = hasMedia
-          ? `<img class="storyReplyThumb" src="${escHtml(m.story_media_url)}" alt="Story" loading="lazy">`
-          : "";
-        const storyLabel = hasMedia
+        // story_media_url = fetched from Graph API at webhook time
+        // story_url       = CDN link delivered directly in the webhook payload (fallback)
+        const mediaUrl = m.story_media_url || m.story_url || null;
+        const needsFetch = !mediaUrl && !!m.id; // no URL at all — try on-demand fetch
+        const thumbId = `storyThumb-${m.id}`;
+        const labelId = `storyLabel-${m.id}`;
+
+        const thumbnailHtml = mediaUrl
+          ? `<img id="${thumbId}" class="storyReplyThumb" src="${escHtml(mediaUrl)}" alt="Story" loading="lazy">`
+          : `<span id="${thumbId}"></span>`;
+        const storyLabelHtml = mediaUrl
           ? "Replied to your story"
-          : "Replied to your story <span class=\"storyExpired\">(story expired)</span>";
-        return `<div class="inboxBubbleRow inboxBubbleRow--${dir}">
+          : `Replied to your story <span id="${labelId}" class="storyExpired">(story expired)</span>`;
+
+        const html = `<div class="inboxBubbleRow inboxBubbleRow--${dir}">
           <div class="inboxBubble inboxBubble--${dir} inboxBubble--storyReply">
-            <div class="storyReplyContext">${thumbnailHtml}<span class="storyReplyLabel">${storyLabel}</span></div>
+            <div class="storyReplyContext">${thumbnailHtml}<span class="storyReplyLabel" id="${needsFetch ? labelId : ""}">${storyLabelHtml}</span></div>
             ${m.text && m.text !== "[non-text message]" ? `<div class="storyReplyText">${escHtml(m.text)}</div>` : ""}
           </div>
           <div class="inboxTime">${fmtMsgTime(m.created_at)}</div>
         </div>`;
+
+        if (needsFetch) {
+          // Kick off on-demand fetch after render — replaces placeholder if media found
+          setTimeout(() => loadStoryMedia(m.id, thumbId, labelId), 0);
+        }
+
+        return html;
       }
 
       return `<div class="inboxBubbleRow inboxBubbleRow--${dir}">
