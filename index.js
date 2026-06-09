@@ -3105,6 +3105,13 @@ app.get("/coach/api/instagram/status", requireCoach, async (req, res) => {
       return safeJson(res, 200, { connected: false });
     }
 
+    // A row existing is not enough — the account is only connected if it has
+    // actual Instagram data. A row with both fields null means the OAuth never
+    // completed or the data was cleared.
+    if (!data.ig_username && !data.ig_user_id) {
+      return safeJson(res, 200, { connected: false });
+    }
+
     // Auto-sync ig_username — routes to graph.instagram.com for Instagram Login
     // accounts (page_id is null) or graph.facebook.com for Facebook Login accounts.
     let currentUsername = data.ig_username || null;
@@ -7443,16 +7450,15 @@ app.get("/auth/instagram/callback", async (req, res) => {
         if (!isAllowedStripeStatus(cfg?.stripe_subscription_status)) {
           return res.redirect("/coach/login.html?instagram_error=Your+subscription+is+inactive.+Please+contact+support.");
         }
-        // Refresh token (page_id: null marks this as Instagram Login flow)
-        await supabase.from("ig_accounts").upsert({
-          client_id: resolvedClientId,
+        // Refresh token — UPDATE directly by client_id (always exists at this point)
+        await supabase.from("ig_accounts").update({
           ig_user_id: igUserId,
           ig_username: igUsername,
           page_id: null,
           page_access_token: longToken,
           is_active: true,
           token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
-        }, { onConflict: "ig_user_id" });
+        }).eq("client_id", resolvedClientId);
         console.log("ig_signup: returning coach logged in", { resolvedClientId, igUserId });
       } else {
         // New coach — create client + config + ig_account
@@ -7492,7 +7498,8 @@ app.get("/auth/instagram/callback", async (req, res) => {
         }
 
         // page_id: null marks this as Instagram Login flow (uses graph.instagram.com for messaging)
-        await supabase.from("ig_accounts").upsert({
+        // New coach — client_id is brand new so INSERT is safe here
+        await supabase.from("ig_accounts").insert({
           client_id: resolvedClientId,
           ig_user_id: igUserId,
           ig_username: igUsername,
@@ -7500,7 +7507,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
           page_access_token: longToken,
           is_active: true,
           token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
-        }, { onConflict: "ig_user_id" });
+        });
 
         console.log("ig_signup: new coach created", { resolvedClientId, igUsername });
       }
@@ -7568,29 +7575,20 @@ app.get("/auth/instagram/callback", async (req, res) => {
     const igUserId = String(igInfo.id);
     console.log("ig_connect: igUserId from /me", { igUserId, fromToken: String(shortTokenData.user_id), clientId });
 
-    // Upsert on client_id so reconnecting always updates the existing row, even if
-    // ig_user_id changed (e.g. ASID vs IGBID namespace difference). Conflicting on
-    // ig_user_id would miss the existing row and attempt an INSERT, which then fails
-    // the unique constraint on client_id.
-    console.log("ig_connect: upsert ig_accounts", { clientId, igUserId });
+    // UPDATE existing row by client_id — never INSERT, avoids duplicate key errors
+    // regardless of whether ig_user_id changed between connections.
+    console.log("ig_connect: update ig_accounts", { clientId, igUserId });
     const { error: upsertErr } = await supabase
       .from("ig_accounts")
-      .upsert({
-        client_id: clientId,
+      .update({
         ig_user_id: igUserId,
         ig_username: igUsername,
         page_id: null,
         page_access_token: longToken,
         is_active: true,
         token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
-      }, { onConflict: "client_id" });
-
-    // Deactivate any other active rows for this client (was using a different IG)
-    await supabase
-      .from("ig_accounts")
-      .update({ is_active: false })
-      .eq("client_id", clientId)
-      .neq("ig_user_id", igUserId);
+      })
+      .eq("client_id", clientId);
 
     if (upsertErr) {
       return res
