@@ -7510,12 +7510,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
         console.error("ig_signup: webhook subscription threw", e?.message || e)
       );
 
-      // Chain into Facebook Login for Business — stores fb_page_token on the same row
-      if (META_APP_ID && META_FB_REDIRECT_URI) {
-        const chainState = signFbChainState({ clientId: resolvedClientId, isNew: !existingIgRow?.client_id });
-        return res.redirect(buildFacebookOAuthUrl(chainState));
-      }
-      // Facebook not configured — fall back to dashboard directly
+      // Signup complete — redirect to dashboard. No Facebook chain.
       const token = signCoachToken(resolvedClientId);
       return res.redirect(`/dashboard?token=${encodeURIComponent(token)}&instagram_connected=1`);
     }
