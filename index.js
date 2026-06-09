@@ -7605,11 +7605,8 @@ app.get("/auth/instagram/callback", async (req, res) => {
       console.error("ig_connect: webhook subscription threw", e?.message || e)
     );
 
-    // Chain into Facebook Login for Business
-    if (META_APP_ID && META_FB_REDIRECT_URI) {
-      const chainState = signFbChainState({ clientId, isNew: false });
-      return res.redirect(buildFacebookOAuthUrl(chainState));
-    }
+    // Dashboard reconnect: always go straight back to dashboard.
+    // No Facebook chain here — that only runs during initial signup (login page flow).
     return res.redirect("/dashboard?instagram_connected=1");
   } catch (e) {
     return res.status(500).send(String(e?.message || e));
