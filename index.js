@@ -7568,7 +7568,10 @@ app.get("/auth/instagram/callback", async (req, res) => {
     const igUserId = String(igInfo.id);
     console.log("ig_connect: igUserId from /me", { igUserId, fromToken: String(shortTokenData.user_id), clientId });
 
-    // Upsert on ig_user_id (page_id: null marks as Instagram Login flow)
+    // Upsert on client_id so reconnecting always updates the existing row, even if
+    // ig_user_id changed (e.g. ASID vs IGBID namespace difference). Conflicting on
+    // ig_user_id would miss the existing row and attempt an INSERT, which then fails
+    // the unique constraint on client_id.
     console.log("ig_connect: upsert ig_accounts", { clientId, igUserId });
     const { error: upsertErr } = await supabase
       .from("ig_accounts")
@@ -7580,7 +7583,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
         page_access_token: longToken,
         is_active: true,
         token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
-      }, { onConflict: "ig_user_id" });
+      }, { onConflict: "client_id" });
 
     // Deactivate any other active rows for this client (was using a different IG)
     await supabase
