@@ -92,6 +92,11 @@
       .optionalNote{ background: rgba(45, 107, 255, 0.05); border:1px solid rgba(45, 107, 255, 0.14); border-radius:12px; padding:12px 14px; color: var(--muted); font-size:13px; line-height:1.5; margin-top:16px; }
       .optionalNote strong{ color: var(--text); }
 
+      /* Product cards */
+      .productCard{ border:1px solid var(--border); border-radius:14px; padding:14px; position:relative; }
+      .productCard label{ margin-top:10px; }
+      .productCard label:first-of-type{ margin-top:0; }
+
       @media (max-width: 700px){
         .row{ grid-template-columns: 1fr; }
         .row3{ grid-template-columns: 1fr; }
@@ -210,7 +215,28 @@
         </div>
 
         <div class="divider"></div>
+
+        <label style="margin-top:0;">24-hour follow-up message <span style="font-weight:500; color:var(--muted);">(optional)</span></label>
+        <textarea id="followup_message" placeholder="Example:&#10;hey, just checking in — still here if you want to chat" style="min-height:80px;"></textarea>
+        <div class="helper">Sent once if a lead goes quiet for 24h. Leave blank to use the smart default based on what you know about the lead.</div>
+
+        <div class="divider" style="margin-top:16px;"></div>
         <div class="tip">These are not AI replies — they are fixed openers you write yourself.</div>
+      </div>
+
+      <!-- Response Delay -->
+      <div class="card" style="margin-top:12px;">
+        <div class="takeoverTitle" style="font-size:16px;">Response delay</div>
+        <div class="takeoverSub" style="margin-top:4px;">How long the bot waits before replying. A longer delay feels more natural.</div>
+        <div style="margin-top:14px; max-width:420px;">
+          <label style="margin-top:0;">Delay: <strong id="delayLabel">90s</strong></label>
+          <input type="range" id="response_delay_ms" min="30" max="180" step="5" value="90"
+            style="width:100%; margin-top:8px; accent-color:var(--primary);" />
+          <div style="display:flex; justify-content:space-between; margin-top:4px;">
+            <span class="helper" style="margin:0;">30s (faster)</span>
+            <span class="helper" style="margin:0;">3 min (more natural)</span>
+          </div>
+        </div>
       </div>
 
       <!-- Comment Keyword DM -->
@@ -265,6 +291,16 @@
           </select>
           <div class="helper">Only asks once per lead. Never on the first message.</div>
         </div>
+      </div>
+
+      <!-- ─── Products & Services ──────────────────────────────────────── -->
+      <div class="sectionLabel">Products &amp; Services</div>
+      <div class="card" id="productsCard">
+        <div class="takeoverTitle" style="font-size:16px;">Products &amp; Services</div>
+        <div class="takeoverSub" style="margin-top:4px;">Add each product or service so the bot can identify which one fits each lead and pitch it naturally.</div>
+        <div id="productsList" style="margin-top:14px; display:flex; flex-direction:column; gap:12px;"></div>
+        <button class="btn" id="addProductBtn" style="margin-top:14px;">+ Add product</button>
+        <div class="helper" style="margin-top:8px;">If you offer multiple products, the bot picks the most relevant one per lead based on what they share.</div>
       </div>
 
       <!-- ─── SECTION 1: Essential Setup ─────────────────────────────── -->

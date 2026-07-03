@@ -839,6 +839,12 @@ how_it_works:
   String(cfg?.how_it_works || "").trim() ||
   extractSingleOfferSection(raw, "How it works") ||
   preset.howItWorks,
+
+    // Feature 2: multi-product support
+    products:
+      Array.isArray(cfg?.products) && cfg.products.length > 0
+        ? cfg.products
+        : null,
   };
 }
 function getDefaultFallbackExamples(niche = "generic") {
@@ -2303,6 +2309,7 @@ CORE RULES — follow every single one:
 - never give a generic response — every reply must be specific to what they just said
 - never repeat a phrase you’ve already used in this conversation (check recent_assistant_replies)
 - do not invent services, outcomes, pricing, or niche details — only use what’s in the context provided
+- if a products array is present in the context, identify which product best matches what this lead has described and reference it naturally — do not list all products unprompted
 - never assume the niche is fitness or money coaching unless the context clearly says so
 - if a booking link was already sent, don’t send it again unless they ask for it
 - NEVER mention budget, investment, pricing, or money in the first 2 messages of any conversation — even if it feels relevant
@@ -2466,6 +2473,7 @@ const context = {
   what_they_get: structuredOffer.what_they_get || null,
   who_its_for: structuredOffer.who_its_for || null,
   how_it_works: structuredOffer.how_it_works || null,
+  products: structuredOffer.products || null,
 
   main_result: String(cfg?.main_result || "").trim() || null,
   best_fit_leads: String(cfg?.best_fit_leads || "").trim() || null,
@@ -4365,6 +4373,29 @@ if (
 }
 if (typeof patch.calendly_api_key === "string" || patch.calendly_api_key === null) {
   allowed.calendly_api_key = patch.calendly_api_key || null;
+}
+// Feature 4: custom 24h follow-up message
+if (typeof patch.followup_message === "string" || patch.followup_message === null) {
+  allowed.followup_message = patch.followup_message || null;
+}
+// Feature 6: response delay (clamped server-side to 30s–180s)
+if (patch.response_delay_ms != null) {
+  const ms = Number(patch.response_delay_ms);
+  if (!isNaN(ms) && ms >= 30000 && ms <= 180000) {
+    allowed.response_delay_ms = ms;
+  }
+}
+// Feature 2: products array
+if (Array.isArray(patch.products)) {
+  allowed.products = patch.products
+    .filter((p) => p && typeof p.name === "string" && p.name.trim())
+    .map((p) => ({
+      id: String(p.id || crypto.randomUUID()),
+      name: String(p.name).trim(),
+      description: String(p.description || "").trim() || null,
+      price: String(p.price || "").trim() || null,
+      who_its_for: String(p.who_its_for || "").trim() || null,
+    }));
 }
     console.log("[config save] allowed keys being written:", Object.keys(allowed));
     console.log("[config save] comment_keyword_dm_enabled in allowed:", allowed.comment_keyword_dm_enabled);
@@ -7080,7 +7111,33 @@ log("ig_trigger_opener_sent", {
             }
           }
 
-          if (!reply) return;
+          if (!reply) {
+            // Feature 1+4: confidence pause — bot couldn't produce a reply,
+            // flag the lead for coach review instead of going silent silently.
+            const leadName =
+              leadNameCache.get(`${lead.client_id}:${senderId}`) ||
+              lead.ig_name ||
+              `Lead ${String(senderId).slice(-6)}`;
+            try {
+              await setLeadManualOverride({
+                leadId: lead.id,
+                clientId: lead.client_id,
+                enabled: true,
+                reason: "Low confidence — coach input needed",
+                actor: "system",
+              });
+            } catch (e) {
+              console.warn("confidence_pause: setLeadManualOverride failed", e?.message || e);
+            }
+            emitActivityEvent(lead.client_id, {
+              type: "confidence_pause",
+              leadName,
+              igPsid: senderId,
+              preview: text ? String(text).slice(0, 120) : "[non-text message]",
+            });
+            log("confidence_pause", { leadId: lead.id, clientId: lead.client_id, senderId });
+            return;
+          }
 
           // Emit: AI reply generated
           emitActivityEvent(lead.client_id, {
@@ -7163,6 +7220,17 @@ log("ig_trigger_opener_sent", {
             }
           }
 
+          // Feature 5: if reply is still too similar after retry + fallback, force a variation
+          if (reply && isReplyTooSimilar(reply, recentAssistantHistory, turnStrategy?.type)) {
+            const variationSuffixes = [
+              " — what do you think?",
+              " let me know",
+              " — does that make sense?",
+              " still here if you need anything",
+            ];
+            reply = reply + variationSuffixes[Math.floor(Math.random() * variationSuffixes.length)];
+          }
+
           try {
             const nextStage = deriveLeadStage({
               lead,
@@ -7183,18 +7251,12 @@ log("ig_trigger_opener_sent", {
             const msg = messagesToSend[i];
 
             const words = msg.split(" ").length;
-            const typingDelay = Math.min(words * 250, 5000);
+            const typingDelay = Math.min(words * 250, 3000);
 
-            const rand = Math.random();
-            let extraDelay;
-
-            if (rand < 0.2) {
-              extraDelay = Math.random() * 2000 + 1000;
-            } else if (rand < 0.85) {
-              extraDelay = Math.random() * 5000 + 3000;
-            } else {
-              extraDelay = Math.random() * 8000 + 8000;
-            }
+            // Feature 6: coach-configurable response delay (30s–180s, default 90s)
+            const baseDelay = Math.max(30000, Math.min(180000, Number(cfg?.response_delay_ms) || 90000));
+            const jitter = baseDelay * 0.15 * (Math.random() * 2 - 1); // ±15%
+            const extraDelay = Math.round(baseDelay + jitter);
 
             const delay = typingDelay + extraDelay;
             await new Promise((res) => setTimeout(res, delay));
@@ -7752,7 +7814,78 @@ app.get("/auth/facebook/callback", async (req, res) => {
  * ...send one casual re-engagement DM and mark followup_sent = true.
  */
 
-function buildFollowUpText(leadMemory) {
+// ─── Feature 3: Missed conversation recovery on reboot ───────────────────────
+// Runs once at startup. Finds leads that sent a message while the server was
+// down (last_inbound_at > last_outbound_at) and sends a catch-up message so
+// the conversation doesn't go cold. Uses the coach's custom follow-up message
+// if one is configured (Feature 4).
+async function runRebootRecoveryJob() {
+  const now = Date.now();
+  const min5 = new Date(now - 5 * 60 * 1000).toISOString();
+  const h24  = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: leads, error } = await supabase
+    .from("leads")
+    .select("id, ig_psid, client_id, last_inbound_at, last_outbound_at, followup_sent, manual_override, booking_sent, call_completed")
+    .eq("followup_sent", false)
+    .eq("manual_override", false)
+    .eq("booking_sent", false)
+    .eq("call_completed", false)
+    .gte("last_inbound_at", h24)
+    .lte("last_inbound_at", min5);
+
+  if (error) {
+    console.error("reboot_recovery: query failed", error.message);
+    return;
+  }
+
+  for (const lead of leads || []) {
+    const inboundMs  = lead.last_inbound_at  ? new Date(lead.last_inbound_at).getTime()  : 0;
+    const outboundMs = lead.last_outbound_at ? new Date(lead.last_outbound_at).getTime() : -1;
+    // Only recover if there's an unanswered inbound (inbound strictly newer than last outbound)
+    if (inboundMs <= outboundMs) continue;
+
+    try {
+      const igAccount = await getIgAccountByClientId(lead.client_id);
+      if (!igAccount?.page_access_token) continue;
+
+      const cfg = await getClientConfig(lead.client_id).catch(() => null);
+      const custom = String(cfg?.followup_message || "").trim();
+      const text = custom || "hey, just picking back up from earlier — what did you want help with?";
+
+      const { sendResp } = await sendInstagramTextMessage({
+        accessToken: igAccount.page_access_token,
+        recipientId: lead.ig_psid,
+        text,
+        useInstagramApi: !igAccount.page_id,
+      });
+
+      if (sendResp.ok) {
+        await updateLeadTracking(lead.id, {
+          followup_sent: true,
+          last_outbound_at: nowIso(),
+          last_outbound_text: text,
+        });
+        await supabase.from("messages").insert({
+          lead_id: lead.id,
+          client_id: lead.client_id,
+          direction: "out",
+          text,
+          created_at: new Date().toISOString(),
+        });
+        log("reboot_recovery_dm_sent", { leadId: lead.id, clientId: lead.client_id, text });
+      }
+    } catch (e) {
+      console.error("reboot_recovery: failed for lead", lead.id, e?.message || e);
+    }
+  }
+}
+
+function buildFollowUpText(leadMemory, cfg) {
+  // Feature 4: use coach's custom follow-up message if set
+  const custom = String(cfg?.followup_message || "").trim();
+  if (custom) return custom;
+
   const goal = String(leadMemory?.goal || "").trim();
   const motivation = String(leadMemory?.motivation || "").trim();
   const painPoints = String(leadMemory?.pain_points || "").trim();
@@ -7808,7 +7941,8 @@ async function runFollowUpJob() {
         leadMemory = await getLeadMemory(lead.id);
       } catch {}
 
-      const text = buildFollowUpText(leadMemory).replace(/—|–|--/g, "");
+      const cfg = await getClientConfig(lead.client_id).catch(() => null);
+      const text = buildFollowUpText(leadMemory, cfg).replace(/—|–|--/g, "");
 
       const { sendResp, sendData } = await sendInstagramTextMessage({
         accessToken: igAccount.page_access_token,
@@ -8386,6 +8520,13 @@ async function refreshExpiringTokens() {
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+
+  // Feature 3: Missed conversation recovery — runs once 30s after startup
+  setTimeout(() => {
+    runRebootRecoveryJob().catch((e) =>
+      console.error("reboot_recovery: startup run failed", e?.message || e)
+    );
+  }, 30 * 1000);
 
   // Run once on startup (after 2 min to let the server settle)
   setTimeout(() => {

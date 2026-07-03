@@ -163,6 +163,85 @@
     }
   }
 
+  // ── HTML escape helpers ───────────────────────────────────────────────────
+
+  function escAttr(str) {
+    return String(str || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function escHtml(str) {
+    return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // ── Feature 2: Products ───────────────────────────────────────────────────
+
+  let _products = [];
+
+  function renderProducts() {
+    const list = qs("#productsList");
+    if (!list) return;
+    list.innerHTML = "";
+    _products.forEach((p, i) => {
+      const div = document.createElement("div");
+      div.className = "productCard";
+      div.dataset.idx = i;
+      div.innerHTML = `
+        <button class="removeProductBtn btn" style="position:absolute;top:10px;right:10px;padding:5px 8px;font-size:11px;">Remove</button>
+        <div class="row">
+          <div>
+            <label style="margin-top:0;">Product name *</label>
+            <input class="product-name" value="${escAttr(p.name)}" placeholder="e.g. 1:1 Online Coaching" />
+          </div>
+          <div>
+            <label style="margin-top:0;">Price</label>
+            <input class="product-price" value="${escAttr(p.price || "")}" placeholder="e.g. £299/month" />
+          </div>
+        </div>
+        <label>Description</label>
+        <textarea class="product-description" style="min-height:70px;">${escHtml(p.description || "")}</textarea>
+        <label>Who it's for</label>
+        <input class="product-who" value="${escAttr(p.who_its_for || "")}" placeholder="e.g. Busy professionals wanting structure" />
+      `;
+      div.querySelector(".removeProductBtn").addEventListener("click", () => {
+        _products.splice(i, 1);
+        renderProducts();
+      });
+      list.appendChild(div);
+    });
+  }
+
+  function collectProducts() {
+    return Array.from(document.querySelectorAll(".productCard")).map((card, i) => ({
+      id: _products[i]?.id || crypto.randomUUID(),
+      name: (card.querySelector(".product-name")?.value || "").trim(),
+      price: (card.querySelector(".product-price")?.value || "").trim() || null,
+      description: (card.querySelector(".product-description")?.value || "").trim() || null,
+      who_its_for: (card.querySelector(".product-who")?.value || "").trim() || null,
+    })).filter((p) => p.name);
+  }
+
+  function wireProductsCard() {
+    const addBtn = qs("#addProductBtn");
+    if (!addBtn || addBtn.__wired) return;
+    addBtn.__wired = true;
+    addBtn.addEventListener("click", () => {
+      _products.push({ id: crypto.randomUUID(), name: "", price: null, description: null, who_its_for: null });
+      renderProducts();
+      qs("#productsList")?.lastElementChild?.scrollIntoView({ behavior: "smooth" });
+    });
+  }
+
+  // ── Feature 6: Response delay slider ─────────────────────────────────────
+
+  function wireDelaySlider() {
+    const slider = qs("#response_delay_ms");
+    const label  = qs("#delayLabel");
+    if (!slider || slider.__wired) return;
+    slider.__wired = true;
+    slider.addEventListener("input", () => {
+      if (label) label.textContent = `${slider.value}s`;
+    });
+  }
+
   // ── Load config into form ─────────────────────────────────────────────────
 
   function val(el, v) {
@@ -225,6 +304,20 @@
       val(qs("#vocabulary"), c.vocabulary);
       val(qs("#system_prompt"), c.system_prompt);
       if (c.example_messages) val(qs("#example_messages"), c.example_messages);
+      // Feature 4: custom follow-up message
+      val(qs("#followup_message"), c.followup_message);
+
+      // Feature 6: response delay slider
+      const delayMs = Number(c.response_delay_ms) || 90000;
+      const slider = qs("#response_delay_ms");
+      const delayLabel = qs("#delayLabel");
+      if (slider) slider.value = Math.round(delayMs / 1000);
+      if (delayLabel) delayLabel.textContent = `${Math.round(delayMs / 1000)}s`;
+
+      // Feature 2: products
+      _products = Array.isArray(c.products) ? c.products : [];
+      renderProducts();
+
       // Calendly — show placeholder dots if key is already saved, blank if not
       const keyEl = qs("#calendly_api_key");
       if (keyEl) keyEl.placeholder = c.calendly_api_key ? "••••••••••••  (saved)" : "eyJ…";
@@ -670,6 +763,12 @@
             vocabulary: String(qs("#vocabulary")?.value || "").trim() || null,
             system_prompt: String(qs("#system_prompt")?.value || "").trim() || null,
             example_messages: exParsed.value || null,
+            // Feature 4
+            followup_message: String(qs("#followup_message")?.value || "").trim() || null,
+            // Feature 6
+            response_delay_ms: Number(qs("#response_delay_ms")?.value || 90) * 1000,
+            // Feature 2
+            products: collectProducts(),
           }),
         });
 
@@ -795,6 +894,8 @@
     wireGeneratePromptButton();
     wirePreviewBtn();
     wireExpandToggle();
+    wireProductsCard();
+    wireDelaySlider();
     wireBadges(); // wire change listeners before loadConfig populates values
 
     await Promise.allSettled([

@@ -101,9 +101,13 @@
       const stage = stageFmt(lead.stage);
       const lastMsg = fmtDate(lead.last_inbound_at || lead.last_outbound_at || lead.created_at);
       const paused = !!lead.manual_override;
-      const botBadge = paused
-        ? `<span class="badge paused">Paused</span>`
-        : `<span class="badge active">Active</span>`;
+      const isConfidencePause = paused &&
+        String(lead.manual_override_reason || "").includes("Low confidence");
+      const botBadge = isConfidencePause
+        ? `<span class="badge needs-review" title="Bot couldn't reply — open Instagram to respond manually">Needs review</span>`
+        : paused
+          ? `<span class="badge paused">Paused</span>`
+          : `<span class="badge active">Active</span>`;
 
       return `<tr>
         <td style="font-weight:600;">${escHtml(name)}</td>
