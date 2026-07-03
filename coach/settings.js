@@ -786,19 +786,55 @@
     });
   }
 
-  // ── Expand/collapse optional section ─────────────────────────────────────
+  // ── Optional customisation wizard ────────────────────────────────────────
 
-  function wireExpandToggle() {
-    const toggle = qs("#expandToggle");
-    const body = qs("#expandBody");
-    const chevron = qs("#expandChevron");
-    if (!toggle || !body || !chevron) return;
+  function wireWizard() {
+    const steps = Array.from(document.querySelectorAll(".wizardStep"));
+    const progressFill  = qs("#wizardProgressFill");
+    const progressLabel = qs("#wizardProgressLabel");
+    const prevBtn = qs("#wizardPrevBtn");
+    const nextBtn = qs("#wizardNextBtn");
+    const saveBtn = qs("#wizardSaveBtn");
+    if (!steps.length || !nextBtn) return;
 
-    toggle.addEventListener("click", () => {
-      const isOpen = body.classList.contains("open");
-      body.classList.toggle("open", !isOpen);
-      chevron.classList.toggle("open", !isOpen);
+    const total = steps.length;
+    let current = 0;
+
+    function showStep(n) {
+      steps.forEach((s, i) => s.classList.toggle("active", i === n));
+      const pct = ((n + 1) / total * 100).toFixed(1);
+      if (progressFill)  progressFill.style.width = pct + "%";
+      if (progressLabel) progressLabel.textContent = `${n + 1} of ${total}`;
+      if (prevBtn) prevBtn.style.display = n === 0 ? "none" : "inline-flex";
+      if (nextBtn) nextBtn.style.display = n === total - 1 ? "none" : "inline-flex";
+      if (saveBtn) saveBtn.style.display = n === total - 1 ? "inline-flex" : "none";
+      // Focus the textarea on the new step
+      const field = steps[n].querySelector("textarea, input");
+      if (field) setTimeout(() => field.focus(), 60);
+    }
+
+    if (prevBtn) prevBtn.addEventListener("click", () => {
+      if (current > 0) showStep(--current);
     });
+    if (nextBtn) nextBtn.addEventListener("click", () => {
+      if (current < total - 1) showStep(++current);
+    });
+    // Save button delegates to the main Save button
+    if (saveBtn) saveBtn.addEventListener("click", () => {
+      qs("#saveBtn")?.click();
+    });
+
+    // Support keyboard: Enter advances to next step (Shift+Enter = newline)
+    document.querySelectorAll(".wizardStep textarea").forEach((ta) => {
+      ta.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey && current < total - 1) {
+          e.preventDefault();
+          showStep(++current);
+        }
+      });
+    });
+
+    showStep(0);
   }
 
   // ── Calendly ──────────────────────────────────────────────────────────────
@@ -893,7 +929,7 @@
     wireSaveButton();
     wireGeneratePromptButton();
     wirePreviewBtn();
-    wireExpandToggle();
+    wireWizard();
     wireProductsCard();
     wireDelaySlider();
     wireBadges(); // wire change listeners before loadConfig populates values
@@ -908,15 +944,5 @@
 
     // Sync badge display after config values are loaded into selects
     wireBadges();
-
-    // Auto-expand optional section if any optional fields are already filled
-    const optionalIds = ["offer_what","offer_features","offer_audience","offer_process","main_result","best_fit_leads","not_a_fit","common_objections","closing_triggers","urgency_reason","trust_builders","faq"];
-    const hasOptional = optionalIds.some((id) => String(qs(`#${id}`)?.value || "").trim());
-    if (hasOptional) {
-      const body = qs("#expandBody");
-      const chevron = qs("#expandChevron");
-      if (body) body.classList.add("open");
-      if (chevron) chevron.classList.add("open");
-    }
   });
 })();
