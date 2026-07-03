@@ -4774,7 +4774,7 @@ app.get("/coach/api/instagram/debug", requireCoach, async (req, res) => {
 
     const { data: igRows } = await supabase
       .from("ig_accounts")
-      .select("id, client_id, ig_username, is_active, created_at")
+      .select("id, client_id, ig_user_id, page_id, ig_username, is_active, created_at")
       .order("created_at", { ascending: false })
       .limit(10);
 
