@@ -144,7 +144,6 @@
 
   function wireBadges() {
     syncBadge("storyReplyToggleBadge", "story_reply_auto_dm_enabled", "Story reply ON", "Story reply OFF");
-    syncBadge("commentReplyToggleBadge", "comment_reply_auto_dm_enabled", "Comment reply ON", "Comment reply OFF");
     syncBadge("keywordToggleBadge", "keyword_auto_dm_enabled", "Keyword DM ON", "Keyword DM OFF");
     syncBadge("commentKeywordToggleBadge", "comment_keyword_dm_enabled", "On", "Off");
     const badge = qs("#contactCollectionBadge");
@@ -230,6 +229,57 @@
     });
   }
 
+  // ── Booking Items ─────────────────────────────────────────────────────────
+
+  let _bookingItems = [];
+
+  function renderBookingItems() {
+    const list = qs("#bookingItemsList");
+    if (!list) return;
+    list.innerHTML = "";
+    _bookingItems.forEach((item, i) => {
+      const row = document.createElement("div");
+      row.className = "bookingItem";
+      row.innerHTML = `
+        <input class="bi-name" value="${escAttr(item.name)}" placeholder="e.g. Book a free call" />
+        <input class="bi-url" value="${escAttr(item.url)}" placeholder="https://calendly.com/..." />
+        <select class="bi-type">
+          <option value="booking"${item.type === "booking" ? " selected" : ""}>Booking link</option>
+          <option value="product"${item.type === "product" ? " selected" : ""}>Product</option>
+        </select>
+        <button type="button" class="btn removeBookingItemBtn" style="padding:8px 10px; flex-shrink:0;">Remove</button>
+      `;
+      row.querySelector(".removeBookingItemBtn").addEventListener("click", () => {
+        _bookingItems.splice(i, 1);
+        renderBookingItems();
+      });
+      list.appendChild(row);
+    });
+    // Show/hide add button based on max
+    const addBtn = qs("#addBookingItemBtn");
+    if (addBtn) addBtn.style.display = _bookingItems.length >= 10 ? "none" : "";
+  }
+
+  function collectBookingItems() {
+    return Array.from(document.querySelectorAll(".bookingItem")).map((row, i) => ({
+      name: (row.querySelector(".bi-name")?.value || "").trim(),
+      url: (row.querySelector(".bi-url")?.value || "").trim(),
+      type: row.querySelector(".bi-type")?.value || "booking",
+    })).filter((item) => item.name || item.url);
+  }
+
+  function wireBookingItemsCard() {
+    const addBtn = qs("#addBookingItemBtn");
+    if (!addBtn || addBtn.__wired) return;
+    addBtn.__wired = true;
+    addBtn.addEventListener("click", () => {
+      if (_bookingItems.length >= 10) return;
+      _bookingItems.push({ name: "", url: "", type: "booking" });
+      renderBookingItems();
+      qs("#bookingItemsList")?.lastElementChild?.scrollIntoView({ behavior: "smooth" });
+    });
+  }
+
   // ── Feature 6: Response delay slider ─────────────────────────────────────
 
   function wireDelaySlider() {
@@ -261,8 +311,6 @@
       // Triggers
       val(qs("#story_reply_auto_dm_enabled"), c.story_reply_auto_dm_enabled);
       val(qs("#story_reply_auto_dm_text"), c.story_reply_auto_dm_text);
-      val(qs("#comment_reply_auto_dm_enabled"), c.comment_reply_auto_dm_enabled);
-      val(qs("#comment_reply_auto_dm_text"), c.comment_reply_auto_dm_text);
       val(qs("#keyword_auto_dm_enabled"), c.keyword_auto_dm_enabled);
       val(qs("#keyword_trigger_text"), c.keyword_trigger_text);
       val(qs("#keyword_auto_dm_text"), c.keyword_auto_dm_text);
@@ -277,9 +325,11 @@
       // Contact collection
       val(qs("#contact_collection_enabled"), c.contact_collection_enabled);
 
-      // Booking & offer
-      val(qs("#booking_url"), c.booking_url);
-      val(qs("#booking_url_alt"), c.booking_url_alt);
+      // Booking items
+      _bookingItems = Array.isArray(c.booking_items) ? c.booking_items : [];
+      renderBookingItems();
+
+      // Offer
       val(qs("#offer_what"), c.what_you_do);
       val(qs("#offer_features"), c.what_they_get);
       val(qs("#offer_audience"), c.who_its_for);
@@ -298,7 +348,9 @@
 
       // AI customisation
       val(qs("#instagram_handle"), c.instagram_handle);
-      val(qs("#niche"), c.niche || "generic");
+      val(qs("#niche"), c.niche || "fitness");
+      if (c.niche_other) val(qs("#niche_other"), c.niche_other);
+      syncNicheOther();
       val(qs("#tone"), c.tone);
       val(qs("#style"), c.style);
       val(qs("#vocabulary"), c.vocabulary);
@@ -325,6 +377,22 @@
     } catch (e) {
       setErr("Failed to load settings: " + String(e.message || e));
     }
+  }
+
+  // ── Niche "Other" toggle ─────────────────────────────────────────────────
+
+  function syncNicheOther() {
+    const sel = qs("#niche");
+    const wrap = qs("#nicheOtherWrap");
+    if (!sel || !wrap) return;
+    wrap.style.display = sel.value === "other" ? "block" : "none";
+  }
+
+  function wireNicheSelect() {
+    const sel = qs("#niche");
+    if (!sel || sel.__nicheWired) return;
+    sel.__nicheWired = true;
+    sel.addEventListener("change", syncNicheOther);
   }
 
   // ── Instagram connection ──────────────────────────────────────────────────
@@ -443,17 +511,12 @@
 
         const story_reply_auto_dm_enabled = String(qs("#story_reply_auto_dm_enabled")?.value || "false") === "true";
         const story_reply_auto_dm_text = String(qs("#story_reply_auto_dm_text")?.value || "").trim();
-        const comment_reply_auto_dm_enabled = String(qs("#comment_reply_auto_dm_enabled")?.value || "false") === "true";
-        const comment_reply_auto_dm_text = String(qs("#comment_reply_auto_dm_text")?.value || "").trim();
         const keyword_auto_dm_enabled = String(qs("#keyword_auto_dm_enabled")?.value || "false") === "true";
         const keyword_trigger_text = String(qs("#keyword_trigger_text")?.value || "").trim();
         const keyword_auto_dm_text = String(qs("#keyword_auto_dm_text")?.value || "").trim();
 
         if (story_reply_auto_dm_enabled && !story_reply_auto_dm_text) {
           setErr("Add the story reply outbound message or turn Story reply auto-DM off."); return;
-        }
-        if (comment_reply_auto_dm_enabled && !comment_reply_auto_dm_text) {
-          setErr("Add the comment reply outbound message or turn Comment reply auto-DM off."); return;
         }
         if (keyword_auto_dm_enabled && !keyword_trigger_text) {
           setErr("Add the trigger phrase or turn Keyword auto-DM off."); return;
@@ -678,27 +741,22 @@
       try {
         clearErr();
 
-        const booking_url = String(qs("#booking_url")?.value || "").trim();
-        const booking_url_alt = String(qs("#booking_url_alt")?.value || "").trim();
         const instagram_handle = String(qs("#instagram_handle")?.value || "").trim();
-
-        if (!isValidUrl(booking_url)) { setErr("Booking URL is not a valid URL."); return; }
-        if (!isValidUrl(booking_url_alt)) { setErr("Alt Booking URL is not a valid URL."); return; }
         if (!isValidIgHandle(instagram_handle)) { setErr("Instagram handle format is invalid (letters, numbers, dots, underscores, max 30 chars)."); return; }
+
+        const bookingItems = collectBookingItems();
+        for (const item of bookingItems) {
+          if (!isValidUrl(item.url)) { setErr(`Booking item "${item.name || "unnamed"}" has an invalid URL.`); return; }
+        }
 
         const story_reply_auto_dm_enabled = String(qs("#story_reply_auto_dm_enabled")?.value || "false") === "true";
         const story_reply_auto_dm_text = String(qs("#story_reply_auto_dm_text")?.value || "").trim();
-        const comment_reply_auto_dm_enabled = String(qs("#comment_reply_auto_dm_enabled")?.value || "false") === "true";
-        const comment_reply_auto_dm_text = String(qs("#comment_reply_auto_dm_text")?.value || "").trim();
         const keyword_auto_dm_enabled = String(qs("#keyword_auto_dm_enabled")?.value || "false") === "true";
         const keyword_trigger_text = String(qs("#keyword_trigger_text")?.value || "").trim();
         const keyword_auto_dm_text = String(qs("#keyword_auto_dm_text")?.value || "").trim();
 
         if (story_reply_auto_dm_enabled && !story_reply_auto_dm_text) {
           setErr("Add the story reply outbound message or turn Story reply auto-DM off."); return;
-        }
-        if (comment_reply_auto_dm_enabled && !comment_reply_auto_dm_text) {
-          setErr("Add the comment reply outbound message or turn Comment reply auto-DM off."); return;
         }
         if (keyword_auto_dm_enabled && !keyword_trigger_text) {
           setErr("Add the trigger phrase or turn Keyword auto-DM off."); return;
@@ -725,16 +783,18 @@
         btn.style.opacity = "0.75";
         btn.textContent = "Saving...";
 
+        // Derive primary booking_url from first booking-type item for backend compat
+        const firstBookingItem = bookingItems.find((i) => i.type === "booking");
+        const derived_booking_url = firstBookingItem?.url || null;
+
         await apiFetch(`${API}/config`, {
           method: "POST",
           body: JSON.stringify({
-            booking_url: booking_url || null,
-            booking_url_alt: booking_url_alt || null,
+            booking_url: derived_booking_url,
+            booking_items: bookingItems,
             instagram_handle: instagram_handle || null,
             story_reply_auto_dm_enabled,
             story_reply_auto_dm_text: story_reply_auto_dm_text || null,
-            comment_reply_auto_dm_enabled,
-            comment_reply_auto_dm_text: comment_reply_auto_dm_text || null,
             keyword_auto_dm_enabled,
             keyword_trigger_text: keyword_trigger_text || null,
             keyword_auto_dm_text: keyword_auto_dm_text || null,
@@ -757,17 +817,15 @@
             trust_builders: String(qs("#trust_builders")?.value || "").trim() || null,
             faq: String(qs("#faq")?.value || "").trim() || null,
             offer_price: String(qs("#offer_price")?.value || "").trim() || null,
-            niche: String(qs("#niche")?.value || "generic"),
+            niche: String(qs("#niche")?.value || "fitness"),
+            niche_other: String(qs("#niche_other")?.value || "").trim() || null,
             tone: String(qs("#tone")?.value || "").trim() || null,
             style: String(qs("#style")?.value || "").trim() || null,
             vocabulary: String(qs("#vocabulary")?.value || "").trim() || null,
             system_prompt: String(qs("#system_prompt")?.value || "").trim() || null,
             example_messages: exParsed.value || null,
-            // Feature 4
             followup_message: String(qs("#followup_message")?.value || "").trim() || null,
-            // Feature 6
             response_delay_ms: Number(qs("#response_delay_ms")?.value || 90) * 1000,
-            // Feature 2
             products: collectProducts(),
           }),
         });
@@ -925,12 +983,14 @@
     }
 
     wireLogout();
+    wireNicheSelect();
     wireInstagramConnectButton();
     wireSaveButton();
     wireGeneratePromptButton();
     wirePreviewBtn();
     wireWizard();
     wireProductsCard();
+    wireBookingItemsCard();
     wireDelaySlider();
     wireBadges(); // wire change listeners before loadConfig populates values
 

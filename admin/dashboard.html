@@ -2,462 +2,222 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin | Looped</title>
   <style>
-    :root{
-      --bg:#ffffff;
-      --panel:#ffffff;
-      --panel2:#ffffff;
-      --text:#0b1220;
-      --muted:#5b667a;
-
-      --line:rgba(15,23,42,.10);
-      --line2:rgba(15,23,42,.14);
-
-      --btn:#111827;
-      --btnText:#ffffff;
-
-      --btn2:#ffffff;
-      --btn2Text:#111827;
-
-      --danger:#b42318;
-      --ok:#027a48;
-      --warn:#b54708;
-
-      --shadow:0 10px 30px rgba(15,23,42,.08);
-      --shadow2:0 0 0 1px rgba(15,23,42,.06) inset;
-      --radius:18px;
+    :root {
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --border: rgba(15,23,42,0.10);
+      --border2: rgba(15,23,42,0.14);
+      --text: #0f172a;
+      --muted: rgba(15,23,42,0.55);
+      --primary: #2d6bff;
+      --danger: #b42318;
+      --ok: #027a48;
+      --okBg: rgba(2,122,72,0.08);
+      --okBorder: rgba(2,122,72,0.18);
+      --warnBg: rgba(181,71,8,0.08);
+      --warnBorder: rgba(181,71,8,0.18);
+      --warnText: #b54708;
+      --shadow: 0 10px 30px rgba(15,23,42,0.06);
     }
-
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial;
-      background:var(--bg);
-      color:var(--text);
-    }
-
-    .wrap{display:flex;min-height:100vh}
-
-    .side{
-      width:240px;
-      padding:18px 14px;
-      border-right:1px solid var(--line);
-      background:linear-gradient(180deg, rgba(15,23,42,.02), rgba(15,23,42,0));
-    }
-
-    .brand{
-      font-weight:800;
-      letter-spacing:.2px;
-      margin-bottom:14px;
-    }
-
-    .nav a{
-      display:block;
-      padding:10px 10px;
-      border-radius:12px;
-      color:var(--muted);
-      text-decoration:none;
-      margin-bottom:6px;
-      border:1px solid transparent;
-    }
-    .nav a:hover{
-      background:rgba(15,23,42,.03);
-      border-color:rgba(15,23,42,.06);
-      color:var(--text);
-    }
-    .nav a.active{
-      background:rgba(15,23,42,.05);
-      border-color:rgba(15,23,42,.08);
-      color:var(--text);
-    }
-
-    .main{flex:1;padding:18px 18px 40px}
-
-    .topbar{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      margin-bottom:14px;
-    }
-
-    .title{
-      font-size:18px;
-      font-weight:800;
-    }
-
-    .actions{
-      display:flex;
-      gap:8px;
-      align-items:center;
-      flex-wrap:wrap;
-    }
-
-    .btn{
-      border:1px solid var(--line2);
-      border-radius:12px;
-      padding:10px 12px;
-      font-weight:800;
-      cursor:pointer;
-      color:var(--btnText);
-      background:var(--btn);
-      line-height:1;
-    }
-    .btn:hover{filter:brightness(1.02)}
-    .btn:active{transform:translateY(.5px)}
-    .btn:disabled{opacity:.65;cursor:not-allowed}
-
-    .btn.secondary{
-      background:var(--btn2);
-      color:var(--btn2Text);
-      border:1px solid var(--line2);
-    }
-
-    .btn.danger{
-      background:transparent;
-      color:var(--danger);
-      border:1px solid rgba(180,35,24,.25);
-    }
-    .btn.danger:hover{background:rgba(180,35,24,.06)}
-
-    .btn.small{
-      padding:8px 10px;
-      font-size:12px;
-      border-radius:10px;
-    }
-
-    .grid{display:grid;gap:14px}
-
-    .card{
-      background:var(--panel);
-      border:1px solid var(--line);
-      border-radius:var(--radius);
-      padding:14px;
-      box-shadow:var(--shadow2);
-    }
-
-    .card h2{
-      margin:0 0 10px;
-      font-size:13px;
-      color:var(--muted);
-      font-weight:800;
-      letter-spacing:.2px;
-    }
-
-    table{
-      width:100%;
-      border-collapse:collapse;
-      overflow:hidden;
-      border-radius:14px;
-    }
-
-    th,td{
-      padding:10px 10px;
-      border-bottom:1px solid var(--line);
-      text-align:left;
-      font-size:13px;
-      color:var(--text);
-      vertical-align:middle;
-      background:#fff;
-    }
-
-    th{
-      color:var(--muted);
-      font-weight:800;
-      font-size:12px;
-      background:rgba(15,23,42,.02);
-    }
-
-    tr:hover td{background:rgba(15,23,42,.02)}
-
-    .pill{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      padding:6px 10px;
-      border-radius:999px;
-      font-size:12px;
-      border:1px solid var(--line);
-      color:var(--muted);
-      background:rgba(15,23,42,.02);
-      font-weight:800;
-      white-space:nowrap;
-    }
-    .pill.ok{
-      color:var(--ok);
-      border-color:rgba(2,122,72,.25);
-      background:rgba(2,122,72,.06);
-    }
-    .pill.warn{
-      color:var(--warn);
-      border-color:rgba(181,71,8,.25);
-      background:rgba(181,71,8,.06);
-    }
-    .pill.danger{
-      color:var(--danger);
-      border-color:rgba(180,35,24,.25);
-      background:rgba(180,35,24,.06);
-    }
-    .pill.demo{
-      color:#5b21b6;
-      border-color:rgba(91,33,182,.25);
-      background:rgba(91,33,182,.06);
-    }
-
-    .muted{color:var(--muted)}
-    .err{color:var(--danger);margin-top:10px;white-space:pre-wrap}
-    .okText{color:var(--ok);margin-top:10px;white-space:pre-wrap}
-
-    .actionsCell{
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-    }
-
-    .linkBox{
-      margin-top:12px;
-      padding:10px 12px;
-      border-radius:12px;
-      border:1px dashed var(--line2);
-      background:rgba(15,23,42,.02);
-      display:none;
-      gap:10px;
-      align-items:center;
-      justify-content:space-between;
-      flex-wrap:wrap;
-    }
-    .linkBoxText{
-      font-size:12px;
-      color:var(--muted);
-      word-break:break-all;
-      flex:1;
-      min-width:180px;
-    }
-
-    .modalOverlay{
-      position:fixed;
-      inset:0;
-      background:rgba(15,23,42,.40);
-      display:none;
-      align-items:center;
-      justify-content:center;
-      padding:18px;
-      z-index:9999;
-    }
-    .modal{
-      width:min(920px, 100%);
-      background:var(--panel);
-      border:1px solid var(--line);
-      border-radius:var(--radius);
-      overflow:hidden;
-      box-shadow:var(--shadow);
-    }
-    .modal.narrow{
-      width:min(560px, 100%);
-    }
-    .modalHead{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:10px;
-      padding:14px 14px;
-      background:rgba(15,23,42,.02);
-      border-bottom:1px solid var(--line);
-    }
-    .modalTitle{font-weight:900}
-    .modalBody{padding:14px}
-    .formRow{display:grid;gap:8px;margin-bottom:12px}
-
-    label{
-      font-size:12px;
-      color:var(--muted);
-      font-weight:800;
-    }
-
-    input,textarea{
-      width:100%;
-      background:#fff;
-      border:1px solid var(--line2);
-      color:var(--text);
-      border-radius:12px;
-      padding:10px 10px;
-      outline:none;
-      font-size:13px;
-    }
-    input:focus,textarea:focus{
-      border-color:rgba(17,24,39,.35);
-      box-shadow:0 0 0 3px rgba(17,24,39,.08);
-    }
-
-    textarea{
-      min-height:160px;
-      resize:vertical;
-    }
-
-    .row2{
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:12px;
-    }
-
-    .modalFoot{
-      display:flex;
-      justify-content:flex-end;
-      gap:8px;
-      padding:14px;
-      border-top:1px solid var(--line);
-      background:rgba(15,23,42,.02);
-    }
-
-    @media (max-width: 980px){
-      .wrap{display:block}
-      .side{
-        width:auto;
-        border-right:0;
-        border-bottom:1px solid var(--line);
-      }
-      .row2{grid-template-columns:1fr}
-      .topbar{flex-direction:column;align-items:flex-start}
-    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.85); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 10; }
+    .brand { font-weight: 900; font-size: 15px; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 28px 20px 80px; }
+    h1 { margin: 0 0 4px; font-size: 28px; font-weight: 900; letter-spacing: -0.3px; }
+    .sub { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+    .statsRow { display: flex; gap: 14px; margin-bottom: 28px; flex-wrap: wrap; }
+    .statCard { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 16px 20px; flex: 1; min-width: 140px; box-shadow: var(--shadow); }
+    .statCard .num { font-size: 28px; font-weight: 900; }
+    .statCard .lbl { font-size: 12px; color: var(--muted); font-weight: 700; margin-top: 2px; }
+    .btn { border: 1px solid var(--border2); background: #fff; color: var(--text); padding: 8px 14px; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 13px; line-height: 1; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; user-select: none; }
+    .btn:hover { filter: brightness(0.97); }
+    .btn.primary { background: var(--primary); border-color: rgba(45,107,255,0.3); color: #fff; }
+    .btn.primary:hover { filter: brightness(1.04); }
+    .btn.danger { background: #fff0f0; border-color: rgba(180,35,24,0.2); color: var(--danger); }
+    .btn.sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
+    .sectionLabel { font-size: 11px; font-weight: 800; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin: 28px 0 10px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { padding: 11px 14px; text-align: left; font-size: 11px; font-weight: 800; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; background: rgba(15,23,42,0.018); }
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(45,107,255,0.02); }
+    tbody td { padding: 12px 14px; font-size: 13px; vertical-align: middle; }
+    .tdMuted { color: var(--muted); font-size: 12px; }
+    .badge { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 750; }
+    .badge.ok { background: var(--okBg); border: 1px solid var(--okBorder); color: var(--ok); }
+    .badge.warn { background: var(--warnBg); border: 1px solid var(--warnBorder); color: var(--warnText); }
+    .badge.off { background: rgba(15,23,42,0.05); border: 1px solid var(--border); color: var(--muted); }
+    .actionBtns { display: flex; gap: 6px; flex-wrap: wrap; }
+    .emptyState { padding: 50px 20px; text-align: center; color: var(--muted); }
+    /* Modal */
+    .modal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.45); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+    .modal.open { display: flex; }
+    .modalBox { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 24px 60px rgba(15,23,42,0.18); padding: 28px; width: 100%; max-width: 580px; max-height: 90vh; overflow-y: auto; }
+    .modalBox h2 { margin: 0 0 6px; font-size: 20px; font-weight: 900; }
+    .modalBox .sub { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin: 14px 0 5px; }
+    input, select, textarea { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border2); background: #fff; color: var(--text); font-family: inherit; font-size: 13px; outline: none; box-sizing: border-box; }
+    textarea { resize: vertical; }
+    input:focus, select:focus, textarea:focus { border-color: rgba(45,107,255,0.5); box-shadow: 0 0 0 3px rgba(45,107,255,0.1); }
+    .modalFooter { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
+    .errMsg { color: var(--danger); font-size: 13px; margin-top: 10px; display: none; }
+    .okMsg { color: var(--ok); font-size: 13px; margin-top: 10px; display: none; }
+    .credReveal { background: rgba(15,23,42,0.04); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-top: 10px; font-size: 13px; display: none; }
+    .credReveal strong { font-weight: 700; color: var(--text); }
+    .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+    .createForm { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow); }
+    .createForm h3 { margin: 0 0 14px; font-size: 16px; font-weight: 800; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media(max-width:600px) { .row2 { grid-template-columns: 1fr; } .actionBtns { flex-direction: column; } }
   </style>
 </head>
 <body>
+  <div class="topbar">
+    <div class="brand">Looped Admin</div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn sm" id="refreshBtn">Refresh</button>
+      <button class="btn sm danger" id="logoutBtn">Logout</button>
+    </div>
+  </div>
+
   <div class="wrap">
-    <aside class="side">
-      <div class="brand">Looped</div>
-      <nav class="nav">
-        <a class="active" href="/admin/dashboard.html">Admin Dashboard</a>
-        <a href="/admin/login.html">Login</a>
-      </nav>
-      <div style="margin-top:14px" class="muted">
-        <div class="pill" id="authStatus">Auth: unknown</div>
-      </div>
-    </aside>
+    <h1>Dashboard</h1>
+    <div class="sub">Manage clients, configs, and access.</div>
 
-    <main class="main">
-      <div class="topbar">
-        <div class="title">Admin Dashboard</div>
-        <div class="actions">
-          <button class="btn" id="createClientBtn" type="button">Create Client</button>
-          <button class="btn secondary" id="refreshBtn">Refresh</button>
-          <button class="btn danger" id="logoutBtn">Logout</button>
+    <!-- Stats -->
+    <div class="statsRow" id="statsRow">
+      <div class="statCard"><div class="num" id="statClients">-</div><div class="lbl">Clients</div></div>
+      <div class="statCard"><div class="num" id="statLeads">-</div><div class="lbl">Total leads</div></div>
+      <div class="statCard"><div class="num" id="statMessages">-</div><div class="lbl">Messages</div></div>
+    </div>
+
+    <!-- Create client -->
+    <div class="sectionLabel">Create client</div>
+    <div class="createForm">
+      <div class="row2">
+        <div>
+          <label>Name</label>
+          <input id="newName" placeholder="Coach name" />
+        </div>
+        <div>
+          <label>Email</label>
+          <input id="newEmail" type="email" placeholder="coach@example.com" />
         </div>
       </div>
-
-      <div class="grid">
-        <section class="card">
-          <h2>Clients (coaches)</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Timezone</th>
-                <th>Billing</th>
-                <th>Created</th>
-                <th style="width:420px;">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="clientsBody"></tbody>
-          </table>
-          <div class="linkBox" id="paymentLinkBox">
-            <div class="linkBoxText" id="paymentLinkText"></div>
-            <button class="btn secondary small" id="copyPaymentLinkBtn" type="button">Copy link</button>
-          </div>
-          <div class="okText" id="clientsOk" style="display:none;"></div>
-          <div class="err" id="clientsErr"></div>
-        </section>
-
-        <section class="card">
-          <h2>Leads</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Stage</th>
-                <th>Booking sent</th>
-                <th>Call completed</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody id="leadsBody"></tbody>
-          </table>
-          <div class="err" id="leadsErr"></div>
-        </section>
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn primary" id="createClientBtn">Create client</button>
+        <span class="errMsg" id="createErr" style="display:inline;"></span>
+        <span class="okMsg" id="createOk" style="display:inline;"></span>
       </div>
-    </main>
+    </div>
+
+    <!-- Client list -->
+    <div class="sectionLabel">All clients</div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Client ID</th>
+            <th>Niche</th>
+            <th>Subscription</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="clientTableBody">
+          <tr><td colspan="6"><div class="emptyState">Loading...</div></td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
-  <div class="modalOverlay" id="editModal">
-    <div class="modal">
-      <div class="modalHead">
-        <div class="modalTitle" id="editTitle">Edit client</div>
-        <button class="btn secondary" id="closeModalBtn" type="button">Close</button>
-      </div>
-      <div class="modalBody">
-        <div class="row2">
-          <div class="formRow">
-            <label>Booking URL</label>
-            <input id="bookingUrlInput" placeholder="https://calendly.com/..." />
-          </div>
-          <div class="formRow">
-            <label>Alt Booking URL (optional)</label>
-            <input id="bookingUrlAltInput" placeholder="https://..." />
-          </div>
-        </div>
+  <!-- Config modal -->
+  <div class="modal" id="configModal">
+    <div class="modalBox">
+      <h2>Edit config</h2>
+      <div class="sub" id="configModalSub">Client name</div>
 
-        <div class="formRow">
-          <label>System prompt</label>
-          <textarea id="systemPromptInput" placeholder="The coach's DM assistant prompt..."></textarea>
-        </div>
+      <label>System prompt</label>
+      <textarea id="cfgSystemPrompt" rows="8" placeholder="AI system prompt..."></textarea>
 
-        <div class="err" id="editErr"></div>
-      </div>
-      <div class="modalFoot">
-        <button class="btn secondary" id="cancelEditBtn" type="button">Cancel</button>
-        <button class="btn" id="saveEditBtn" type="button">Save</button>
+      <label>Niche</label>
+      <select id="cfgNiche">
+        <option value="fitness">Fitness</option>
+        <option value="money">Money / Business</option>
+        <option value="mindset">Mindset</option>
+        <option value="nutrition">Nutrition</option>
+        <option value="relationship">Relationship</option>
+        <option value="career">Career</option>
+        <option value="life">Life</option>
+        <option value="sales">Sales</option>
+        <option value="marketing">Marketing</option>
+        <option value="leadership">Leadership</option>
+        <option value="generic">Generic</option>
+        <option value="other">Other</option>
+      </select>
+
+      <label>Tone</label>
+      <input id="cfgTone" placeholder="e.g. direct, calm, friendly" />
+
+      <label>Style</label>
+      <input id="cfgStyle" placeholder="e.g. short, punchy, concise" />
+
+      <label>Booking URL</label>
+      <input id="cfgBookingUrl" placeholder="https://calendly.com/..." />
+
+      <label>Offer price</label>
+      <input id="cfgOfferPrice" placeholder="e.g. £200/month" />
+
+      <label>Subscription status</label>
+      <select id="cfgStripeStatus">
+        <option value="active">active</option>
+        <option value="trialing">trialing</option>
+        <option value="demo">demo</option>
+        <option value="past_due">past_due</option>
+        <option value="canceled">canceled</option>
+        <option value="">none</option>
+      </select>
+
+      <div class="errMsg" id="configErr"></div>
+      <div class="okMsg" id="configOk"></div>
+
+      <div class="modalFooter">
+        <button class="btn" id="configCancelBtn">Cancel</button>
+        <button class="btn primary" id="configSaveBtn">Save changes</button>
       </div>
     </div>
   </div>
 
-  <div class="modalOverlay" id="createClientModal">
-    <div class="modal narrow">
-      <div class="modalHead">
-        <div class="modalTitle">Create client</div>
-        <button class="btn secondary" id="closeCreateClientModalBtn" type="button">Close</button>
+  <!-- Credentials modal -->
+  <div class="modal" id="credsModal">
+    <div class="modalBox" style="max-width:440px;">
+      <h2>Show credentials</h2>
+      <div class="sub" id="credsModalSub">Enter the master password to reveal login details.</div>
+
+      <label>Master password</label>
+      <input type="password" id="masterPasswordInput" placeholder="Enter master password" autocomplete="off" />
+
+      <div class="errMsg" id="credsErr"></div>
+
+      <div class="credReveal" id="credReveal">
+        <div style="margin-bottom:6px;"><strong>Email:</strong> <span id="credEmail"></span></div>
+        <div style="font-size:12px;color:var(--muted);" id="credNote"></div>
       </div>
-      <div class="modalBody">
-        <div class="formRow">
-          <label>Client name</label>
-          <input id="createClientNameInput" placeholder="e.g. James Binks Coaching" />
-        </div>
 
-        <div class="formRow">
-          <label>Coach email</label>
-          <input id="createClientEmailInput" type="email" placeholder="coach@example.com" />
-        </div>
-
-        <div class="formRow">
-          <label>Timezone</label>
-          <input id="createClientTimezoneInput" placeholder="e.g. Europe/London" />
-        </div>
-
-        <div class="err" id="createClientErr"></div>
-      </div>
-      <div class="modalFoot">
-        <button class="btn secondary" id="cancelCreateClientBtn" type="button">Cancel</button>
-        <button class="btn" id="saveCreateClientBtn" type="button">Create</button>
+      <div class="modalFooter">
+        <button class="btn" id="credsCancelBtn">Close</button>
+        <button class="btn primary" id="credsRevealBtn">Reveal</button>
       </div>
     </div>
   </div>
 
-  <script src="/admin/admin.js?v=20260522a"></script>
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      if (window.AdminDashboard?.init) AdminDashboard.init();
-      else console.error("AdminDashboard not found (admin.js not loaded)");
-    });
-  </script>
+  <script src="/admin/admin.js"></script>
+  <script>AdminDashboard.init();</script>
 </body>
 </html>

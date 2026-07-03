@@ -1273,6 +1273,16 @@ Hey — just checking in. If you're still thinking about it, happy to answer any
 
     <script src="/coach/coach.js"></script>
     <script>
+    // Admin "Access Dashboard" token injection via postMessage
+    window.addEventListener("message", function(e) {
+      if (e.origin !== window.location.origin) return;
+      if (e.data && e.data.type === "admin_inject_token" && e.data.coach_token) {
+        localStorage.setItem("coach_token", e.data.coach_token);
+        window.location.reload();
+      }
+    });
+    </script>
+    <script>
     (function () {
       const API = "/coach/api";
 

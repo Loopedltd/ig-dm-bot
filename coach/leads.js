@@ -15,9 +15,9 @@
   }
 
   function fmtDate(iso) {
-    if (!iso) return "—";
+    if (!iso) return "";
     const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "—";
+    if (Number.isNaN(d.getTime())) return "";
     const now = new Date();
     const diffMs = now - d;
     const diffMins = Math.floor(diffMs / 60000);
@@ -31,7 +31,7 @@
   }
 
   function stageFmt(stage) {
-    if (!stage) return "—";
+    if (!stage) return "";
     return stage.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
@@ -96,23 +96,23 @@
 
     tbody.innerHTML = leads.map((lead) => {
       const name = leadDisplayName(lead);
-      const email = lead.email || "—";
-      const phone = lead.phone || "—";
+      const email = lead.email || "";
+      const phone = lead.phone || "";
       const stage = stageFmt(lead.stage);
       const lastMsg = fmtDate(lead.last_inbound_at || lead.last_outbound_at || lead.created_at);
       const paused = !!lead.manual_override;
       const isConfidencePause = paused &&
         String(lead.manual_override_reason || "").includes("Low confidence");
       const botBadge = isConfidencePause
-        ? `<span class="badge needs-review" title="Bot couldn't reply — open Instagram to respond manually">Needs review</span>`
+        ? `<span class="badge needs-review" title="Bot couldn't reply - open Instagram to respond manually">Needs review</span>`
         : paused
           ? `<span class="badge paused">Paused</span>`
           : `<span class="badge active">Active</span>`;
 
       return `<tr>
         <td style="font-weight:600;">${escHtml(name)}</td>
-        <td class="${email === "—" ? "tdMuted" : ""}">${escHtml(email)}</td>
-        <td class="${phone === "—" ? "tdMuted" : ""}">${escHtml(phone)}</td>
+        <td class="${email ? "" : "tdMuted"}">${escHtml(email)}</td>
+        <td class="${phone ? "" : "tdMuted"}">${escHtml(phone)}</td>
         <td class="tdMuted">${escHtml(stage)}</td>
         <td class="tdMuted">${escHtml(lastMsg)}</td>
         <td>${botBadge}</td>
@@ -132,7 +132,7 @@
     btn.disabled = true;
     btn.style.opacity = "0.65";
     btn.textContent = "Refreshing…";
-    if (statusEl) { statusEl.textContent = "Looking up Instagram names — this may take a moment…"; statusEl.style.display = "block"; statusEl.style.color = "rgba(15,23,42,0.55)"; }
+    if (statusEl) { statusEl.textContent = "Looking up Instagram names - this may take a moment..."; statusEl.style.display = "block"; statusEl.style.color = "rgba(15,23,42,0.55)"; }
 
     try {
       const data = await apiFetch(`${API}/leads/refresh-names`, { method: "POST" });

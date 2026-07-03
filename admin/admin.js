@@ -1,548 +1,368 @@
-/* global window, document, fetch, localStorage, navigator */
+// admin/admin.js — Admin login + dashboard logic
+
+const TOKEN_KEY = "admin_token";
+
+function getToken() { return localStorage.getItem(TOKEN_KEY); }
+function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
+function clearToken() { localStorage.removeItem(TOKEN_KEY); }
+
+async function apiFetch(path, opts = {}) {
+  const token = getToken();
+  const headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(path, Object.assign({}, opts, { headers }));
+  const text = await res.text();
+  let json;
+  try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
+  if (!res.ok) {
+    const msg = json?.error || json?.message || json?.raw || `Request failed (${res.status})`;
+    const err = new Error(msg);
+    err.status = res.status;
+    throw err;
+  }
+  return json;
+}
+
+function escHtml(s) {
+  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function fmtDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// ── Admin Login ───────────────────────────────────────────────────────────────
 
 const AdminLogin = {
-  async init() {
-    const f = document.getElementById("f");
-    if (!f) return;
-
+  init() {
+    const form = document.getElementById("f");
     const btn = document.getElementById("btn");
-    const err = document.getElementById("err");
-    const ok = document.getElementById("ok");
+    const errEl = document.getElementById("err");
 
-    f.addEventListener("submit", async (e) => {
+    if (!form) return;
+
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      if (err) err.style.display = "none";
-      if (ok) ok.style.display = "none";
-      if (btn) btn.disabled = true;
+      errEl.style.display = "none";
+      errEl.textContent = "";
+      btn.disabled = true;
+      btn.textContent = "Signing in...";
 
       try {
-        const email = document.getElementById("email")?.value?.trim() || "";
-        const password = document.getElementById("password")?.value || "";
-
-        const r = await fetch("/admin/api/login", {
+        const email = document.getElementById("email").value.trim();
+        const password = document.getElementById("password").value;
+        const data = await apiFetch("/admin/api/login", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         });
-
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(j?.error || "Login failed");
-
-        const tok = j.token || j.access_token || "";
-        console.log("[AdminLogin] server response keys:", Object.keys(j), "token present:", !!tok);
-        if (!tok) throw new Error(`Login succeeded but no token in response. Keys: ${Object.keys(j).join(", ")}`);
-
-        localStorage.setItem("admin_token", tok);
-        console.log("[AdminLogin] token saved, redirecting to dashboard");
-        if (ok) {
-          ok.textContent = "Logged in. Redirecting…";
-          ok.style.display = "block";
-        }
+        setToken(data.token);
         window.location.href = "/admin/dashboard.html";
-      } catch (e2) {
-        if (err) {
-          err.textContent = String(e2.message || e2);
-          err.style.display = "block";
-        }
-      } finally {
-        if (btn) btn.disabled = false;
+      } catch (e) {
+        errEl.textContent = e.message || "Login failed";
+        errEl.style.display = "block";
+        btn.disabled = false;
+        btn.textContent = "Sign in";
       }
     });
   },
 };
 
+// ── Admin Dashboard ───────────────────────────────────────────────────────────
+
 const AdminDashboard = {
-  state: {
-    token: null,
-    clients: [],
-    clientNameById: new Map(),
-    selectedClient: null,
-    lastPaymentLink: "",
-  },
+  _clients: [],
+  _activeClientId: null,
 
-  el(id) {
-    return document.getElementById(id);
-  },
-
-  authHeaders() {
-    return {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${this.state.token}`,
-    };
-  },
-
-  async apiFetch(path, opts = {}) {
-    const r = await fetch(path, { ...opts, headers: { ...this.authHeaders(), ...(opts.headers || {}) } });
-    const j = await r.json().catch(() => ({}));
-    if (r.status === 401) {
-      localStorage.removeItem("admin_token");
+  init() {
+    if (!getToken()) {
       window.location.href = "/admin/login.html";
       return;
     }
-    if (!r.ok) throw new Error(j?.error || j?.message || `Request failed (${r.status})`);
-    return j;
-  },
 
-  fmtDate(s) {
-    try {
-      return s ? new Date(s).toLocaleString("en-GB") : "";
-    } catch {
-      return s || "";
-    }
-  },
+    const qs = (id) => document.getElementById(id);
 
-  showErr(id, msg) {
-    const node = this.el(id);
-    if (!node) return;
-    node.textContent = msg || "";
-    node.style.display = msg ? "block" : "none";
-  },
-
-  showOk(id, msg) {
-    const node = this.el(id);
-    if (!node) return;
-    node.textContent = msg || "";
-    node.style.display = msg ? "block" : "none";
-  },
-
-  requireTokenOrRedirect() {
-    const token = localStorage.getItem("admin_token");
-    console.log("[AdminDashboard] requireTokenOrRedirect: token =", JSON.stringify(token));
-    if (!token) {
-      console.warn("[AdminDashboard] No token found — redirecting to login");
-      window.location.href = "/admin/login.html";
-      return false;
-    }
-    this.state.token = token;
-    return true;
-  },
-
-  bindLogout() {
-    const b = this.el("logoutBtn");
-    if (!b) return;
-    b.addEventListener("click", () => {
-      localStorage.removeItem("admin_token");
+    qs("logoutBtn")?.addEventListener("click", () => {
+      clearToken();
       window.location.href = "/admin/login.html";
     });
-  },
 
-  bindRefresh() {
-    const b = this.el("refreshBtn");
-    if (!b) return;
-    b.addEventListener("click", () => this.refreshAll());
-  },
+    qs("refreshBtn")?.addEventListener("click", () => this.loadAll());
 
-  bindPaymentLinkBox() {
-    const copyBtn = this.el("copyPaymentLinkBtn");
-    if (!copyBtn || copyBtn.__wired) return;
-    copyBtn.__wired = true;
+    // Create client
+    qs("createClientBtn")?.addEventListener("click", () => this.createClient());
 
-    copyBtn.addEventListener("click", async () => {
-      try {
-        if (!this.state.lastPaymentLink) return;
-        await navigator.clipboard.writeText(this.state.lastPaymentLink);
-        this.showOk("clientsOk", "Payment link copied.");
-      } catch {
-        this.showErr("clientsErr", "Could not copy payment link.");
+    // Config modal
+    qs("configCancelBtn")?.addEventListener("click", () => this.closeModal("configModal"));
+    qs("configSaveBtn")?.addEventListener("click", () => this.saveConfig());
+
+    // Credentials modal
+    qs("credsCancelBtn")?.addEventListener("click", () => this.closeModal("credsModal"));
+    qs("credsRevealBtn")?.addEventListener("click", () => this.revealCredentials());
+
+    // Close modals on backdrop click
+    ["configModal", "credsModal"].forEach((id) => {
+      const el = qs(id);
+      if (el) {
+        el.addEventListener("click", (e) => {
+          if (e.target === el) this.closeModal(id);
+        });
       }
     });
+
+    this.loadAll();
   },
 
-  showPaymentLink(url) {
-    const box = this.el("paymentLinkBox");
-    const text = this.el("paymentLinkText");
-    if (!box || !text) return;
-
-    this.state.lastPaymentLink = url || "";
-    text.textContent = url || "";
-    box.style.display = url ? "flex" : "none";
+  async loadAll() {
+    await Promise.allSettled([this.loadStats(), this.loadClients()]);
   },
 
-  openModal() {
-    const overlay = this.el("editModal");
-    if (!overlay) return;
-    overlay.style.display = "flex";
-  },
-
-  closeModal() {
-    const overlay = this.el("editModal");
-    if (!overlay) return;
-    overlay.style.display = "none";
-    this.showErr("editErr", "");
-    this.state.selectedClient = null;
-  },
-
-  openCreateClientModal() {
-    const overlay = this.el("createClientModal");
-    if (!overlay) return;
-
-    this.showErr("createClientErr", "");
-    const nameInput = this.el("createClientNameInput");
-    const emailInput = this.el("createClientEmailInput");
-    const timezoneInput = this.el("createClientTimezoneInput");
-
-    if (nameInput) nameInput.value = "";
-    if (emailInput) emailInput.value = "";
-    if (timezoneInput) timezoneInput.value = "Europe/London";
-
-    overlay.style.display = "flex";
-  },
-
-  closeCreateClientModal() {
-    const overlay = this.el("createClientModal");
-    if (!overlay) return;
-    overlay.style.display = "none";
-    this.showErr("createClientErr", "");
-  },
-
-  bindModalButtons() {
-    const closeBtn = this.el("closeModalBtn");
-    closeBtn?.addEventListener("click", () => this.closeModal());
-
-    const cancelBtn = this.el("cancelEditBtn");
-    cancelBtn?.addEventListener("click", () => this.closeModal());
-
-    const saveBtn = this.el("saveEditBtn");
-    saveBtn?.addEventListener("click", () => this.saveEdit());
-
-    const overlay = this.el("editModal");
-    overlay?.addEventListener("click", (e) => {
-      if (e.target === overlay) this.closeModal();
-    });
-  },
-
-  bindCreateClientModalButtons() {
-    const openBtn = this.el("createClientBtn");
-    openBtn?.addEventListener("click", () => this.openCreateClientModal());
-
-    const closeBtn = this.el("closeCreateClientModalBtn");
-    closeBtn?.addEventListener("click", () => this.closeCreateClientModal());
-
-    const cancelBtn = this.el("cancelCreateClientBtn");
-    cancelBtn?.addEventListener("click", () => this.closeCreateClientModal());
-
-    const saveBtn = this.el("saveCreateClientBtn");
-    saveBtn?.addEventListener("click", () => this.saveCreateClient());
-
-    const overlay = this.el("createClientModal");
-    overlay?.addEventListener("click", (e) => {
-      if (e.target === overlay) this.closeCreateClientModal();
-    });
-  },
-
-  getClientConfig(client) {
-    const cfg = client?.config;
-    if (Array.isArray(cfg)) return cfg[0] || {};
-    return cfg || {};
-  },
-
-  getBillingStatusPill(cfg) {
-    const status = String(cfg?.stripe_subscription_status || "").toLowerCase();
-
-    if (status === "demo") {
-      return { text: "demo", className: "pill demo" };
-    }
-    if (status === "active" || status === "trialing") {
-      return { text: status, className: "pill ok" };
-    }
-    if (status === "past_due" || status === "unpaid") {
-      return { text: status, className: "pill warn" };
-    }
-    if (status === "canceled" || status === "cancelled") {
-      return { text: status, className: "pill danger" };
-    }
-    return { text: status || "not set", className: "pill" };
-  },
-
-  openEdit(client) {
-    this.state.selectedClient = client;
-    this.showErr("editErr", "");
-
-    const title = this.el("editTitle");
-    if (title) title.textContent = `Edit: ${client?.name || "Client"}`;
-
-    const cfg = this.getClientConfig(client);
-
-    const bookingUrlInput = this.el("bookingUrlInput");
-    const bookingUrlAltInput = this.el("bookingUrlAltInput");
-    const systemPromptInput = this.el("systemPromptInput");
-
-    if (bookingUrlInput) bookingUrlInput.value = cfg.booking_url || "";
-    if (bookingUrlAltInput) bookingUrlAltInput.value = cfg.booking_url_alt || "";
-    if (systemPromptInput) systemPromptInput.value = cfg.system_prompt || "";
-
-    this.openModal();
-  },
-
-  async saveEdit() {
-    this.showErr("editErr", "");
-
-    const client = this.state.selectedClient;
-    if (!client?.id) {
-      this.showErr("editErr", "No client selected.");
-      return;
-    }
-
-    const booking_url = this.el("bookingUrlInput")?.value?.trim() || null;
-    const booking_url_alt = this.el("bookingUrlAltInput")?.value?.trim() || null;
-    const system_prompt = this.el("systemPromptInput")?.value?.trim() || "";
-
-    const payload = {
-      booking_url: booking_url || null,
-      booking_url_alt: booking_url_alt || null,
-      system_prompt,
-    };
-
+  async loadStats() {
     try {
-      const j = await this.apiFetch(`/admin/api/clients/${client.id}/config`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      if (!j) return;
-
-      await this.loadClients();
-      this.closeModal();
+      const data = await apiFetch("/admin/api/stats");
+      const s = data?.stats || data || {};
+      const qs = (id) => document.getElementById(id);
+      if (qs("statClients")) qs("statClients").textContent = s.clients ?? "-";
+      if (qs("statLeads")) qs("statLeads").textContent = s.leads ?? "-";
+      if (qs("statMessages")) qs("statMessages").textContent = s.messages ?? "-";
     } catch (e) {
-      this.showErr("editErr", String(e.message || e));
+      console.warn("stats load failed:", e.message);
     }
-  },
-
-  async saveCreateClient() {
-    this.showErr("createClientErr", "");
-
-    const name = this.el("createClientNameInput")?.value?.trim() || "";
-    const email = this.el("createClientEmailInput")?.value?.trim() || "";
-    const timezone = this.el("createClientTimezoneInput")?.value?.trim() || "Europe/London";
-
-    if (!name) {
-      this.showErr("createClientErr", "Client name is required.");
-      return;
-    }
-
-    if (!email) {
-      this.showErr("createClientErr", "Coach email is required.");
-      return;
-    }
-
-    try {
-      const j = await this.apiFetch("/admin/api/clients/create", {
-        method: "POST",
-        body: JSON.stringify({ name, email, timezone }),
-      });
-      if (!j) return;
-
-      await this.loadClients();
-      this.closeCreateClientModal();
-      this.showOk("clientsOk", "Client created.");
-    } catch (e) {
-      this.showErr("createClientErr", String(e.message || e));
-    }
-  },
-
-  async setBotPaused(clientId, enabled) {
-    const j = await this.apiFetch(`/admin/api/clients/${clientId}/bot-paused`, {
-      method: "POST",
-      body: JSON.stringify({ enabled: !!enabled, reason: enabled ? "Paused by admin" : "Resumed by admin" }),
-    });
-    if (!j) return null;
-    return j;
-  },
-
-async createPaymentLink(clientId, email) {
-  const j = await this.apiFetch(`/admin/api/create-payment-link/${clientId}`, {
-    method: "POST",
-    body: JSON.stringify({ email }),
-  });
-  if (!j) return null;
-  return j;
-},
-
-  async init() {
-    if (!this.requireTokenOrRedirect()) return;
-
-    const authStatus = this.el("authStatus");
-    if (authStatus) {
-      authStatus.textContent = "Auth: OK";
-      authStatus.classList.add("ok");
-    }
-
-    this.bindLogout();
-    this.bindRefresh();
-    this.bindModalButtons();
-    this.bindCreateClientModalButtons();
-    this.bindPaymentLinkBox();
-
-    await this.refreshAll();
-  },
-
-  async refreshAll() {
-    this.showErr("clientsErr", "");
-    this.showErr("leadsErr", "");
-    this.showOk("clientsOk", "");
-    await this.loadClients();
-    await this.loadLeads();
   },
 
   async loadClients() {
-    this.showErr("clientsErr", "");
-    this.showOk("clientsOk", "");
-
-    const body = this.el("clientsBody");
-    if (body) body.innerHTML = "";
-
+    const tbody = document.getElementById("clientTableBody");
+    if (!tbody) return;
     try {
-      const j = await this.apiFetch("/admin/api/clients");
-      if (!j) return;
-
-      this.state.clients = j.clients || [];
-      this.state.clientNameById = new Map(this.state.clients.map((c) => [c.id, c.name]));
-
-      if (!body) return;
-
-      for (const c of this.state.clients) {
-        const tr = document.createElement("tr");
-
-        const tdName = document.createElement("td");
-        tdName.textContent = c.name || "(no name)";
-        tr.appendChild(tdName);
-
-        const tdTz = document.createElement("td");
-        tdTz.textContent = c.timezone || "";
-        tr.appendChild(tdTz);
-
-        const cfg = this.getClientConfig(c);
-        const billing = this.getBillingStatusPill(cfg);
-
-        const tdBilling = document.createElement("td");
-        const billingPill = document.createElement("span");
-        billingPill.className = billing.className;
-        billingPill.textContent = billing.text;
-        tdBilling.appendChild(billingPill);
-        tr.appendChild(tdBilling);
-
-        const tdCreated = document.createElement("td");
-        tdCreated.textContent = this.fmtDate(c.created_at);
-        tr.appendChild(tdCreated);
-
-        const tdAct = document.createElement("td");
-        tdAct.className = "actionsCell";
-
-        const editBtn = document.createElement("button");
-        editBtn.className = "btn";
-        editBtn.textContent = "Edit";
-        editBtn.addEventListener("click", () => this.openEdit(c));
-        tdAct.appendChild(editBtn);
-
-const payBtn = document.createElement("button");
-payBtn.className = "btn secondary";
-payBtn.textContent = "Payment link";
-payBtn.addEventListener("click", async () => {
-  try {
-    this.showErr("clientsErr", "");
-    this.showOk("clientsOk", "");
-    payBtn.disabled = true;
-
-    const email = window.prompt("Enter the coach email for this payment link:");
-    if (!email || !email.trim()) {
-      throw new Error("Coach email is required to create the payment link.");
-    }
-
-    const data = await this.createPaymentLink(c.id, email.trim().toLowerCase());
-    const url = data?.url || "";
-
-    if (!url) throw new Error("No payment link returned.");
-
-    this.showPaymentLink(url);
-
-    try {
-      await navigator.clipboard.writeText(url);
-      this.showOk("clientsOk", "Payment link created and copied.");
-    } catch {
-      this.showOk("clientsOk", "Payment link created.");
-    }
-  } catch (e) {
-    this.showErr("clientsErr", String(e.message || e));
-  } finally {
-    payBtn.disabled = false;
-  }
-});
-tdAct.appendChild(payBtn);
-
-        const paused = !!cfg.bot_paused;
-        const toggleBtn = document.createElement("button");
-        toggleBtn.className = paused ? "btn secondary" : "btn danger";
-        toggleBtn.textContent = paused ? "Resume bot" : "Pause bot";
-
-        toggleBtn.addEventListener("click", async () => {
-          try {
-            toggleBtn.disabled = true;
-            const nextPaused = !paused;
-            await this.setBotPaused(c.id, nextPaused);
-            await this.loadClients();
-          } catch (e) {
-            this.showErr("clientsErr", String(e.message || e));
-          } finally {
-            toggleBtn.disabled = false;
-          }
-        });
-
-        tdAct.appendChild(toggleBtn);
-        tr.appendChild(tdAct);
-
-        body.appendChild(tr);
-      }
+      const data = await apiFetch("/admin/api/clients");
+      this._clients = data?.clients || [];
+      this.renderClientTable();
     } catch (e) {
-      this.showErr("clientsErr", String(e.message || e));
+      if (e.status === 401) { window.location.href = "/admin/login.html"; return; }
+      tbody.innerHTML = `<tr><td colspan="6"><div class="emptyState" style="color:#b42318;">Failed to load: ${escHtml(e.message)}</div></td></tr>`;
     }
   },
 
-  async loadLeads() {
-    this.showErr("leadsErr", "");
+  renderClientTable() {
+    const tbody = document.getElementById("clientTableBody");
+    if (!tbody) return;
 
-    const body = this.el("leadsBody");
-    if (body) body.innerHTML = "";
+    if (!this._clients.length) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="emptyState">No clients yet.</div></td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = this._clients.map((c) => {
+      const cfg = c.config || {};
+      const status = cfg.stripe_subscription_status || "none";
+      const badgeCls = status === "active" || status === "trialing" || status === "demo" ? "ok" : status === "past_due" ? "warn" : "off";
+      const niche = cfg.niche || "generic";
+      return `<tr>
+        <td style="font-weight:700;">${escHtml(c.name || "Unnamed")}</td>
+        <td class="tdMuted" style="font-family:monospace;font-size:11px;">${escHtml(c.id)}</td>
+        <td class="tdMuted">${escHtml(niche)}</td>
+        <td><span class="badge ${badgeCls}">${escHtml(status)}</span></td>
+        <td class="tdMuted">${escHtml(fmtDate(c.created_at))}</td>
+        <td>
+          <div class="actionBtns">
+            <button class="btn sm" onclick="AdminDashboard.openConfigModal('${escHtml(c.id)}')">Edit config</button>
+            <button class="btn sm primary" onclick="AdminDashboard.loginAsCoach('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Access dashboard</button>
+            <button class="btn sm" onclick="AdminDashboard.openCredsModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Show credentials</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join("");
+  },
+
+  // ── Create client ──────────────────────────────────────────────────────────
+
+  async createClient() {
+    const qs = (id) => document.getElementById(id);
+    const name = (qs("newName")?.value || "").trim();
+    const email = (qs("newEmail")?.value || "").trim();
+    const errEl = qs("createErr");
+    const okEl = qs("createOk");
+
+    if (errEl) { errEl.textContent = ""; errEl.style.display = "none"; }
+    if (okEl) { okEl.textContent = ""; okEl.style.display = "none"; }
+
+    if (!name) { if (errEl) { errEl.textContent = "Name is required."; errEl.style.display = "inline"; } return; }
+    if (!email) { if (errEl) { errEl.textContent = "Email is required."; errEl.style.display = "inline"; } return; }
+
+    const btn = qs("createClientBtn");
+    if (btn) { btn.disabled = true; btn.textContent = "Creating..."; }
 
     try {
-      const j = await this.apiFetch("/admin/api/leads");
-      if (!j) return;
+      const data = await apiFetch("/admin/api/clients/create", {
+        method: "POST",
+        body: JSON.stringify({ name, email }),
+      });
+      if (okEl) { okEl.textContent = `Created: ${data.client?.id || "ok"}. Send password setup link to the coach.`; okEl.style.display = "inline"; }
+      if (qs("newName")) qs("newName").value = "";
+      if (qs("newEmail")) qs("newEmail").value = "";
+      await this.loadClients();
+    } catch (e) {
+      if (errEl) { errEl.textContent = e.message || "Create failed."; errEl.style.display = "inline"; }
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "Create client"; }
+    }
+  },
 
-      const leads = j.leads || [];
-      if (!body) return;
+  // ── Config modal ───────────────────────────────────────────────────────────
 
-      for (const l of leads) {
-        const tr = document.createElement("tr");
+  openConfigModal(clientId) {
+    const client = this._clients.find((c) => c.id === clientId);
+    if (!client) return;
+    this._activeClientId = clientId;
+    const cfg = client.config || {};
 
-        const tdName = document.createElement("td");
-        tdName.textContent =
-          l.name ||
-          this.state.clientNameById.get(l.client_id) ||
-          l.ig_psid ||
-          "";
-        tr.appendChild(tdName);
+    const qs = (id) => document.getElementById(id);
+    if (qs("configModalSub")) qs("configModalSub").textContent = client.name || clientId;
+    if (qs("cfgSystemPrompt")) qs("cfgSystemPrompt").value = cfg.system_prompt || "";
+    if (qs("cfgNiche")) qs("cfgNiche").value = cfg.niche || "generic";
+    if (qs("cfgTone")) qs("cfgTone").value = cfg.tone || "";
+    if (qs("cfgStyle")) qs("cfgStyle").value = cfg.style || "";
+    if (qs("cfgBookingUrl")) qs("cfgBookingUrl").value = cfg.booking_url || "";
+    if (qs("cfgOfferPrice")) qs("cfgOfferPrice").value = cfg.offer_price || "";
+    if (qs("cfgStripeStatus")) qs("cfgStripeStatus").value = cfg.stripe_subscription_status || "";
+    if (qs("configErr")) { qs("configErr").textContent = ""; qs("configErr").style.display = "none"; }
+    if (qs("configOk")) { qs("configOk").textContent = ""; qs("configOk").style.display = "none"; }
 
-        const tdStage = document.createElement("td");
-        tdStage.textContent = l.stage || "";
-        tr.appendChild(tdStage);
+    this.openModal("configModal");
+  },
 
-        const tdBooking = document.createElement("td");
-        tdBooking.textContent = l.booking_sent ? "true" : "false";
-        tr.appendChild(tdBooking);
+  async saveConfig() {
+    const clientId = this._activeClientId;
+    if (!clientId) return;
 
-        const tdCall = document.createElement("td");
-        tdCall.textContent = l.call_completed ? "true" : "false";
-        tr.appendChild(tdCall);
+    const qs = (id) => document.getElementById(id);
+    const errEl = qs("configErr");
+    const okEl = qs("configOk");
+    const btn = qs("configSaveBtn");
 
-        const tdCreated = document.createElement("td");
-        tdCreated.textContent = this.fmtDate(l.created_at);
-        tr.appendChild(tdCreated);
+    if (errEl) { errEl.style.display = "none"; }
+    if (okEl) { okEl.style.display = "none"; }
+    if (btn) { btn.disabled = true; btn.textContent = "Saving..."; }
 
-        body.appendChild(tr);
+    try {
+      await apiFetch(`/admin/api/clients/${clientId}/config`, {
+        method: "POST",
+        body: JSON.stringify({
+          system_prompt: qs("cfgSystemPrompt")?.value || null,
+          niche: qs("cfgNiche")?.value || null,
+          tone: qs("cfgTone")?.value || null,
+          style: qs("cfgStyle")?.value || null,
+          booking_url: qs("cfgBookingUrl")?.value || null,
+          offer_price: qs("cfgOfferPrice")?.value || null,
+          stripe_subscription_status: qs("cfgStripeStatus")?.value || null,
+        }),
+      });
+      if (okEl) { okEl.textContent = "Saved."; okEl.style.display = "block"; }
+      // Update local cache
+      const client = this._clients.find((c) => c.id === clientId);
+      if (client) {
+        client.config = client.config || {};
+        client.config.system_prompt = qs("cfgSystemPrompt")?.value || null;
+        client.config.niche = qs("cfgNiche")?.value || null;
+        client.config.tone = qs("cfgTone")?.value || null;
+        client.config.style = qs("cfgStyle")?.value || null;
+        client.config.booking_url = qs("cfgBookingUrl")?.value || null;
+        client.config.offer_price = qs("cfgOfferPrice")?.value || null;
+        client.config.stripe_subscription_status = qs("cfgStripeStatus")?.value || null;
+        this.renderClientTable();
       }
     } catch (e) {
-      this.showErr("leadsErr", String(e.message || e));
+      if (errEl) { errEl.textContent = e.message || "Save failed."; errEl.style.display = "block"; }
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "Save changes"; }
     }
+  },
+
+  // ── Login as coach ─────────────────────────────────────────────────────────
+
+  async loginAsCoach(clientId, clientName) {
+    try {
+      const data = await apiFetch(`/admin/api/clients/${clientId}/login-token`, { method: "POST" });
+      const coachToken = data.token;
+      // Store under coach token key and open dashboard in new tab
+      const win = window.open("/dashboard", "_blank");
+      if (!win) {
+        alert("Pop-up blocked. Please allow pop-ups for this site.");
+        return;
+      }
+      // The new tab needs the token — inject it via localStorage on the same origin
+      // We do this by navigating to a helper URL that sets the token
+      win.addEventListener("load", () => {
+        try {
+          win.localStorage.setItem("coach_token", coachToken);
+          win.location.reload();
+        } catch (e) {
+          // If blocked, write token to sessionStorage as fallback
+          console.warn("Could not inject token into new tab:", e);
+        }
+      }, { once: true });
+      // Fallback: store in sessionStorage here and pass via postMessage
+      setTimeout(() => {
+        try {
+          win.postMessage({ type: "admin_inject_token", coach_token: coachToken }, window.location.origin);
+        } catch {}
+      }, 1000);
+    } catch (e) {
+      alert("Failed to get login token: " + (e.message || e));
+    }
+  },
+
+  // ── Show credentials ───────────────────────────────────────────────────────
+
+  openCredsModal(clientId, clientName) {
+    this._activeClientId = clientId;
+    const qs = (id) => document.getElementById(id);
+    if (qs("credsModalSub")) qs("credsModalSub").textContent = `Credentials for: ${clientName || clientId}`;
+    if (qs("masterPasswordInput")) qs("masterPasswordInput").value = "";
+    if (qs("credsErr")) { qs("credsErr").textContent = ""; qs("credsErr").style.display = "none"; }
+    if (qs("credReveal")) qs("credReveal").style.display = "none";
+    this.openModal("credsModal");
+  },
+
+  async revealCredentials() {
+    const clientId = this._activeClientId;
+    if (!clientId) return;
+    const qs = (id) => document.getElementById(id);
+    const masterPw = qs("masterPasswordInput")?.value || "";
+    const errEl = qs("credsErr");
+    const revealEl = qs("credReveal");
+
+    if (errEl) { errEl.style.display = "none"; }
+    if (!masterPw) { if (errEl) { errEl.textContent = "Enter the master password."; errEl.style.display = "block"; } return; }
+
+    const btn = qs("credsRevealBtn");
+    if (btn) { btn.disabled = true; btn.textContent = "Checking..."; }
+
+    try {
+      const data = await apiFetch(`/admin/api/clients/${clientId}/credentials`, {
+        method: "POST",
+        body: JSON.stringify({ master_password: masterPw }),
+      });
+      if (qs("credEmail")) qs("credEmail").textContent = data.email || "(no email found)";
+      if (qs("credNote")) qs("credNote").textContent = data.note || "";
+      if (revealEl) revealEl.style.display = "block";
+    } catch (e) {
+      if (errEl) { errEl.textContent = e.message || "Incorrect password."; errEl.style.display = "block"; }
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "Reveal"; }
+    }
+  },
+
+  // ── Modal helpers ──────────────────────────────────────────────────────────
+
+  openModal(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add("open");
+  },
+
+  closeModal(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove("open");
   },
 };
-
-window.AdminLogin = AdminLogin;
-window.AdminDashboard = AdminDashboard;

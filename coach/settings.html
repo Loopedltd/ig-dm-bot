@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Settings — Looped</title>
+    <title>Settings | Looped</title>
     <style>
       :root{
         --bg: #f7f8fb;
@@ -100,6 +100,9 @@
       .productCard{ border:1px solid var(--border); border-radius:14px; padding:14px; position:relative; }
       .productCard label{ margin-top:10px; }
       .productCard label:first-of-type{ margin-top:0; }
+      .bookingItem{ display:grid; grid-template-columns:1fr 1fr auto auto; gap:8px; align-items:center; }
+      .bookingItem input, .bookingItem select{ margin:0; }
+      @media(max-width:600px){ .bookingItem{ grid-template-columns:1fr 1fr; } .bookingItem .removeBookingItemBtn{ grid-column:span 2; } }
 
       @media (max-width: 700px){
         .row{ grid-template-columns: 1fr; }
@@ -153,15 +156,38 @@
         Instagram connected! Fill in your settings below and click Save to finish setup.
       </div>
 
-      <!-- ── Niche — first field, always visible ─────────────────────── -->
+      <!-- Niche: first field, always visible -->
       <div class="card" style="margin-top:16px;">
         <label style="margin-top:0; font-size:14px; font-weight:700; color:var(--text);">Your niche</label>
         <select id="niche" style="max-width:320px; margin-top:8px;">
-          <option value="generic">Generic coach</option>
           <option value="fitness">Fitness coach</option>
           <option value="money">Money / Business coach</option>
+          <option value="mindset">Mindset coach</option>
+          <option value="nutrition">Nutrition coach</option>
+          <option value="relationship">Relationship coach</option>
+          <option value="career">Career coach</option>
+          <option value="life">Life coach</option>
+          <option value="sales">Sales coach</option>
+          <option value="marketing">Marketing coach</option>
+          <option value="leadership">Leadership coach</option>
+          <option value="generic">Generic / Multi-niche</option>
+          <option value="other">Other</option>
         </select>
-        <div class="helper">The most important setting — drives all presets, tone, and fallback knowledge. Set this first.</div>
+        <div id="nicheOtherWrap" style="display:none; margin-top:8px; max-width:320px;">
+          <input id="niche_other" placeholder="Describe your niche e.g. parenting coach, sobriety coach..." />
+          <div class="helper" style="margin-top:4px;">We'll map this to the closest preset automatically.</div>
+        </div>
+        <div class="helper">The most important setting. Drives all presets, tone, and fallback knowledge. Set this first.</div>
+      </div>
+
+      <!-- Booking Links & Products -->
+      <div class="sectionLabel">Booking Links &amp; Products</div>
+      <div class="card" id="bookingItemsCard">
+        <div class="takeoverTitle" style="font-size:16px;">Booking links &amp; products</div>
+        <div class="takeoverSub" style="margin-top:4px;">Add your booking links and products. The bot will send the most relevant one. Up to 10 items.</div>
+        <div id="bookingItemsList" style="margin-top:14px; display:flex; flex-direction:column; gap:8px;"></div>
+        <button type="button" class="btn" id="addBookingItemBtn" style="margin-top:10px; width:fit-content;">+ Add item</button>
+        <div class="helper" style="margin-top:8px;">Mark at least one item as <strong>Booking link</strong> so the bot knows where to send leads.</div>
       </div>
 
       <!-- DM Trigger Automations -->
@@ -174,7 +200,7 @@
           </div>
         </div>
 
-        <div class="row3" style="margin-top:14px;">
+        <div class="row" style="margin-top:14px;">
           <div>
             <div class="takeoverTopLine" style="margin-bottom:8px;">
               <span class="badge" id="storyReplyToggleBadge">Story reply OFF</span>
@@ -187,19 +213,6 @@
             <label>Outbound message</label>
             <textarea id="story_reply_auto_dm_text" placeholder="Example:&#10;Appreciate the reply - what are you trying to sort right now?" style="min-height:110px;"></textarea>
             <div class="helper">Fires when someone replies to your story and opens a DM thread.</div>
-          </div>
-          <div>
-            <div class="takeoverTopLine" style="margin-bottom:8px;">
-              <span class="badge" id="commentReplyToggleBadge">Comment reply OFF</span>
-            </div>
-            <label style="margin-top:0;">Comment reply auto-DM</label>
-            <select id="comment_reply_auto_dm_enabled">
-              <option value="false">Off</option>
-              <option value="true">On</option>
-            </select>
-            <label>Outbound message</label>
-            <textarea id="comment_reply_auto_dm_text" placeholder="Example:&#10;Saw your comment - what are you trying to get help with?" style="min-height:110px;"></textarea>
-            <div class="helper">Fires when someone enters DMs from a post comment.</div>
           </div>
           <div>
             <div class="takeoverTopLine" style="margin-bottom:8px;">
@@ -221,11 +234,11 @@
         <div class="divider"></div>
 
         <label style="margin-top:0;">24-hour follow-up message <span style="font-weight:500; color:var(--muted);">(optional)</span></label>
-        <textarea id="followup_message" placeholder="Example:&#10;hey, just checking in — still here if you want to chat" style="min-height:80px;"></textarea>
+        <textarea id="followup_message" placeholder="Example:&#10;hey, just checking in - still here if you want to chat" style="min-height:80px;"></textarea>
         <div class="helper">Sent once if a lead goes quiet for 24h. Leave blank to use the smart default based on what you know about the lead.</div>
 
         <div class="divider" style="margin-top:16px;"></div>
-        <div class="tip">These are not AI replies — they are fixed openers you write yourself.</div>
+        <div class="tip">These are not AI replies. They are fixed openers you write yourself.</div>
       </div>
 
       <!-- Response Delay -->
@@ -315,16 +328,10 @@
         <div class="takeoverTitle" style="font-size:16px;">Get your bot working in minutes</div>
         <div class="takeoverSub" style="margin-top:4px;">Fill these in and your bot is ready. Everything else has smart defaults.</div>
 
-        <div class="row" style="margin-top:4px;">
-          <div>
-            <label style="margin-top:0;">Booking URL</label>
-            <input id="booking_url" placeholder="https://calendly.com/yourname/15min" />
-          </div>
-          <div>
-            <label style="margin-top:0;">Offer price</label>
-            <input id="offer_price" placeholder="e.g. £200 one-off, £1500/month, from £99" />
-            <div class="helper">Used when someone asks "how much is it?"</div>
-          </div>
+        <div style="margin-top:4px;">
+          <label style="margin-top:0;">Offer price</label>
+          <input id="offer_price" placeholder="e.g. £200 one-off, £1500/month, from £99" style="max-width:320px;" />
+          <div class="helper">Used when someone asks "how much is it?"</div>
         </div>
 
         <label>Instagram handle</label>
@@ -333,7 +340,7 @@
 
         <div class="divider"></div>
 
-        <label>Your real DMs <span style="font-weight:800; color: var(--primary);">— most important field for making the bot sound like you</span></label>
+        <label>Your real DMs <span style="font-weight:800; color: var(--primary);">- most important field for making the bot sound like you</span></label>
         <textarea id="example_messages" style="min-height:320px;">user: how much is it?
 assistant: it's £200 to get started then £90 after that
 
@@ -368,7 +375,7 @@ assistant: use this and get booked in
         <div class="tip">Format: <code style="background:rgba(15,23,42,0.06); padding:2px 6px; border-radius:6px; font-size:12px;">user: ...</code> then <code style="background:rgba(15,23,42,0.06); padding:2px 6px; border-radius:6px; font-size:12px;">assistant: ...</code> with a blank line between each pair.</div>
       </div>
 
-      <!-- ─── SECTION 2: Optional Customisation — wizard ──────────────── -->
+      <!-- SECTION 2: Optional Customisation wizard -->
       <div class="sectionLabel" style="display:flex; align-items:center; gap:8px;">
         <span class="sectionNum" style="background: var(--muted);">2</span> Optional Customisation
       </div>
@@ -391,7 +398,7 @@ assistant: use this and get booked in
           <div class="wizardStep active" data-step="0">
             <div class="wizardQuestion">What do you do?</div>
             <div class="wizardHint">Describe your service in plain English. The bot uses this when leads ask what you offer.</div>
-            <textarea id="offer_what" placeholder="e.g. I help busy men over 30 get in shape with a tailored training and nutrition plan — no gym required."></textarea>
+            <textarea id="offer_what" placeholder="e.g. I help busy men over 30 get in shape with a tailored training and nutrition plan - no gym required."></textarea>
           </div>
 
           <div class="wizardStep" data-step="1">
@@ -414,8 +421,8 @@ assistant: use this and get booked in
 
           <div class="wizardStep" data-step="4">
             <div class="wizardQuestion">What's the main result you help people get?</div>
-            <div class="wizardHint">The headline outcome — what someone's life looks like after working with you.</div>
-            <textarea id="main_result" placeholder="e.g. Help busy men lose body fat, build real strength, and actually enjoy training — without it taking over their life."></textarea>
+            <div class="wizardHint">The headline outcome - what someone's life looks like after working with you.</div>
+            <textarea id="main_result" placeholder="e.g. Help busy men lose body fat, build real strength, and actually enjoy training - without it taking over their life."></textarea>
           </div>
 
           <div class="wizardStep" data-step="5">
@@ -438,20 +445,20 @@ assistant: use this and get booked in
 
           <div class="wizardStep" data-step="8">
             <div class="wizardQuestion">When should the bot send the booking link?</div>
-            <div class="wizardHint">Tell the bot exactly when to offer the link — and when not to. The more specific the better.</div>
+            <div class="wizardHint">Tell the bot exactly when to offer the link, and when not to. The more specific the better.</div>
             <textarea id="closing_triggers" placeholder="e.g. Send the link when they ask how to get started, ask for the link directly, say it sounds good, or ask about price and still seem interested. Don't send it in the first message or if they seem unsure."></textarea>
           </div>
 
           <div class="wizardStep" data-step="9">
             <div class="wizardQuestion">Why should someone act now rather than later?</div>
             <div class="wizardHint">What usually triggers a lead to finally commit? The bot can reference this naturally in conversation.</div>
-            <textarea id="urgency_reason" placeholder="e.g. Most people come to me when something has clicked — a holiday coming up, they've had enough of not seeing progress, or they've just decided enough is enough."></textarea>
+            <textarea id="urgency_reason" placeholder="e.g. Most people come to me when something has clicked - a holiday coming up, they've had enough of not seeing progress, or they've just decided enough is enough."></textarea>
           </div>
 
           <div class="wizardStep" data-step="10">
             <div class="wizardQuestion">What builds trust with your leads?</div>
             <div class="wizardHint">Proof points, guarantees, or things that make you stand out. The bot mentions these when leads seem hesitant.</div>
-            <textarea id="trust_builders" placeholder="e.g.&#10;- Tailored plans — nothing generic&#10;- Real results from real clients&#10;- Direct support, not just a portal&#10;- You can message me any time"></textarea>
+            <textarea id="trust_builders" placeholder="e.g.&#10;- Tailored plans - nothing generic&#10;- Real results from real clients&#10;- Direct support, not just a portal&#10;- You can message me any time"></textarea>
           </div>
 
           <div class="wizardStep" data-step="11">
@@ -494,7 +501,7 @@ assistant: use this and get booked in
 
         <label>System prompt override</label>
         <textarea id="system_prompt" placeholder="Example:&#10;Sound like a real coach in Instagram DMs, not support and not a chatbot.&#10;&#10;Rules:&#10;- Keep replies short and natural&#10;- Ask only one question at a time&#10;- Answer direct questions directly&#10;- Only send the booking link when they're ready"></textarea>
-        <div class="tip">Tip: keep it specific — tone, rules, what to do when asked price, when to send booking link.</div>
+        <div class="tip">Tip: keep it specific - tone, rules, what to do when asked price, when to send booking link.</div>
 
         <div style="margin-top:14px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
           <button class="btn" id="generatePromptBtn">Generate Prompt</button>
@@ -502,10 +509,6 @@ assistant: use this and get booked in
         </div>
         <div id="promptLimitStatus" class="helper"></div>
 
-        <!-- Alt booking URL tucked here as advanced -->
-        <div class="divider"></div>
-        <label>Alt Booking URL <span style="font-weight:500; color: var(--muted);">(optional)</span></label>
-        <input id="booking_url_alt" placeholder="https://…" style="max-width:420px;" />
       </div>
 
       <!-- ─── SECTION 3: Calendly Integration ─────────────────────────── -->
@@ -564,7 +567,7 @@ assistant: use this and get booked in
           </div>
         </div>
         <div class="previewFooter">
-          <span class="previewDisclaimer">Simulated — for illustration only</span>
+          <span class="previewDisclaimer">Simulated - for illustration only</span>
           <button class="btn small" id="regenerateBtn">Regenerate</button>
         </div>
       </div>

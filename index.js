@@ -569,6 +569,97 @@ function isCleanExamplePair(userText, assistantText) {
   return true;
 }
 
+// Phrases that are unambiguously someone pitching TO the coach, never a lead buying from them.
+// Kept strict to avoid false positives — a lead saying "can we hop on a call?" must not trigger this.
+function detectSalesPitch(text) {
+  const t = String(text || "").toLowerCase();
+
+  // Explicit first-person pitch openers: "I help coaches like you", "we offer X", etc.
+  const pitchPhrases = [
+    "i can help you get more clients",
+    "i can help you grow your business",
+    "i can help grow your",
+    "i help coaches like you",
+    "i help businesses like yours",
+    "i help people like you",
+    "we help coaches like you",
+    "we help businesses like yours",
+    "i'm reaching out because i",
+    "i wanted to reach out to you",
+    "i noticed your profile and",
+    "i came across your profile and",
+    "i've been following your content and",
+    "i saw your profile and",
+    "we specialize in helping coaches",
+    "we specialise in helping coaches",
+    "we specialize in helping businesses",
+    "we specialise in helping businesses",
+    "lead generation for coaches",
+    "leads for coaches",
+    "i can run your ads",
+    "run ads for your business",
+    "manage your social media",
+    "social media management for",
+    "seo for your business",
+    "seo for coaches",
+    "website for your business",
+    "build your website",
+    "i have a proposal for you",
+    "i have an offer for you",
+    "partnership opportunity for you",
+    "collab opportunity for you",
+    "collaboration opportunity for you",
+    "book a call with me",
+    "schedule a call with me",
+    "dm me if you're interested",
+    "dm me if interested",
+    "reply if you're interested",
+    "reply if interested",
+    "let me know if you'd like to work together",
+    "interested in working together",
+    "our agency can",
+    "our software can",
+    "our platform can",
+    "our tool can",
+    "our service includes",
+    "our services include",
+    "our solution for",
+  ];
+
+  if (pitchPhrases.some((phrase) => t.includes(phrase))) return true;
+
+  // Pattern: "I [verb] [coaches/businesses/people like you]" — catches variants not in list
+  if (/\bi (help|assist|support|work with|grow|build|scale) (coaches|business owners|entrepreneurs|content creators) (like|such as) you\b/.test(t)) return true;
+
+  // Pattern: "we offer / we provide / we do X for coaches/businesses"
+  if (/\bwe (offer|provide|do|handle|specialise in|specialize in)\b/.test(t) &&
+      /\b(coaches|businesses|clients|leads|social media|ads|seo|content|websites|marketing)\b/.test(t)) return true;
+
+  return false;
+}
+
+// Returns true if the message is a genuine question about the coach's services,
+// or is clearly unrelated to pitching — used to resume bot after pitch deflection.
+function detectGenuineLeadQuestion(text) {
+  const t = String(text || "").toLowerCase();
+
+  // Explicit interest in the coach's offering
+  if (/\b(how much|what does it cost|what's the price|pricing|your price)\b/.test(t)) return true;
+  if (/\b(how do(es)? it work|what do you (do|offer|help with|include)|tell me more|more info|more details)\b/.test(t)) return true;
+  if (/\b(i('m| am) interested|i want to (know|find out|learn|join|sign up|get started|book))\b/.test(t)) return true;
+  if (/\b(what('s| is) (included|in it|in the (program|coaching|package)))\b/.test(t)) return true;
+  if (/\b(book(ing)?|sign up|get started|start|join|enrol|enroll)\b/.test(t)) return true;
+  if (/\b(can i (ask|know|get|book|join)|do you (offer|have|work with))\b/.test(t)) return true;
+  if (/\b(coaching|program|package|course|service|session|call with you|work with you)\b/.test(t)) return true;
+  if (/\b(results|transformation|testimonials|success stories)\b/.test(t)) return true;
+  if (/\bsorry\b/.test(t)) return true; // Likely backpedaling after pitch
+
+  // Short casual messages that don't contain pitch language are likely genuine
+  if (t.split(" ").length <= 6 && !detectSalesPitch(text)) return true;
+
+  return false;
+}
+
 function sanitizeReply(text) {
   let out = String(text || "").trim();
   if (!out) return out;
@@ -759,58 +850,147 @@ function extractSingleOfferSection(raw, label) {
   const match = text.match(regex);
   return match ? String(match[1] || "").trim() : "";
 }
+const VALID_NICHES = [
+  "fitness", "money", "mindset", "nutrition", "relationship",
+  "career", "life", "sales", "marketing", "leadership", "other", "generic",
+];
+
+// Maps free-text "Other" entries to a known niche if close enough
+function mapOtherNiche(customText) {
+  if (!customText) return "generic";
+  const t = String(customText).toLowerCase();
+  if (/fitness|gym|workout|weight|body|physique|strength|fat|muscle|transform|health|training/.test(t)) return "fitness";
+  if (/money|business|revenue|income|client|sales|profit|financial|wealth|cash/.test(t)) return "money";
+  if (/mindset|mental|anxiety|confidence|belief|self|stress|emotional|psychology/.test(t)) return "mindset";
+  if (/nutrition|diet|food|eating|meal|gut|weight loss|macro|calories/.test(t)) return "nutrition";
+  if (/relation|dating|love|partner|marriage|couple|divorce|breakup/.test(t)) return "relationship";
+  if (/career|job|interview|promotion|workplace|profession|resume|cv/.test(t)) return "career";
+  if (/sales|selling|close|convert|pipeline|cold outreach/.test(t)) return "sales";
+  if (/market|brand|content|social media|funnel|ads|copy/.test(t)) return "marketing";
+  if (/leader|manage|team|executive|director|founder|ceo/.test(t)) return "leadership";
+  if (/life coach|personal develop|goal|habit|productivity|accountability/.test(t)) return "life";
+  return "other";
+}
+
 function getEffectiveNiche(cfg) {
   const niche = String(cfg?.niche || "").trim().toLowerCase();
-
-  if (["fitness", "money", "generic"].includes(niche)) {
-    return niche;
-  }
-
+  if (VALID_NICHES.includes(niche)) return niche;
+  // Legacy: if niche is "generic" or unrecognised, fall back
   return "generic";
 }
 
 function getNicheLabel(niche) {
-  if (niche === "fitness") return "fitness coaching";
-  if (niche === "money") return "money/business coaching";
-  return "general coaching";
+  const labels = {
+    fitness: "fitness coaching",
+    money: "business and money coaching",
+    mindset: "mindset coaching",
+    nutrition: "nutrition coaching",
+    relationship: "relationship coaching",
+    career: "career coaching",
+    life: "life coaching",
+    sales: "sales coaching",
+    marketing: "marketing coaching",
+    leadership: "leadership coaching",
+    other: "coaching",
+    generic: "general coaching",
+  };
+  return labels[niche] || "general coaching";
 }
 
 function getNichePreset(niche) {
   if (niche === "fitness") {
     return {
-      whatYouDo:
-        "I help people get in shape properly with structure, accountability, and a plan they actually stick to.",
-      whatTheyGet:
-        "You get proper structure, accountability, clear targets, and support so you actually follow through instead of falling off after a week.",
-      howItWorks:
-        "You get started, we look at where you're at now, what needs fixing, then everything gets built around that so you've got a clear plan and proper support.",
-      whoItsFor:
-        "It’s for people who are serious about getting in shape and want real structure, not people looking for a quick fix or random motivation.",
+      whatYouDo: "I help people get in shape properly with structure, accountability, and a plan they actually stick to.",
+      whatTheyGet: "You get proper structure, accountability, clear targets, and support so you actually follow through instead of falling off after a week.",
+      howItWorks: "You get started, we look at where you’re at now, what needs fixing, then everything gets built around that so you’ve got a clear plan and proper support.",
+      whoItsFor: "It’s for people who are serious about getting in shape and want real structure, not people looking for a quick fix or random motivation.",
     };
   }
-
   if (niche === "money") {
     return {
-      whatYouDo:
-        "I help people tighten their offer, fix their messaging, and get more consistent clients instead of guessing and hoping.",
-      whatTheyGet:
-        "You get clarity on the offer, better positioning, direct support, and a proper path to getting clients more consistently.",
-      howItWorks:
-        "We look at where you're at, what’s not converting, what needs tightening up, then build a clearer path so you can actually move properly.",
-      whoItsFor:
-        "It’s for people who want to make more money, get more clients, and stop drifting with no real structure.",
+      whatYouDo: "I help people tighten their offer, fix their messaging, and get more consistent clients instead of guessing and hoping.",
+      whatTheyGet: "You get clarity on the offer, better positioning, direct support, and a proper path to getting clients more consistently.",
+      howItWorks: "We look at where you’re at, what’s not converting, what needs tightening up, then build a clearer path so you can actually move properly.",
+      whoItsFor: "It’s for people who want to make more money, get more clients, and stop drifting with no real structure.",
     };
   }
-
+  if (niche === "mindset") {
+    return {
+      whatYouDo: "I help people break through the mental blocks stopping them from moving forward and build the mindset they actually need to get results.",
+      whatTheyGet: "You get clarity on what’s holding you back, tools to shift it, and support to actually follow through instead of self-sabotaging.",
+      howItWorks: "We identify the patterns and beliefs keeping you stuck, then work through them properly so you can actually move.",
+      whoItsFor: "It’s for people who know what they need to do but keep getting in their own way.",
+    };
+  }
+  if (niche === "nutrition") {
+    return {
+      whatYouDo: "I help people fix their relationship with food, build a sustainable diet, and actually get the results they’ve been chasing.",
+      whatTheyGet: "You get a plan built around your life, proper guidance on what to eat and why, and support so you stay consistent.",
+      howItWorks: "We look at where you’re at now, what’s not working, then build a proper eating plan around your lifestyle so it actually sticks.",
+      whoItsFor: "It’s for people who are done with fad diets and want something that actually works long term.",
+    };
+  }
+  if (niche === "relationship") {
+    return {
+      whatYouDo: "I help people build better relationships, improve how they communicate, and stop repeating the same patterns.",
+      whatTheyGet: "You get tools to understand what’s really going on, how to handle it better, and proper support to actually change the dynamic.",
+      howItWorks: "We look at what’s happening and why, then work through it properly so you’ve got real tools and not just surface fixes.",
+      whoItsFor: "It’s for people who want to improve their relationship or how they show up in one, not people looking for a quick fix.",
+    };
+  }
+  if (niche === "career") {
+    return {
+      whatYouDo: "I help people get clear on what they actually want from their career, make the right moves, and land where they want to be.",
+      whatTheyGet: "You get clarity, a clear direction, and proper support to make the move without second-guessing yourself.",
+      howItWorks: "We look at where you are, where you want to be, what’s in the way, then map a clear path and work through it properly.",
+      whoItsFor: "It’s for people who feel stuck in their career or know they want more but don’t know how to get there.",
+    };
+  }
+  if (niche === "life") {
+    return {
+      whatYouDo: "I help people get clear on what they actually want, build better habits, and start moving in the right direction.",
+      whatTheyGet: "You get clarity, structure, proper accountability, and support so you actually follow through instead of going round in circles.",
+      howItWorks: "We look at what you want, what’s in the way, and what needs to change, then build a clear plan and work through it together.",
+      whoItsFor: "It’s for people who want to make real changes and are ready to do the work, not people looking for motivation alone.",
+    };
+  }
+  if (niche === "sales") {
+    return {
+      whatYouDo: "I help people close more deals, improve their sales process, and stop losing leads they should be converting.",
+      whatTheyGet: "You get a tighter process, better messaging, proper frameworks, and support so your close rate actually goes up.",
+      howItWorks: "We look at where the deals are falling apart, fix the gaps, and build a process that converts more consistently.",
+      whoItsFor: "It’s for people who know their product is good but struggle to convert leads into paying clients.",
+    };
+  }
+  if (niche === "marketing") {
+    return {
+      whatYouDo: "I help people sharpen their messaging, build better content, and actually attract the right clients instead of just posting and hoping.",
+      whatTheyGet: "You get clear positioning, a content strategy that works, and proper support to execute it consistently.",
+      howItWorks: "We look at what you’re putting out, who it’s attracting, and what needs fixing, then rebuild it properly.",
+      whoItsFor: "It’s for people who want their marketing to actually convert, not just get likes.",
+    };
+  }
+  if (niche === "leadership") {
+    return {
+      whatYouDo: "I help leaders and founders get better at leading their teams, making decisions, and building something they’re actually proud of.",
+      whatTheyGet: "You get clearer thinking, better tools for leading people, and a space to work through what’s actually going on.",
+      howItWorks: "We look at where the friction is, what patterns are showing up, and work through them properly so you can lead more effectively.",
+      whoItsFor: "It’s for leaders who want to be genuinely better at what they do, not just more productive.",
+    };
+  }
+  if (niche === "other") {
+    return {
+      whatYouDo: "I help people get clarity, make a plan, and follow through properly.",
+      whatTheyGet: "You get proper support, structure, and someone in your corner so you can actually get the result you’re after.",
+      howItWorks: "We look at where you are, what needs to change, and build a clear path so you’re not just winging it.",
+      whoItsFor: "It’s for people who are serious about making a real change and want proper support to do it.",
+    };
+  }
   return {
-    whatYouDo:
-      "I help people get a proper result with a clear plan, the right support, and a process that actually helps them follow through.",
-    whatTheyGet:
-      "You get proper support, structure, and guidance so you can stop guessing and actually move properly.",
-    howItWorks:
-      "We look at where you're at, what needs fixing, and the best next steps so everything is clear and moving in the right direction.",
-    whoItsFor:
-      "It’s for people who want proper help and structure, not people just winging it.",
+    whatYouDo: "I help people get a proper result with a clear plan, the right support, and a process that actually helps them follow through.",
+    whatTheyGet: "You get proper support, structure, and guidance so you can stop guessing and actually move properly.",
+    howItWorks: "We look at where you’re at, what needs fixing, and the best next steps so everything is clear and moving in the right direction.",
+    whoItsFor: "It’s for people who want proper help and structure, not people just winging it.",
   };
 }
 
@@ -844,6 +1024,12 @@ how_it_works:
     products:
       Array.isArray(cfg?.products) && cfg.products.length > 0
         ? cfg.products
+        : null,
+
+    // Unified booking links and products
+    booking_items:
+      Array.isArray(cfg?.booking_items) && cfg.booking_items.length > 0
+        ? cfg.booking_items
         : null,
   };
 }
@@ -2436,9 +2622,9 @@ Only applies when contact_collection_enabled is true in the context.
 - keep the ask short and casual, not formal
 
 NICHE RULE:
-- if niche is fitness, sound natural for fitness and body transformation conversations
-- if niche is money, sound natural for client acquisition, business growth, and sales
-- do not mix the two
+- niche is "${niche}" (${getNicheLabel(niche)})
+- use terminology and framing natural for that niche — fitness coaches talk about training, results, body change; money coaches talk about clients, revenue, offers; mindset coaches talk about beliefs, patterns, clarity; nutrition coaches talk about food, diet, consistency; relationship coaches talk about communication, patterns, connection; career coaches talk about direction, opportunities, progression; life coaches talk about goals, habits, clarity; sales coaches talk about pipeline, conversion, close rate; marketing coaches talk about messaging, content, attracting clients; leadership coaches talk about team, decisions, culture
+- match the language to what someone in that niche would actually say
 
 Return ONLY valid JSON in this exact shape:
 {
@@ -2474,6 +2660,7 @@ const context = {
   who_its_for: structuredOffer.who_its_for || null,
   how_it_works: structuredOffer.how_it_works || null,
   products: structuredOffer.products || null,
+  booking_items: structuredOffer.booking_items || null,
 
   main_result: String(cfg?.main_result || "").trim() || null,
   best_fit_leads: String(cfg?.best_fit_leads || "").trim() || null,
@@ -3699,6 +3886,17 @@ if (
     )
       allowed.bot_paused_reason = patch.bot_paused_reason;
 
+    // Admin can adjust subscription status directly
+    const validStripeStatuses = ["active", "trialing", "demo", "past_due", "canceled", "incomplete", null];
+    if (patch.stripe_subscription_status !== undefined) {
+      const s = patch.stripe_subscription_status === null ? null : String(patch.stripe_subscription_status);
+      if (validStripeStatuses.includes(s)) allowed.stripe_subscription_status = s;
+    }
+
+    // Admin can set tone, style directly
+    if (typeof patch.tone === "string" || patch.tone === null) allowed.tone = patch.tone;
+    if (typeof patch.style === "string" || patch.style === null) allowed.style = patch.style;
+
     const { data: updated, error } = await supabase
       .from("client_configs")
       .update(allowed)
@@ -3816,6 +4014,67 @@ app.post("/admin/api/leads/mark-call-complete", requireAdmin, async (req, res) =
 });
 
 
+
+/**
+ * ===========================
+ * ADMIN: LOGIN AS COACH
+ * ===========================
+ */
+
+app.post("/admin/api/clients/:clientId/login-token", requireAdmin, async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    if (!clientId) return safeJson(res, 400, { error: "clientId required" });
+
+    // Verify client exists
+    const { data: client, error: clientErr } = await supabase
+      .from("clients")
+      .select("id, name")
+      .eq("id", clientId)
+      .single();
+
+    if (clientErr || !client) return safeJson(res, 404, { error: "client not found" });
+
+    // Mint a short-lived coach token (admin impersonation — 4h only)
+    if (!COACH_JWT_SECRET) return safeJson(res, 500, { error: "COACH_JWT_SECRET not configured" });
+    const token = jwt.sign({ role: "coach", client_id: clientId, impersonated_by: "admin" }, COACH_JWT_SECRET, { expiresIn: "4h" });
+
+    return safeJson(res, 200, { ok: true, token, client_name: client.name });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+/**
+ * ===========================
+ * ADMIN: SHOW CLIENT CREDENTIALS
+ * ===========================
+ */
+
+const ADMIN_MASTER_PASSWORD = "Blughgfsdlsfhbdshfghdlfgdsu";
+
+app.post("/admin/api/clients/:clientId/credentials", requireAdmin, async (req, res) => {
+  try {
+    const { master_password } = req.body || {};
+    if (master_password !== ADMIN_MASTER_PASSWORD) {
+      return safeJson(res, 403, { error: "incorrect master password" });
+    }
+
+    const clientId = req.params.clientId;
+
+    const { data: user, error } = await supabase
+      .from("coach_users")
+      .select("email, created_at")
+      .eq("client_id", clientId)
+      .single();
+
+    if (error || !user) return safeJson(res, 404, { error: "no coach user found for this client" });
+
+    return safeJson(res, 200, { ok: true, email: user.email, note: "Password is hashed and cannot be recovered. Use reset-password flow to set a new one." });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
 
 /**
  * ===========================
@@ -4276,7 +4535,12 @@ if (patch.contact_collection_enabled !== undefined && patch.contact_collection_e
       allowed.instagram_handle = patch.instagram_handle;
     }
 if (typeof patch.niche === "string" || patch.niche === null) {
-  allowed.niche = patch.niche;
+  const n = String(patch.niche || "").trim().toLowerCase();
+  allowed.niche = VALID_NICHES.includes(n) ? n : "generic";
+  // If "other" niche, also store the custom text for reference
+  if (n === "other" && patch.niche_other) {
+    allowed.niche_other = String(patch.niche_other).trim().slice(0, 100) || null;
+  }
 }
     if (
       typeof patch.offer_description === "string" ||
@@ -4396,6 +4660,20 @@ if (Array.isArray(patch.products)) {
       price: String(p.price || "").trim() || null,
       who_its_for: String(p.who_its_for || "").trim() || null,
     }));
+}
+// Booking items (unified booking links + products)
+if (Array.isArray(patch.booking_items)) {
+  allowed.booking_items = patch.booking_items
+    .filter((item) => item && (item.name || item.url))
+    .slice(0, 10)
+    .map((item) => ({
+      name: String(item.name || "").trim(),
+      url: String(item.url || "").trim(),
+      type: item.type === "product" ? "product" : "booking",
+    }));
+  // Keep booking_url in sync with first booking-type item
+  const firstBooking = allowed.booking_items.find((i) => i.type === "booking");
+  if (firstBooking?.url) allowed.booking_url = firstBooking.url;
 }
     console.log("[config save] allowed keys being written:", Object.keys(allowed));
     console.log("[config save] comment_keyword_dm_enabled in allowed:", allowed.comment_keyword_dm_enabled);
@@ -5094,10 +5372,9 @@ IMPORTANT SALES BEHAVIOUR:
 - The assistant should qualify briefly, then guide decisively
 
 IMPORTANT NICHE RULE:
-- If niche is fitness, the assistant should naturally sound like someone who sells fitness coaching
-- If niche is money, the assistant should naturally sound like someone who sells business / money / client acquisition help
-- Do not mix niches
-- Do not sound generic if niche context exists
+- niche is "${effectiveNiche}" (${getNicheLabel(effectiveNiche)})
+- use terminology and conversational framing natural for that niche: fitness = training/results/body; money = clients/revenue/offer; mindset = beliefs/patterns/clarity; nutrition = food/diet/habits; relationship = communication/connection/patterns; career = direction/opportunities/growth; life = goals/habits/accountability; sales = pipeline/conversion/close; marketing = messaging/content/reach; leadership = team/culture/decisions
+- do not mix niches, do not sound generic if niche context is available
 
 WHAT THE COACH DOES:
 ${whatYouDo || "(not provided)"}
@@ -6771,26 +7048,77 @@ async function processDmEvent(messaging, igAccount, overrideText) {
               await sendInstagramTextMessage({
                 accessToken: voiceAcc.page_access_token,
                 recipientId: senderId,
-                text: "Hey, I can't listen to voice notes right now — what's on your mind? Just type it out and I'll get back to you! 💬",
+                text: "Hey, I can't listen to voice notes right now - what's on your mind? Just type it out and I'll get back to you!",
                 useInstagramApi: !voiceAcc.page_id,
               });
             }
             return;
           }
 
-          if (lead.manual_override) {
-            const H24 = 24 * 60 * 60 * 1000;
-            const idleMs = msSince(lead.manual_override_at);
-
-            if (idleMs <= H24) return;
-
+          // Detect inbound sales pitches and brush them off politely
+          if (text && detectSalesPitch(text)) {
+            log("sales_pitch_detected", { senderId, leadId: lead.id, clientId: lead.client_id, text: text.slice(0, 120) });
+            const pitchAcc = await getIgAccountByClientId(lead.client_id).catch(() => null);
+            if (pitchAcc?.page_access_token) {
+              await sendInstagramTextMessage({
+                accessToken: pitchAcc.page_access_token,
+                recipientId: senderId,
+                text: "Thanks for reaching out - we're not looking for that right now.",
+                useInstagramApi: !pitchAcc.page_id,
+              });
+            }
             await setLeadManualOverride({
               leadId: lead.id,
               clientId: lead.client_id,
-              enabled: false,
-              reason: "Auto resume",
+              enabled: true,
+              reason: "Sales pitch detected - auto-dismissed",
               actor: "system",
             });
+            return;
+          }
+
+          if (lead.manual_override) {
+            const isPitchDismissed = String(lead.manual_override_reason || "").includes("Sales pitch detected");
+
+            if (isPitchDismissed) {
+              // If they're still pitching, stay silent entirely — no reply, no resume
+              if (detectSalesPitch(text || "")) {
+                log("sales_pitch_followup_silenced", { senderId, leadId: lead.id });
+                return;
+              }
+
+              // If they pivot to a genuine question about the coach's services, resume
+              if (detectGenuineLeadQuestion(text || "")) {
+                log("sales_pitch_pivot_resume", { senderId, leadId: lead.id, text: String(text || "").slice(0, 80) });
+                await setLeadManualOverride({
+                  leadId: lead.id,
+                  clientId: lead.client_id,
+                  enabled: false,
+                  reason: "Topic changed - resumed after pitch dismiss",
+                  actor: "system",
+                });
+                // Fall through to normal AI reply handling
+              } else {
+                // Ambiguous follow-up — not clearly a pitch, not clearly a genuine question.
+                // Stay silent to be safe.
+                log("sales_pitch_followup_ambiguous_silenced", { senderId, leadId: lead.id });
+                return;
+              }
+            } else {
+              // Normal manual override (coach replied, confidence pause, etc.)
+              const H24 = 24 * 60 * 60 * 1000;
+              const idleMs = msSince(lead.manual_override_at);
+
+              if (idleMs <= H24) return;
+
+              await setLeadManualOverride({
+                leadId: lead.id,
+                clientId: lead.client_id,
+                enabled: false,
+                reason: "Auto resume",
+                actor: "system",
+              });
+            }
           }
 
           const alreadyHasOutbound = (historyMessages || []).some(

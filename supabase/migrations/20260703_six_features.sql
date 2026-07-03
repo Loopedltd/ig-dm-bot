@@ -10,4 +10,12 @@ ALTER TABLE client_configs
 ALTER TABLE client_configs
   ADD COLUMN IF NOT EXISTS response_delay_ms INT DEFAULT 90000;
 
--- Features 1+4, 3, 5 use existing columns only — no migration needed.
+-- Features 1+4, 3, 5 use existing columns only - no migration needed.
+
+-- Unified booking links & products
+ALTER TABLE client_configs
+  ADD COLUMN IF NOT EXISTS booking_items JSONB DEFAULT '[]'::jsonb;
+
+-- Expanded niche: stores free-text "other" niche description
+ALTER TABLE client_configs
+  ADD COLUMN IF NOT EXISTS niche_other TEXT;
