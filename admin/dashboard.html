@@ -194,6 +194,27 @@
     </div>
   </div>
 
+  <!-- Reset password modal -->
+  <div class="modal" id="resetPwModal">
+    <div class="modalBox" style="max-width:440px;">
+      <h2>Reset password</h2>
+      <div class="sub" id="resetPwModalSub">Generate a new password for this coach.</div>
+
+      <div class="errMsg" id="resetPwErr"></div>
+
+      <div class="credReveal" id="resetPwReveal">
+        <div style="margin-bottom:6px;"><strong>Email:</strong> <span id="resetPwEmail"></span></div>
+        <div style="margin-bottom:6px;"><strong>New password:</strong> <span id="resetPwPassword" style="font-family:monospace;font-size:14px;letter-spacing:.5px;"></span></div>
+        <div style="font-size:12px;color:var(--muted);">Share this with the coach. It will not be shown again.</div>
+      </div>
+
+      <div class="modalFooter">
+        <button class="btn" id="resetPwCancelBtn">Close</button>
+        <button class="btn danger" id="resetPwConfirmBtn">Generate new password</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Credentials modal -->
   <div class="modal" id="credsModal">
     <div class="modalBox" style="max-width:440px;">

@@ -100,9 +100,6 @@
       .productCard{ border:1px solid var(--border); border-radius:14px; padding:14px; position:relative; }
       .productCard label{ margin-top:10px; }
       .productCard label:first-of-type{ margin-top:0; }
-      .bookingItem{ display:grid; grid-template-columns:1fr 1fr auto auto; gap:8px; align-items:center; }
-      .bookingItem input, .bookingItem select{ margin:0; }
-      @media(max-width:600px){ .bookingItem{ grid-template-columns:1fr 1fr; } .bookingItem .removeBookingItemBtn{ grid-column:span 2; } }
 
       @media (max-width: 700px){
         .row{ grid-template-columns: 1fr; }
@@ -180,16 +177,6 @@
         <div class="helper">The most important setting. Drives all presets, tone, and fallback knowledge. Set this first.</div>
       </div>
 
-      <!-- Booking Links & Products -->
-      <div class="sectionLabel">Booking Links &amp; Products</div>
-      <div class="card" id="bookingItemsCard">
-        <div class="takeoverTitle" style="font-size:16px;">Booking links &amp; products</div>
-        <div class="takeoverSub" style="margin-top:4px;">Add your booking links and products. The bot will send the most relevant one. Up to 10 items.</div>
-        <div id="bookingItemsList" style="margin-top:14px; display:flex; flex-direction:column; gap:8px;"></div>
-        <button type="button" class="btn" id="addBookingItemBtn" style="margin-top:10px; width:fit-content;">+ Add item</button>
-        <div class="helper" style="margin-top:8px;">Mark at least one item as <strong>Booking link</strong> so the bot knows where to send leads.</div>
-      </div>
-
       <!-- DM Trigger Automations -->
       <div class="sectionLabel">Trigger Automations</div>
       <div class="card" id="triggerAutomationCard">
@@ -202,6 +189,10 @@
 
         <div class="row" style="margin-top:14px;">
           <div>
+            <div style="margin-bottom:10px;">
+              <div style="font-size:13px; font-weight:800; color:var(--text);">Story Reply</div>
+              <div style="font-size:12px; color:var(--muted); margin-top:2px;">Fires when someone replies to your story and it opens a DM thread.</div>
+            </div>
             <div class="takeoverTopLine" style="margin-bottom:8px;">
               <span class="badge" id="storyReplyToggleBadge">Story reply OFF</span>
             </div>
@@ -212,9 +203,12 @@
             </select>
             <label>Outbound message</label>
             <textarea id="story_reply_auto_dm_text" placeholder="Example:&#10;Appreciate the reply - what are you trying to sort right now?" style="min-height:110px;"></textarea>
-            <div class="helper">Fires when someone replies to your story and opens a DM thread.</div>
           </div>
           <div>
+            <div style="margin-bottom:10px;">
+              <div style="font-size:13px; font-weight:800; color:var(--text);">Keyword DM</div>
+              <div style="font-size:12px; color:var(--muted); margin-top:2px;">Fires when someone DMs you a specific keyword directly (e.g. your CTA says "DM me START").</div>
+            </div>
             <div class="takeoverTopLine" style="margin-bottom:8px;">
               <span class="badge" id="keywordToggleBadge">Keyword DM OFF</span>
             </div>
@@ -227,7 +221,6 @@
             <input id="keyword_trigger_text" placeholder="Example: START" />
             <label>Outbound message</label>
             <textarea id="keyword_auto_dm_text" placeholder="Example:&#10;Saw your message. What's the main thing you want help with?" style="min-height:80px;"></textarea>
-            <div class="helper">If your CTA says <strong>DM me "START"</strong>, this fires when they send that keyword.</div>
           </div>
         </div>
 

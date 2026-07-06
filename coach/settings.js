@@ -199,6 +199,8 @@
         <textarea class="product-description" style="min-height:70px;">${escHtml(p.description || "")}</textarea>
         <label>Who it's for</label>
         <input class="product-who" value="${escAttr(p.who_its_for || "")}" placeholder="e.g. Busy professionals wanting structure" />
+        <label>Product/service link (optional)</label>
+        <input class="product-url" value="${escAttr(p.url || "")}" placeholder="https://..." />
       `;
       div.querySelector(".removeProductBtn").addEventListener("click", () => {
         _products.splice(i, 1);
@@ -213,6 +215,7 @@
       id: _products[i]?.id || crypto.randomUUID(),
       name: (card.querySelector(".product-name")?.value || "").trim(),
       price: (card.querySelector(".product-price")?.value || "").trim() || null,
+      url: (card.querySelector(".product-url")?.value || "").trim() || null,
       description: (card.querySelector(".product-description")?.value || "").trim() || null,
       who_its_for: (card.querySelector(".product-who")?.value || "").trim() || null,
     })).filter((p) => p.name);
@@ -223,62 +226,13 @@
     if (!addBtn || addBtn.__wired) return;
     addBtn.__wired = true;
     addBtn.addEventListener("click", () => {
-      _products.push({ id: crypto.randomUUID(), name: "", price: null, description: null, who_its_for: null });
+      _products.push({ id: crypto.randomUUID(), name: "", price: null, url: null, description: null, who_its_for: null });
       renderProducts();
       qs("#productsList")?.lastElementChild?.scrollIntoView({ behavior: "smooth" });
     });
   }
 
   // ── Booking Items ─────────────────────────────────────────────────────────
-
-  let _bookingItems = [];
-
-  function renderBookingItems() {
-    const list = qs("#bookingItemsList");
-    if (!list) return;
-    list.innerHTML = "";
-    _bookingItems.forEach((item, i) => {
-      const row = document.createElement("div");
-      row.className = "bookingItem";
-      row.innerHTML = `
-        <input class="bi-name" value="${escAttr(item.name)}" placeholder="e.g. Book a free call" />
-        <input class="bi-url" value="${escAttr(item.url)}" placeholder="https://calendly.com/..." />
-        <select class="bi-type">
-          <option value="booking"${item.type === "booking" ? " selected" : ""}>Booking link</option>
-          <option value="product"${item.type === "product" ? " selected" : ""}>Product</option>
-        </select>
-        <button type="button" class="btn removeBookingItemBtn" style="padding:8px 10px; flex-shrink:0;">Remove</button>
-      `;
-      row.querySelector(".removeBookingItemBtn").addEventListener("click", () => {
-        _bookingItems.splice(i, 1);
-        renderBookingItems();
-      });
-      list.appendChild(row);
-    });
-    // Show/hide add button based on max
-    const addBtn = qs("#addBookingItemBtn");
-    if (addBtn) addBtn.style.display = _bookingItems.length >= 10 ? "none" : "";
-  }
-
-  function collectBookingItems() {
-    return Array.from(document.querySelectorAll(".bookingItem")).map((row, i) => ({
-      name: (row.querySelector(".bi-name")?.value || "").trim(),
-      url: (row.querySelector(".bi-url")?.value || "").trim(),
-      type: row.querySelector(".bi-type")?.value || "booking",
-    })).filter((item) => item.name || item.url);
-  }
-
-  function wireBookingItemsCard() {
-    const addBtn = qs("#addBookingItemBtn");
-    if (!addBtn || addBtn.__wired) return;
-    addBtn.__wired = true;
-    addBtn.addEventListener("click", () => {
-      if (_bookingItems.length >= 10) return;
-      _bookingItems.push({ name: "", url: "", type: "booking" });
-      renderBookingItems();
-      qs("#bookingItemsList")?.lastElementChild?.scrollIntoView({ behavior: "smooth" });
-    });
-  }
 
   // ── Feature 6: Response delay slider ─────────────────────────────────────
 
@@ -324,10 +278,6 @@
 
       // Contact collection
       val(qs("#contact_collection_enabled"), c.contact_collection_enabled);
-
-      // Booking items
-      _bookingItems = Array.isArray(c.booking_items) ? c.booking_items : [];
-      renderBookingItems();
 
       // Offer
       val(qs("#offer_what"), c.what_you_do);
@@ -744,11 +694,6 @@
         const instagram_handle = String(qs("#instagram_handle")?.value || "").trim();
         if (!isValidIgHandle(instagram_handle)) { setErr("Instagram handle format is invalid (letters, numbers, dots, underscores, max 30 chars)."); return; }
 
-        const bookingItems = collectBookingItems();
-        for (const item of bookingItems) {
-          if (!isValidUrl(item.url)) { setErr(`Booking item "${item.name || "unnamed"}" has an invalid URL.`); return; }
-        }
-
         const story_reply_auto_dm_enabled = String(qs("#story_reply_auto_dm_enabled")?.value || "false") === "true";
         const story_reply_auto_dm_text = String(qs("#story_reply_auto_dm_text")?.value || "").trim();
         const keyword_auto_dm_enabled = String(qs("#keyword_auto_dm_enabled")?.value || "false") === "true";
@@ -783,15 +728,14 @@
         btn.style.opacity = "0.75";
         btn.textContent = "Saving...";
 
-        // Derive primary booking_url from first booking-type item for backend compat
-        const firstBookingItem = bookingItems.find((i) => i.type === "booking");
-        const derived_booking_url = firstBookingItem?.url || null;
+        // Derive primary booking_url from first product that has a URL
+        const products = collectProducts();
+        const firstProductUrl = products.find((p) => p.url)?.url || null;
 
         await apiFetch(`${API}/config`, {
           method: "POST",
           body: JSON.stringify({
-            booking_url: derived_booking_url,
-            booking_items: bookingItems,
+            booking_url: firstProductUrl,
             instagram_handle: instagram_handle || null,
             story_reply_auto_dm_enabled,
             story_reply_auto_dm_text: story_reply_auto_dm_text || null,
@@ -826,7 +770,7 @@
             example_messages: exParsed.value || null,
             followup_message: String(qs("#followup_message")?.value || "").trim() || null,
             response_delay_ms: Number(qs("#response_delay_ms")?.value || 90) * 1000,
-            products: collectProducts(),
+            products,
           }),
         });
 
@@ -990,7 +934,6 @@
     wirePreviewBtn();
     wireWizard();
     wireProductsCard();
-    wireBookingItemsCard();
     wireDelaySlider();
     wireBadges(); // wire change listeners before loadConfig populates values
 

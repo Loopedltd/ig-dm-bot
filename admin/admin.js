@@ -101,8 +101,12 @@ const AdminDashboard = {
     qs("credsCancelBtn")?.addEventListener("click", () => this.closeModal("credsModal"));
     qs("credsRevealBtn")?.addEventListener("click", () => this.revealCredentials());
 
+    // Reset password modal
+    qs("resetPwCancelBtn")?.addEventListener("click", () => this.closeModal("resetPwModal"));
+    qs("resetPwConfirmBtn")?.addEventListener("click", () => this.resetPassword());
+
     // Close modals on backdrop click
-    ["configModal", "credsModal"].forEach((id) => {
+    ["configModal", "credsModal", "resetPwModal"].forEach((id) => {
       const el = qs(id);
       if (el) {
         el.addEventListener("click", (e) => {
@@ -169,6 +173,7 @@ const AdminDashboard = {
             <button class="btn sm" onclick="AdminDashboard.openConfigModal('${escHtml(c.id)}')">Edit config</button>
             <button class="btn sm primary" onclick="AdminDashboard.loginAsCoach('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Access dashboard</button>
             <button class="btn sm" onclick="AdminDashboard.openCredsModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Show credentials</button>
+            <button class="btn sm danger" onclick="AdminDashboard.openResetPwModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Reset password</button>
           </div>
         </td>
       </tr>`;
@@ -351,6 +356,41 @@ const AdminDashboard = {
       if (errEl) { errEl.textContent = e.message || "Incorrect password."; errEl.style.display = "block"; }
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = "Reveal"; }
+    }
+  },
+
+  // ── Reset password ─────────────────────────────────────────────────────────
+
+  openResetPwModal(clientId, clientName) {
+    this._activeClientId = clientId;
+    const qs = (id) => document.getElementById(id);
+    if (qs("resetPwModalSub")) qs("resetPwModalSub").textContent = `Generate a new password for ${clientName || clientId}.`;
+    if (qs("resetPwErr")) { qs("resetPwErr").textContent = ""; qs("resetPwErr").style.display = "none"; }
+    if (qs("resetPwReveal")) qs("resetPwReveal").style.display = "none";
+    if (qs("resetPwConfirmBtn")) { qs("resetPwConfirmBtn").disabled = false; qs("resetPwConfirmBtn").textContent = "Generate new password"; }
+    this.openModal("resetPwModal");
+  },
+
+  async resetPassword() {
+    const clientId = this._activeClientId;
+    if (!clientId) return;
+    const qs = (id) => document.getElementById(id);
+    const errEl = qs("resetPwErr");
+    const revealEl = qs("resetPwReveal");
+    const btn = qs("resetPwConfirmBtn");
+
+    if (errEl) { errEl.style.display = "none"; }
+    if (btn) { btn.disabled = true; btn.textContent = "Generating..."; }
+
+    try {
+      const data = await apiFetch(`/admin/api/clients/${clientId}/reset-password`, { method: "POST" });
+      if (qs("resetPwEmail")) qs("resetPwEmail").textContent = data.email || "";
+      if (qs("resetPwPassword")) qs("resetPwPassword").textContent = data.new_password || "";
+      if (revealEl) revealEl.style.display = "block";
+      if (btn) { btn.disabled = true; btn.textContent = "Done"; }
+    } catch (e) {
+      if (errEl) { errEl.textContent = e.message || "Reset failed."; errEl.style.display = "block"; }
+      if (btn) { btn.disabled = false; btn.textContent = "Generate new password"; }
     }
   },
 

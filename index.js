@@ -571,6 +571,58 @@ function isCleanExamplePair(userText, assistantText) {
 
 // Phrases that are unambiguously someone pitching TO the coach, never a lead buying from them.
 // Kept strict to avoid false positives — a lead saying "can we hop on a call?" must not trigger this.
+// Returns true when a message is clearly unrelated to coaching or the coach's niche.
+// Used to trigger confidence_pause immediately rather than letting the AI guess.
+function detectOffTopicMessage(text, niche) {
+  const t = String(text || "").toLowerCase().trim();
+  if (!t || t.split(" ").length < 3) return false; // too short to judge
+
+  // These topics are never in scope for any coaching niche
+  const hardOffTopic = [
+    // Finance / legal / accounting
+    /\btax return\b/, /\bfiling (my|a) tax\b/, /\bself.?assessment\b/, /\bhmrc\b/, /\baccounting (help|advice|software)\b/,
+    /\blegal (advice|help)\b/, /\bsolicitor\b/, /\blawyer\b/, /\blitigation\b/, /\bcontract (review|dispute)\b/,
+    /\bvat return\b/, /\bcompany accounts\b/, /\bpayroll\b/, /\bbookkeeping\b/,
+    // Medical / clinical
+    /\bdiagnos(e|is|ing)\b/, /\bprescription\b/, /\bmedication\b/, /\bdoctor('?s)? (appointment|advice|referral)\b/,
+    /\bsymptom(s)?\b.*\b(pain|ache|bleed|fever|rash|infection)\b/,
+    /\bmental health (diagnosis|referral|prescription)\b/,
+    // Home / trades
+    /\bplumb(er|ing)\b/, /\bboiler (repair|fix|replace)\b/, /\belectrician\b/, /\broof(ing)? repair\b/,
+    /\bcarpenter\b/, /\blandlord\b/, /\btenant (dispute|rights)\b/, /\bconveyancing\b/,
+    // Tech support
+    /\bmy (laptop|computer|phone|printer|wifi|router|iphone|android) (won'?t|isn'?t|doesn'?t|not) (work|connect|turn|start|boot)\b/,
+    /\bpassword (reset|recover) (for|on) (my )?(gmail|facebook|instagram|apple|google|amazon|netflix)\b/,
+    /\bhow (do i|to) (install|uninstall|update|download) (windows|macos|android|ios|excel|word)\b/,
+    // Travel / logistics
+    /\bflight (booking|cancel|refund|delay)\b/, /\bvisa application\b/, /\bpassport (renewal|application)\b/,
+    /\bhotel (booking|cancel|refund)\b/,
+    // Food delivery / retail
+    /\b(uber|deliveroo|just.?eat|amazon) (order|delivery|refund|problem)\b/,
+    // Clearly wrong number / confusion
+    /\bwrong number\b/, /\bwho (are|is) (you|this)\b.*\b(again|please)\b/,
+  ];
+
+  if (hardOffTopic.some((re) => re.test(t))) return true;
+
+  // For specific niches, also catch questions firmly outside that niche's domain
+  // that aren't covered by general coaching knowledge
+  const nicheOffTopic = {
+    fitness: [
+      /\bhow (do i|to) (file|submit|complete) (my )?(tax|vat|self.?assessment)\b/,
+      /\b(investment|stock|share|crypto|forex) (advice|tip|strategy)\b/,
+    ],
+    money: [
+      /\bworkout (plan|routine|programme)\b.*\bweight (loss|gain)\b/,
+    ],
+  };
+
+  const nichePatterns = nicheOffTopic[niche] || [];
+  if (nichePatterns.some((re) => re.test(t))) return true;
+
+  return false;
+}
+
 function detectSalesPitch(text) {
   const t = String(text || "").toLowerCase();
 
@@ -4078,6 +4130,50 @@ app.post("/admin/api/clients/:clientId/credentials", requireAdmin, async (req, r
 
 /**
  * ===========================
+ * ADMIN: RESET CLIENT PASSWORD
+ * ===========================
+ */
+
+app.post("/admin/api/clients/:clientId/reset-password", requireAdmin, async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+
+    const { data: user, error: lookupErr } = await supabase
+      .from("coach_users")
+      .select("id, email")
+      .eq("client_id", clientId)
+      .single();
+
+    if (lookupErr || !user) {
+      return safeJson(res, 404, { error: "No coach user found for this client" });
+    }
+
+    // Generate a readable random password: 3 words + 4 digits
+    const words = ["Loop", "Coach", "Dash", "Link", "Bold", "Sync", "Core", "Flux", "Peak", "Rise"];
+    const word1 = words[Math.floor(Math.random() * words.length)];
+    const word2 = words[Math.floor(Math.random() * words.length)];
+    const digits = String(Math.floor(1000 + Math.random() * 9000));
+    const newPassword = `${word1}${word2}${digits}`;
+
+    const hash = await bcrypt.hash(newPassword, 10);
+
+    const { error: updateErr } = await supabase
+      .from("coach_users")
+      .update({ password_hash: hash })
+      .eq("client_id", clientId);
+
+    if (updateErr) {
+      return safeJson(res, 500, { error: String(updateErr.message || updateErr) });
+    }
+
+    return safeJson(res, 200, { ok: true, email: user.email, new_password: newPassword });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+/**
+ * ===========================
  * COACH AUTH + SUBSCRIPTION PROTECTION
  * ===========================
  */
@@ -4658,6 +4754,7 @@ if (Array.isArray(patch.products)) {
       name: String(p.name).trim(),
       description: String(p.description || "").trim() || null,
       price: String(p.price || "").trim() || null,
+      url: String(p.url || "").trim() || null,
       who_its_for: String(p.who_its_for || "").trim() || null,
     }));
 }
@@ -7363,6 +7460,31 @@ log("ig_trigger_opener_sent", {
           turnStrategy = preventRepeatedReplyType(turnStrategy, leadMemory);
 
           lead.last_message = text;
+
+          // Off-topic guard: if the message is clearly nothing to do with this coach's
+          // niche or any coaching service, pause immediately rather than hallucinating a reply.
+          if (text && detectOffTopicMessage(text, niche)) {
+            const leadName = leadNameCache.get(`${lead.client_id}:${senderId}`) || lead.ig_name || `Lead ${String(senderId).slice(-6)}`;
+            log("confidence_pause_off_topic", { leadId: lead.id, clientId: lead.client_id, senderId, text: text.slice(0, 120) });
+            try {
+              await setLeadManualOverride({
+                leadId: lead.id,
+                clientId: lead.client_id,
+                enabled: true,
+                reason: "Low confidence — coach input needed",
+                actor: "system",
+              });
+            } catch (e) {
+              console.warn("off_topic confidence_pause: setLeadManualOverride failed", e?.message || e);
+            }
+            emitActivityEvent(lead.client_id, {
+              type: "confidence_pause",
+              leadName,
+              igPsid: senderId,
+              preview: text ? String(text).slice(0, 120) : "[non-text message]",
+            });
+            return;
+          }
 
           // Emit: AI generating reply
           emitActivityEvent(lead.client_id, {
