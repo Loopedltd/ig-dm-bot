@@ -9148,15 +9148,21 @@ async function sendHealthAlert({ clientName, clientId, issues }) {
   `;
 
   try {
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: ALERT_FROM,
       to: ALERT_EMAIL,
       subject: `[Looped] Alert: ${clientName} — ${issues.length} issue${issues.length !== 1 ? "s" : ""} detected`,
       html,
     });
-    log("health_alert_sent", { clientId, clientName, issueCount: issues.length });
+    if (result?.error) {
+      console.error("health_monitor: Resend returned error", JSON.stringify(result.error));
+    } else {
+      log("health_alert_sent", { clientId, clientName, issueCount: issues.length, emailId: result?.data?.id });
+    }
   } catch (e) {
-    console.error("health_monitor: email send failed", e?.message || e);
+    console.error("health_monitor: email send threw", e?.message || e);
+    if (e?.response) console.error("health_monitor: Resend response body", JSON.stringify(e.response));
+    if (e?.statusCode) console.error("health_monitor: Resend status code", e.statusCode);
   }
 }
 
