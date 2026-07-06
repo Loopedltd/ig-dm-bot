@@ -693,21 +693,29 @@ function detectSalesPitch(text) {
 // Returns true if the message is a genuine question about the coach's services,
 // or is clearly unrelated to pitching — used to resume bot after pitch deflection.
 function detectGenuineLeadQuestion(text) {
-  const t = String(text || "").toLowerCase();
+  const t = String(text || "").toLowerCase().trim();
 
-  // Explicit interest in the coach's offering
-  if (/\b(how much|what does it cost|what's the price|pricing|your price)\b/.test(t)) return true;
+  // Explicit buying signals and interest in the coach's offering
+  if (/\b(how much|what does it cost|what'?s the price|pricing|your price|price of)\b/.test(t)) return true;
   if (/\b(how do(es)? it work|what do you (do|offer|help with|include)|tell me more|more info|more details)\b/.test(t)) return true;
-  if (/\b(i('m| am) interested|i want to (know|find out|learn|join|sign up|get started|book))\b/.test(t)) return true;
-  if (/\b(what('s| is) (included|in it|in the (program|coaching|package)))\b/.test(t)) return true;
+  if (/\bi'?m interested\b/.test(t)) return true;
+  if (/\bim interested\b/.test(t)) return true;
+  if (/\bi want (your|to (know|find out|learn|join|sign up|get started|book|buy|purchase))\b/.test(t)) return true;
+  if (/\binterested in (your|this|the|what)\b/.test(t)) return true;
+  if (/\b(i'?d (like|love|want) to|i want (in|this|that|it))\b/.test(t)) return true;
+  if (/\b(sounds (good|great|interesting|amazing)|that sounds|this sounds)\b/.test(t)) return true;
+  if (/\b(let'?s do it|count me in|sign me up|i'?m in)\b/.test(t)) return true;
+  if (/\b(what('?s| is) (included|in it|in the (program|coaching|package)))\b/.test(t)) return true;
   if (/\b(book(ing)?|sign up|get started|start|join|enrol|enroll)\b/.test(t)) return true;
   if (/\b(can i (ask|know|get|book|join)|do you (offer|have|work with))\b/.test(t)) return true;
   if (/\b(coaching|program|package|course|service|session|call with you|work with you)\b/.test(t)) return true;
   if (/\b(results|transformation|testimonials|success stories)\b/.test(t)) return true;
+  if (/\b(what do (i|you)|how does|when (can|do|would)|where (do|can|should))\b/.test(t)) return true;
   if (/\bsorry\b/.test(t)) return true; // Likely backpedaling after pitch
 
-  // Short casual messages that don't contain pitch language are likely genuine
-  if (t.split(" ").length <= 6 && !detectSalesPitch(text)) return true;
+  // Any message that isn't a pitch and isn't blank is treated as genuine
+  // (after a pitch has been dismissed, benefit of the doubt goes to the lead)
+  if (t.length > 0 && !detectSalesPitch(text)) return true;
 
   return false;
 }
@@ -7195,10 +7203,18 @@ async function processDmEvent(messaging, igAccount, overrideText) {
                 });
                 // Fall through to normal AI reply handling
               } else {
-                // Ambiguous follow-up — not clearly a pitch, not clearly a genuine question.
-                // Stay silent to be safe.
-                log("sales_pitch_followup_ambiguous_silenced", { senderId, leadId: lead.id });
-                return;
+                // Still-pitching case already handled above; this branch shouldn't be reached
+                // because detectGenuineLeadQuestion now returns true for any non-pitch message.
+                // Resume anyway to avoid silencing genuine leads.
+                log("sales_pitch_pivot_resume_fallback", { senderId, leadId: lead.id });
+                await setLeadManualOverride({
+                  leadId: lead.id,
+                  clientId: lead.client_id,
+                  enabled: false,
+                  reason: "Topic changed - resumed after pitch dismiss",
+                  actor: "system",
+                });
+                // Fall through to normal AI reply handling
               }
             } else {
               // Normal manual override (coach replied, confidence pause, etc.)
