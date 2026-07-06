@@ -33,6 +33,12 @@ function fmtDate(iso) {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function fmtDateTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 // ── Admin Login ───────────────────────────────────────────────────────────────
 
 const AdminLogin = {
@@ -73,6 +79,7 @@ const AdminLogin = {
 
 const AdminDashboard = {
   _clients: [],
+  _issues: [],
   _activeClientId: null,
 
   init() {
@@ -89,6 +96,19 @@ const AdminDashboard = {
     });
 
     qs("refreshBtn")?.addEventListener("click", () => this.loadAll());
+
+    // Tab switching
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const target = tab.dataset.tab;
+        document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+        document.querySelectorAll(".tabPanel").forEach((p) => p.classList.remove("active"));
+        tab.classList.add("active");
+        const panel = document.getElementById(`tab-${target}`);
+        if (panel) panel.classList.add("active");
+        if (target === "issues") this.loadIssues();
+      });
+    });
 
     // Create client
     qs("createClientBtn")?.addEventListener("click", () => this.createClient());
@@ -115,11 +135,15 @@ const AdminDashboard = {
       }
     });
 
+    // Issues filter + refresh
+    qs("issueFilterSelect")?.addEventListener("change", () => this.renderIssues());
+    qs("refreshIssuesBtn")?.addEventListener("click", () => this.loadIssues());
+
     this.loadAll();
   },
 
   async loadAll() {
-    await Promise.allSettled([this.loadStats(), this.loadClients()]);
+    await Promise.allSettled([this.loadStats(), this.loadClients(), this.loadIssuesBadge()]);
   },
 
   async loadStats() {
@@ -162,8 +186,12 @@ const AdminDashboard = {
       const status = cfg.stripe_subscription_status || "none";
       const badgeCls = status === "active" || status === "trialing" || status === "demo" ? "ok" : status === "past_due" ? "warn" : "off";
       const niche = cfg.niche || "generic";
+      const muted = !!c.alerts_muted;
       return `<tr>
-        <td style="font-weight:700;">${escHtml(c.name || "Unnamed")}</td>
+        <td style="font-weight:700;">
+          ${escHtml(c.name || "Unnamed")}
+          ${muted ? `<span class="badge muted" style="margin-left:6px;font-size:10px;">Muted</span>` : ""}
+        </td>
         <td class="tdMuted" style="font-family:monospace;font-size:11px;">${escHtml(c.id)}</td>
         <td class="tdMuted">${escHtml(niche)}</td>
         <td><span class="badge ${badgeCls}">${escHtml(status)}</span></td>
@@ -174,10 +202,29 @@ const AdminDashboard = {
             <button class="btn sm primary" onclick="AdminDashboard.loginAsCoach('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Access dashboard</button>
             <button class="btn sm" onclick="AdminDashboard.openCredsModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Show credentials</button>
             <button class="btn sm danger" onclick="AdminDashboard.openResetPwModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Reset password</button>
+            <button class="btn sm${muted ? " muted-on" : ""}" onclick="AdminDashboard.toggleMute('${escHtml(c.id)}', ${muted})">${muted ? "Unmute alerts" : "Mute alerts"}</button>
           </div>
         </td>
       </tr>`;
     }).join("");
+  },
+
+  // ── Mute / unmute alerts ───────────────────────────────────────────────────
+
+  async toggleMute(clientId, currentlyMuted) {
+    try {
+      await apiFetch(`/admin/api/clients/${clientId}/mute-alerts`, {
+        method: "POST",
+        body: JSON.stringify({ muted: !currentlyMuted }),
+      });
+      const client = this._clients.find((c) => c.id === clientId);
+      if (client) {
+        client.alerts_muted = !currentlyMuted;
+        this.renderClientTable();
+      }
+    } catch (e) {
+      alert("Failed to toggle mute: " + (e.message || e));
+    }
   },
 
   // ── Create client ──────────────────────────────────────────────────────────
@@ -264,7 +311,6 @@ const AdminDashboard = {
         }),
       });
       if (okEl) { okEl.textContent = "Saved."; okEl.style.display = "block"; }
-      // Update local cache
       const client = this._clients.find((c) => c.id === clientId);
       if (client) {
         client.config = client.config || {};
@@ -290,28 +336,13 @@ const AdminDashboard = {
     try {
       const data = await apiFetch(`/admin/api/clients/${clientId}/login-token`, { method: "POST" });
       const coachToken = data.token;
-      // Store under coach token key and open dashboard in new tab
       const win = window.open("/dashboard", "_blank");
-      if (!win) {
-        alert("Pop-up blocked. Please allow pop-ups for this site.");
-        return;
-      }
-      // The new tab needs the token — inject it via localStorage on the same origin
-      // We do this by navigating to a helper URL that sets the token
+      if (!win) { alert("Pop-up blocked. Please allow pop-ups for this site."); return; }
       win.addEventListener("load", () => {
-        try {
-          win.localStorage.setItem("coach_token", coachToken);
-          win.location.reload();
-        } catch (e) {
-          // If blocked, write token to sessionStorage as fallback
-          console.warn("Could not inject token into new tab:", e);
-        }
+        try { win.localStorage.setItem("coach_token", coachToken); win.location.reload(); } catch (e) { console.warn("Could not inject token:", e); }
       }, { once: true });
-      // Fallback: store in sessionStorage here and pass via postMessage
       setTimeout(() => {
-        try {
-          win.postMessage({ type: "admin_inject_token", coach_token: coachToken }, window.location.origin);
-        } catch {}
+        try { win.postMessage({ type: "admin_inject_token", coach_token: coachToken }, window.location.origin); } catch {}
       }, 1000);
     } catch (e) {
       alert("Failed to get login token: " + (e.message || e));
@@ -391,6 +422,117 @@ const AdminDashboard = {
     } catch (e) {
       if (errEl) { errEl.textContent = e.message || "Reset failed."; errEl.style.display = "block"; }
       if (btn) { btn.disabled = false; btn.textContent = "Generate new password"; }
+    }
+  },
+
+  // ── Health issues ──────────────────────────────────────────────────────────
+
+  async loadIssuesBadge() {
+    try {
+      const data = await apiFetch("/admin/api/health-issues");
+      const unresolved = (data.issues || []).filter((i) => !i.resolved).length;
+      const badge = document.getElementById("issuesBadge");
+      if (badge) {
+        badge.textContent = unresolved;
+        badge.style.display = unresolved > 0 ? "inline" : "none";
+      }
+    } catch {}
+  },
+
+  async loadIssues() {
+    const list = document.getElementById("issuesList");
+    if (!list) return;
+    list.innerHTML = `<div class="emptyState">Loading...</div>`;
+    try {
+      const data = await apiFetch("/admin/api/health-issues");
+      this._issues = data.issues || [];
+      this.renderIssues();
+    } catch (e) {
+      list.innerHTML = `<div class="emptyState" style="color:#b42318;">Failed to load: ${escHtml(e.message)}</div>`;
+    }
+  },
+
+  renderIssues() {
+    const list = document.getElementById("issuesList");
+    if (!list) return;
+    const filter = document.getElementById("issueFilterSelect")?.value || "unresolved";
+
+    let filtered = this._issues;
+    if (filter === "unresolved") filtered = filtered.filter((i) => !i.resolved);
+    if (filter === "resolved") filtered = filtered.filter((i) => i.resolved);
+
+    // Unresolved first, then by detected_at desc
+    filtered = [...filtered].sort((a, b) => {
+      if (a.resolved !== b.resolved) return a.resolved ? 1 : -1;
+      return new Date(b.detected_at) - new Date(a.detected_at);
+    });
+
+    if (!filtered.length) {
+      list.innerHTML = `<div class="emptyState">${filter === "unresolved" ? "No open issues." : "No issues found."}</div>`;
+      return;
+    }
+
+    list.innerHTML = filtered.map((issue) => {
+      const typeLabel = {
+        no_token: "No token",
+        invalid_token: "Invalid token",
+        stuck_leads: "Stuck leads",
+        webhook_errors: "Webhook errors",
+      }[issue.issue_type] || issue.issue_type;
+
+      return `<div class="issueCard${issue.resolved ? " resolved" : ""}" data-id="${escHtml(issue.id)}">
+        <div class="issueHeader">
+          <div class="issueLeft">
+            <div class="issueClient">${escHtml(issue.client_name || issue.client_id)}</div>
+            <div><span class="issueType">${escHtml(typeLabel)}</span></div>
+            <div class="issueDesc">${escHtml(issue.issue_description)}</div>
+            <div class="issueMeta">
+              Detected: ${escHtml(fmtDateTime(issue.detected_at))}
+              ${issue.resolved && issue.resolved_at ? ` · Resolved: ${escHtml(fmtDateTime(issue.resolved_at))}` : ""}
+            </div>
+          </div>
+          <div class="issueActions">
+            <button class="btn sm${issue.resolved ? "" : " primary"}" onclick="AdminDashboard.toggleResolved('${escHtml(issue.id)}', ${issue.resolved})">
+              ${issue.resolved ? "Reopen" : "Mark resolved"}
+            </button>
+          </div>
+        </div>
+        <div class="issueNotes">
+          <textarea
+            placeholder="Add notes or next steps..."
+            data-issue-id="${escHtml(issue.id)}"
+            onblur="AdminDashboard.saveNotes('${escHtml(issue.id)}', this.value)"
+          >${escHtml(issue.notes || "")}</textarea>
+        </div>
+      </div>`;
+    }).join("");
+  },
+
+  async toggleResolved(issueId, currentlyResolved) {
+    try {
+      const data = await apiFetch(`/admin/api/health-issues/${issueId}/resolve`, {
+        method: "POST",
+        body: JSON.stringify({ resolved: !currentlyResolved }),
+      });
+      const idx = this._issues.findIndex((i) => i.id === issueId);
+      if (idx !== -1 && data.issue) this._issues[idx] = data.issue;
+      this.renderIssues();
+      this.loadIssuesBadge();
+    } catch (e) {
+      alert("Failed to update: " + (e.message || e));
+    }
+  },
+
+  async saveNotes(issueId, notes) {
+    try {
+      await apiFetch(`/admin/api/health-issues/${issueId}/notes`, {
+        method: "PATCH",
+        body: JSON.stringify({ notes: notes.trim() || null }),
+      });
+      const issue = this._issues.find((i) => i.id === issueId);
+      if (issue) issue.notes = notes.trim() || null;
+    } catch (e) {
+      console.warn("notes save failed:", e.message);
     }
   },
 

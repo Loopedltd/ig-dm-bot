@@ -4197,6 +4197,73 @@ app.post("/admin/api/clients/:clientId/reset-password", requireAdmin, async (req
   }
 });
 
+// ── Mute / unmute health alerts for a client ──────────────────────────────────
+app.post("/admin/api/clients/:clientId/mute-alerts", requireAdmin, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { muted } = req.body || {};
+    const { error } = await supabase
+      .from("clients")
+      .update({ alerts_muted: !!muted })
+      .eq("id", clientId);
+    if (error) return safeJson(res, 500, { error: error.message });
+    return safeJson(res, 200, { ok: true, alerts_muted: !!muted });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+// ── Health issues log ─────────────────────────────────────────────────────────
+app.get("/admin/api/health-issues", requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("health_issues")
+      .select("*")
+      .order("detected_at", { ascending: false })
+      .limit(200);
+    if (error) return safeJson(res, 500, { error: error.message });
+    return safeJson(res, 200, { issues: data || [] });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+app.post("/admin/api/health-issues/:issueId/resolve", requireAdmin, async (req, res) => {
+  try {
+    const { issueId } = req.params;
+    const { resolved } = req.body || {};
+    const patch = {
+      resolved: !!resolved,
+      resolved_at: resolved ? new Date().toISOString() : null,
+    };
+    const { data, error } = await supabase
+      .from("health_issues")
+      .update(patch)
+      .eq("id", issueId)
+      .select()
+      .single();
+    if (error) return safeJson(res, 500, { error: error.message });
+    return safeJson(res, 200, { ok: true, issue: data });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+app.patch("/admin/api/health-issues/:issueId/notes", requireAdmin, async (req, res) => {
+  try {
+    const { issueId } = req.params;
+    const { notes } = req.body || {};
+    const { error } = await supabase
+      .from("health_issues")
+      .update({ notes: notes ?? null })
+      .eq("id", issueId);
+    if (error) return safeJson(res, 500, { error: error.message });
+    return safeJson(res, 200, { ok: true });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
 /**
  * ===========================
  * COACH AUTH + SUBSCRIPTION PROTECTION
@@ -9166,12 +9233,27 @@ async function sendHealthAlert({ clientName, clientId, issues }) {
   }
 }
 
+async function recordHealthIssue({ clientId, clientName, issueType, description }) {
+  try {
+    await supabase.from("health_issues").insert({
+      client_id: clientId,
+      client_name: clientName || clientId,
+      issue_type: issueType,
+      issue_description: description,
+      detected_at: new Date().toISOString(),
+      resolved: false,
+    });
+  } catch (e) {
+    console.warn("health_monitor: failed to insert health_issue", e?.message);
+  }
+}
+
 async function runHealthMonitor() {
   try {
-    // 1. Fetch all clients
+    // 1. Fetch all clients, including mute flag
     const { data: clients, error: clientsErr } = await supabase
       .from("clients")
-      .select("id, name");
+      .select("id, name, alerts_muted");
     if (clientsErr || !clients?.length) return;
 
     const now = Date.now();
@@ -9179,18 +9261,26 @@ async function runHealthMonitor() {
     const THIRTY_MINS = 30 * 60 * 1000;
 
     for (const client of clients) {
-      const { id: clientId, name: clientName } = client;
-      const issues = [];
+      const { id: clientId, name: clientName, alerts_muted } = client;
+
+      // Skip muted clients entirely
+      if (alerts_muted) {
+        log("health_monitor_skipped_muted", { clientId, clientName });
+        continue;
+      }
+
+      const issues = []; // { type, description } — used for email
 
       // ── Check 1: Instagram token validity ─────────────────────────────────
       try {
         const igAcc = await getIgAccountByClientId(clientId);
         if (!igAcc?.page_access_token) {
           if (shouldSendAlert(clientId, "no_token")) {
-            issues.push("No active Instagram token found. The account may not be connected.");
+            const desc = "No active Instagram token found. The account may not be connected.";
+            issues.push(desc);
+            await recordHealthIssue({ clientId, clientName, issueType: "no_token", description: desc });
           }
         } else {
-          // Light probe — just fetch /me to verify the token is accepted
           const probeUrl = igAcc.page_id
             ? `https://graph.facebook.com/v21.0/${encodeURIComponent(igAcc.ig_user_id || igAcc.page_id)}?fields=id&access_token=${encodeURIComponent(igAcc.page_access_token)}`
             : `https://graph.instagram.com/v21.0/me?fields=id&access_token=${encodeURIComponent(igAcc.page_access_token)}`;
@@ -9199,10 +9289,11 @@ async function runHealthMonitor() {
           if (probe && !probe.ok) {
             const body = await probe.json().catch(() => ({}));
             const code = body?.error?.code;
-            // Code 190 = invalid/expired token
             if (code === 190 || code === 102 || probe.status === 401) {
               if (shouldSendAlert(clientId, "invalid_token")) {
-                issues.push(`Instagram token is invalid or expired (error code ${code ?? probe.status}). Re-connect Instagram in the coach dashboard.`);
+                const desc = `Instagram token is invalid or expired (error code ${code ?? probe.status}). Re-connect Instagram in the coach dashboard.`;
+                issues.push(desc);
+                await recordHealthIssue({ clientId, clientName, issueType: "invalid_token", description: desc });
               }
             }
           }
@@ -9226,9 +9317,9 @@ async function runHealthMonitor() {
             const names = stuckLeads.map((l) =>
               l.ig_name || `···${String(l.ig_psid || "").slice(-6)}`
             ).join(", ");
-            issues.push(
-              `${stuckLeads.length} lead${stuckLeads.length !== 1 ? "s" : ""} stuck with bot paused for over 2 hours: ${names}`
-            );
+            const desc = `${stuckLeads.length} lead${stuckLeads.length !== 1 ? "s" : ""} stuck with bot paused for over 2 hours: ${names}`;
+            issues.push(desc);
+            await recordHealthIssue({ clientId, clientName, issueType: "stuck_leads", description: desc });
           }
         }
       } catch (e) {
@@ -9241,16 +9332,16 @@ async function runHealthMonitor() {
         const recent = errors.filter((e) => now - e.ts.getTime() < THIRTY_MINS);
         if (recent.length >= 3) {
           if (shouldSendAlert(clientId, "webhook_errors")) {
-            issues.push(
-              `${recent.length} webhook errors in the last 30 minutes. Latest: "${recent[recent.length - 1].error.slice(0, 120)}"`
-            );
+            const desc = `${recent.length} webhook errors in the last 30 minutes. Latest: "${recent[recent.length - 1].error.slice(0, 120)}"`;
+            issues.push(desc);
+            await recordHealthIssue({ clientId, clientName, issueType: "webhook_errors", description: desc });
           }
         }
       } catch (e) {
         console.warn("health_monitor: webhook error check failed for", clientId, e?.message);
       }
 
-      // ── Send alert if any issues found ────────────────────────────────────
+      // ── Send alert email if any issues found ──────────────────────────────
       if (issues.length > 0) {
         await sendHealthAlert({ clientName: clientName || clientId, clientId, issues });
       }

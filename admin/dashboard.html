@@ -20,6 +20,9 @@
       --warnBg: rgba(181,71,8,0.08);
       --warnBorder: rgba(181,71,8,0.18);
       --warnText: #b54708;
+      --purple: #6d28d9;
+      --purpleBg: rgba(124,58,237,0.08);
+      --purpleBorder: rgba(124,58,237,0.22);
       --shadow: 0 10px 30px rgba(15,23,42,0.06);
     }
     * { box-sizing: border-box; }
@@ -38,6 +41,7 @@
     .btn.primary { background: var(--primary); border-color: rgba(45,107,255,0.3); color: #fff; }
     .btn.primary:hover { filter: brightness(1.04); }
     .btn.danger { background: #fff0f0; border-color: rgba(180,35,24,0.2); color: var(--danger); }
+    .btn.muted-on { background: rgba(181,71,8,0.08); border-color: rgba(181,71,8,0.25); color: #b54708; }
     .btn.sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
     .sectionLabel { font-size: 11px; font-weight: 800; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin: 28px 0 10px; }
     .card { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
@@ -52,8 +56,30 @@
     .badge.ok { background: var(--okBg); border: 1px solid var(--okBorder); color: var(--ok); }
     .badge.warn { background: var(--warnBg); border: 1px solid var(--warnBorder); color: var(--warnText); }
     .badge.off { background: rgba(15,23,42,0.05); border: 1px solid var(--border); color: var(--muted); }
+    .badge.muted { background: rgba(181,71,8,0.08); border: 1px solid rgba(181,71,8,0.25); color: #b54708; }
     .actionBtns { display: flex; gap: 6px; flex-wrap: wrap; }
     .emptyState { padding: 50px 20px; text-align: center; color: var(--muted); }
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+    .tab { padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 10px 10px 0 0; border: 1px solid transparent; border-bottom: none; color: var(--muted); background: none; position: relative; bottom: -1px; }
+    .tab.active { background: var(--panel); border-color: var(--border); color: var(--text); }
+    .tabPanel { display: none; }
+    .tabPanel.active { display: block; }
+    /* Issues */
+    .issueCard { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 10px; box-shadow: var(--shadow); }
+    .issueCard.resolved { opacity: 0.6; }
+    .issueHeader { display: flex; align-items: flex-start; gap: 12px; justify-content: space-between; flex-wrap: wrap; }
+    .issueLeft { flex: 1; min-width: 0; }
+    .issueClient { font-size: 13px; font-weight: 800; margin-bottom: 2px; }
+    .issueType { display: inline-block; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; padding: 2px 7px; border-radius: 6px; background: var(--purpleBg); border: 1px solid var(--purpleBorder); color: var(--purple); margin-bottom: 5px; }
+    .issueDesc { font-size: 13px; color: var(--text); line-height: 1.5; margin-bottom: 6px; }
+    .issueMeta { font-size: 11px; color: var(--muted); }
+    .issueActions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+    .issueNotes { margin-top: 10px; }
+    .issueNotes textarea { width: 100%; min-height: 56px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border2); font-size: 12px; font-family: inherit; color: var(--text); resize: vertical; outline: none; }
+    .issueNotes textarea:focus { border-color: rgba(45,107,255,0.5); box-shadow: 0 0 0 3px rgba(45,107,255,0.1); }
+    .issueFilter { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; flex-wrap: wrap; }
+    .resolvedCount { font-size: 12px; color: var(--muted); cursor: pointer; text-decoration: underline; user-select: none; }
     /* Modal */
     .modal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.45); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
     .modal.open { display: flex; }
@@ -71,7 +97,6 @@
     .credReveal strong { font-weight: 700; color: var(--text); }
     .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
     .createForm { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow); }
-    .createForm h3 { margin: 0 0 14px; font-size: 16px; font-weight: 800; }
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media(max-width:600px) { .row2 { grid-template-columns: 1fr; } .actionBtns { flex-direction: column; } }
   </style>
@@ -90,50 +115,73 @@
     <div class="sub">Manage clients, configs, and access.</div>
 
     <!-- Stats -->
-    <div class="statsRow" id="statsRow">
+    <div class="statsRow">
       <div class="statCard"><div class="num" id="statClients">-</div><div class="lbl">Clients</div></div>
       <div class="statCard"><div class="num" id="statLeads">-</div><div class="lbl">Total leads</div></div>
       <div class="statCard"><div class="num" id="statMessages">-</div><div class="lbl">Messages</div></div>
     </div>
 
-    <!-- Create client -->
-    <div class="sectionLabel">Create client</div>
-    <div class="createForm">
-      <div class="row2">
-        <div>
-          <label>Name</label>
-          <input id="newName" placeholder="Coach name" />
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="clients">Clients</button>
+      <button class="tab" data-tab="issues">Issues <span id="issuesBadge" style="display:none;background:#b42318;color:#fff;border-radius:999px;font-size:10px;padding:1px 6px;margin-left:4px;font-weight:800;"></span></button>
+    </div>
+
+    <!-- Clients tab -->
+    <div class="tabPanel active" id="tab-clients">
+      <!-- Create client -->
+      <div class="sectionLabel">Create client</div>
+      <div class="createForm">
+        <div class="row2">
+          <div>
+            <label>Name</label>
+            <input id="newName" placeholder="Coach name" />
+          </div>
+          <div>
+            <label>Email</label>
+            <input id="newEmail" type="email" placeholder="coach@example.com" />
+          </div>
         </div>
-        <div>
-          <label>Email</label>
-          <input id="newEmail" type="email" placeholder="coach@example.com" />
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button class="btn primary" id="createClientBtn">Create client</button>
+          <span class="errMsg" id="createErr" style="display:inline;"></span>
+          <span class="okMsg" id="createOk" style="display:inline;"></span>
         </div>
       </div>
-      <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <button class="btn primary" id="createClientBtn">Create client</button>
-        <span class="errMsg" id="createErr" style="display:inline;"></span>
-        <span class="okMsg" id="createOk" style="display:inline;"></span>
+
+      <!-- Client list -->
+      <div class="sectionLabel">All clients</div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Client ID</th>
+              <th>Niche</th>
+              <th>Subscription</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="clientTableBody">
+            <tr><td colspan="6"><div class="emptyState">Loading...</div></td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
-    <!-- Client list -->
-    <div class="sectionLabel">All clients</div>
-    <div class="card">
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Client ID</th>
-            <th>Niche</th>
-            <th>Subscription</th>
-            <th>Created</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="clientTableBody">
-          <tr><td colspan="6"><div class="emptyState">Loading...</div></td></tr>
-        </tbody>
-      </table>
+    <!-- Issues tab -->
+    <div class="tabPanel" id="tab-issues">
+      <div class="sectionLabel">Health issues</div>
+      <div class="issueFilter">
+        <select id="issueFilterSelect" style="width:auto;padding:6px 10px;font-size:12px;">
+          <option value="unresolved">Unresolved only</option>
+          <option value="all">All issues</option>
+          <option value="resolved">Resolved only</option>
+        </select>
+        <button class="btn sm" id="refreshIssuesBtn">Refresh</button>
+      </div>
+      <div id="issuesList"><div class="emptyState">Loading...</div></div>
     </div>
   </div>
 
