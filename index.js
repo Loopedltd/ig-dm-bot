@@ -7,6 +7,7 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
 import Stripe from "stripe";
+import { Resend } from "resend";
 import { supabase } from "./supabaseClient.js";
 
 // ─── Real-time activity stream (SSE) ─────────────────────────────────────────
@@ -256,6 +257,19 @@ function safeJson(res, status, payload) {
     }
   }
 }
+// In-memory ring buffer for webhook_async_errors — keyed by clientId
+// Each entry: { ts: Date, error: string }
+const recentWebhookErrors = new Map(); // clientId -> [{ ts, error }]
+
+function recordWebhookError(clientId, errorMsg) {
+  if (!clientId) return;
+  const list = recentWebhookErrors.get(clientId) || [];
+  list.push({ ts: new Date(), error: String(errorMsg || "unknown") });
+  // Keep last 50 per client
+  if (list.length > 50) list.splice(0, list.length - 50);
+  recentWebhookErrors.set(clientId, list);
+}
+
 function log(event, data = {}) {
   console.log(
     JSON.stringify({
@@ -264,6 +278,9 @@ function log(event, data = {}) {
       ...data,
     })
   );
+  if (event === "webhook_async_error" && data.clientId) {
+    recordWebhookError(data.clientId, data.error);
+  }
 }
 
 function msSince(iso) {
@@ -7029,7 +7046,7 @@ log("ig_event_debug", {
           // Immediate path: echo, trigger, or non-text message
           await processDmEvent(messaging, igAccount, text);
         } catch (err) {
-          log("webhook_async_error", { error: err?.message || String(err) });
+          log("webhook_async_error", { clientId: igAccount?.client_id || null, error: err?.message || String(err) });
         }
       })();
     }
@@ -7937,7 +7954,7 @@ log("ig_trigger_opener_sent", {
             }
           }
         } catch (err) {
-          log("webhook_async_error", { error: err?.message || String(err) });
+          log("webhook_async_error", { clientId: lead?.client_id || null, error: err?.message || String(err) });
         }
 }
 /**
@@ -9086,6 +9103,157 @@ async function refreshExpiringTokens() {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HEALTH MONITOR — runs every 5 minutes, alerts james@looped.ltd via Resend
+// ─────────────────────────────────────────────────────────────────────────────
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const ALERT_EMAIL = "james@looped.ltd";
+const ALERT_FROM = "Looped Alerts <alerts@looped.ltd>";
+const ADMIN_BASE_URL = process.env.APP_URL || "https://app.looped.ltd";
+
+// Track which alert types have already been sent per client to avoid spam
+// Key: `${clientId}:${alertType}` → timestamp of last alert sent
+const alertSentAt = new Map();
+
+function shouldSendAlert(clientId, type, cooldownMs = 30 * 60 * 1000) {
+  const key = `${clientId}:${type}`;
+  const last = alertSentAt.get(key) || 0;
+  if (Date.now() - last < cooldownMs) return false;
+  alertSentAt.set(key, Date.now());
+  return true;
+}
+
+async function sendHealthAlert({ clientName, clientId, issues }) {
+  if (!resend) {
+    console.warn("health_monitor: RESEND_API_KEY not set — skipping email");
+    return;
+  }
+
+  const adminUrl = `${ADMIN_BASE_URL}/admin/dashboard.html`;
+  const issueLines = issues.map((i) => `<li style="margin-bottom:8px;">${i}</li>`).join("");
+
+  const html = `
+    <div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+      <h2 style="color:#b42318;margin:0 0 4px;">Health alert: ${clientName}</h2>
+      <p style="color:#555;margin:0 0 20px;font-size:14px;">Detected at ${new Date().toUTCString()}</p>
+      <ul style="background:#fff5f5;border:1px solid #fecaca;border-radius:8px;padding:16px 16px 16px 32px;color:#333;font-size:14px;line-height:1.6;">
+        ${issueLines}
+      </ul>
+      <p style="margin-top:20px;">
+        <a href="${adminUrl}" style="background:#2d6bff;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Open admin dashboard</a>
+      </p>
+      <p style="color:#999;font-size:12px;margin-top:16px;">Looped health monitor · every 5 minutes</p>
+    </div>
+  `;
+
+  try {
+    await resend.emails.send({
+      from: ALERT_FROM,
+      to: ALERT_EMAIL,
+      subject: `[Looped] Alert: ${clientName} — ${issues.length} issue${issues.length !== 1 ? "s" : ""} detected`,
+      html,
+    });
+    log("health_alert_sent", { clientId, clientName, issueCount: issues.length });
+  } catch (e) {
+    console.error("health_monitor: email send failed", e?.message || e);
+  }
+}
+
+async function runHealthMonitor() {
+  try {
+    // 1. Fetch all clients
+    const { data: clients, error: clientsErr } = await supabase
+      .from("clients")
+      .select("id, name");
+    if (clientsErr || !clients?.length) return;
+
+    const now = Date.now();
+    const TWO_HOURS = 2 * 60 * 60 * 1000;
+    const THIRTY_MINS = 30 * 60 * 1000;
+
+    for (const client of clients) {
+      const { id: clientId, name: clientName } = client;
+      const issues = [];
+
+      // ── Check 1: Instagram token validity ─────────────────────────────────
+      try {
+        const igAcc = await getIgAccountByClientId(clientId);
+        if (!igAcc?.page_access_token) {
+          if (shouldSendAlert(clientId, "no_token")) {
+            issues.push("No active Instagram token found. The account may not be connected.");
+          }
+        } else {
+          // Light probe — just fetch /me to verify the token is accepted
+          const probeUrl = igAcc.page_id
+            ? `https://graph.facebook.com/v21.0/${encodeURIComponent(igAcc.ig_user_id || igAcc.page_id)}?fields=id&access_token=${encodeURIComponent(igAcc.page_access_token)}`
+            : `https://graph.instagram.com/v21.0/me?fields=id&access_token=${encodeURIComponent(igAcc.page_access_token)}`;
+
+          const probe = await fetch(probeUrl).catch(() => null);
+          if (probe && !probe.ok) {
+            const body = await probe.json().catch(() => ({}));
+            const code = body?.error?.code;
+            // Code 190 = invalid/expired token
+            if (code === 190 || code === 102 || probe.status === 401) {
+              if (shouldSendAlert(clientId, "invalid_token")) {
+                issues.push(`Instagram token is invalid or expired (error code ${code ?? probe.status}). Re-connect Instagram in the coach dashboard.`);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("health_monitor: token check failed for", clientId, e?.message);
+      }
+
+      // ── Check 2: Leads stuck in manual_override > 2 hours ────────────────
+      try {
+        const cutoff = new Date(now - TWO_HOURS).toISOString();
+        const { data: stuckLeads, error: stuckErr } = await supabase
+          .from("leads")
+          .select("id, ig_name, ig_psid, manual_override_at, manual_override_reason")
+          .eq("client_id", clientId)
+          .eq("manual_override", true)
+          .lt("manual_override_at", cutoff);
+
+        if (!stuckErr && stuckLeads?.length > 0) {
+          if (shouldSendAlert(clientId, "stuck_leads")) {
+            const names = stuckLeads.map((l) =>
+              l.ig_name || `···${String(l.ig_psid || "").slice(-6)}`
+            ).join(", ");
+            issues.push(
+              `${stuckLeads.length} lead${stuckLeads.length !== 1 ? "s" : ""} stuck with bot paused for over 2 hours: ${names}`
+            );
+          }
+        }
+      } catch (e) {
+        console.warn("health_monitor: stuck leads check failed for", clientId, e?.message);
+      }
+
+      // ── Check 3: Recent webhook_async_errors ──────────────────────────────
+      try {
+        const errors = recentWebhookErrors.get(clientId) || [];
+        const recent = errors.filter((e) => now - e.ts.getTime() < THIRTY_MINS);
+        if (recent.length >= 3) {
+          if (shouldSendAlert(clientId, "webhook_errors")) {
+            issues.push(
+              `${recent.length} webhook errors in the last 30 minutes. Latest: "${recent[recent.length - 1].error.slice(0, 120)}"`
+            );
+          }
+        }
+      } catch (e) {
+        console.warn("health_monitor: webhook error check failed for", clientId, e?.message);
+      }
+
+      // ── Send alert if any issues found ────────────────────────────────────
+      if (issues.length > 0) {
+        await sendHealthAlert({ clientName: clientName || clientId, clientId, issues });
+      }
+    }
+  } catch (e) {
+    console.error("health_monitor: run failed", e?.message || e);
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 
@@ -9127,5 +9295,13 @@ app.listen(PORT, () => {
       console.error("token_refresh: error", e?.message || e)
     );
   }, 12 * 60 * 60 * 1000);
+
+  // Health monitor — first run 2 min after startup, then every 5 minutes
+  setTimeout(() => {
+    runHealthMonitor().catch((e) => console.error("health_monitor: startup run failed", e?.message || e));
+    setInterval(() => {
+      runHealthMonitor().catch((e) => console.error("health_monitor: error", e?.message || e));
+    }, 5 * 60 * 1000);
+  }, 2 * 60 * 1000);
 });
 
