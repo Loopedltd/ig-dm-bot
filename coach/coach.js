@@ -1371,6 +1371,7 @@ function wireQueueRefreshButton() {
     ai_reply_ready:{ icon: "✓",  iconCls: "activityIcon--sky",    cardCls: "activityEvent--ready",      label: "Reply ready" },
     reply_queued:  { icon: "→",  iconCls: "activityIcon--purple", cardCls: "activityEvent--queued",     label: "Reply queued" },
     reply_sent:    { icon: "✓",  iconCls: "activityIcon--green",  cardCls: "activityEvent--sent",       label: "Delivered to Instagram" },
+    confidence_pause: { icon: "⚠", iconCls: "activityIcon--purple", cardCls: "activityEvent--paused", label: "Needs review - bot paused" },
   };
 
   function fmtActivityTime(isoStr) {
@@ -1475,6 +1476,16 @@ function wireQueueRefreshButton() {
           return;
         }
         addActivityEvent(event);
+        // When confidence_pause fires, immediately mark the lead in the local list
+        // so the Needs Review badge appears without waiting for a manual refresh.
+        if (event.type === "confidence_pause" && event.igPsid) {
+          const lead = allLeads.find((l) => String(l.ig_psid) === String(event.igPsid));
+          if (lead) {
+            lead.manual_override = true;
+            lead.manual_override_reason = "Low confidence — coach input needed";
+            renderLeadsList();
+          }
+        }
       } catch {}
     };
 
