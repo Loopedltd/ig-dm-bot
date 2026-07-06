@@ -199,7 +199,7 @@
         <textarea class="product-description" style="min-height:70px;">${escHtml(p.description || "")}</textarea>
         <label>Who it's for</label>
         <input class="product-who" value="${escAttr(p.who_its_for || "")}" placeholder="e.g. Busy professionals wanting structure" />
-        <label>Product/service link (optional)</label>
+        <label>Product/service link</label>
         <input class="product-url" value="${escAttr(p.url || "")}" placeholder="https://..." />
       `;
       div.querySelector(".removeProductBtn").addEventListener("click", () => {
@@ -294,7 +294,6 @@
       val(qs("#urgency_reason"), c.urgency_reason);
       val(qs("#trust_builders"), c.trust_builders);
       val(qs("#faq"), c.faq);
-      val(qs("#offer_price"), c.offer_price);
 
       // AI customisation
       val(qs("#instagram_handle"), c.instagram_handle);
@@ -487,7 +486,6 @@
         const urgency_reason = String(qs("#urgency_reason")?.value || "").trim();
         const trust_builders = String(qs("#trust_builders")?.value || "").trim();
         const faq = String(qs("#faq")?.value || "").trim();
-        const offer_price = String(qs("#offer_price")?.value || "").trim();
         const example_messages = String(qs("#example_messages")?.value || "").trim();
         const niche = String(qs("#niche")?.value || "generic").trim();
 
@@ -505,7 +503,7 @@
         const data = await apiFetch(`${API}/generate-prompt`, {
           method: "POST",
           body: JSON.stringify({
-            instagram_handle, niche, example_messages, offer_description, offer_price,
+            instagram_handle, niche, example_messages, offer_description,
             what_you_do: offer_what, what_they_get: offer_features,
             who_its_for: offer_audience, how_it_works: offer_process,
             main_result, best_fit_leads, not_a_fit, common_objections,
@@ -760,7 +758,6 @@
             urgency_reason: String(qs("#urgency_reason")?.value || "").trim() || null,
             trust_builders: String(qs("#trust_builders")?.value || "").trim() || null,
             faq: String(qs("#faq")?.value || "").trim() || null,
-            offer_price: String(qs("#offer_price")?.value || "").trim() || null,
             niche: String(qs("#niche")?.value || "fitness"),
             niche_other: String(qs("#niche_other")?.value || "").trim() || null,
             tone: String(qs("#tone")?.value || "").trim() || null,

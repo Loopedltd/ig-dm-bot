@@ -1929,9 +1929,7 @@ function getFallbackReply({ turnStrategy, cfg, leadMemory }) {
 
   const map = {
     answer_price_after_cta: [
-      cfg?.offer_price
-        ? `it’s ${cfg.offer_price}`
-        : `i can break the pricing down properly for you`,
+      (() => { const p = Array.isArray(cfg?.products) ? cfg.products.find((p) => p?.price) : null; return p?.price ? `it’s ${p.price}` : `i can break the pricing down properly for you`; })(),
     ],
 answer_offer_question_after_cta: [
   `${getEffectiveWhatYouDo(cfg)}`,
@@ -1989,7 +1987,8 @@ send_booking_link_now: bookingUrl
 }
 function buildDeterministicReply({ turnStrategy, cfg }) {
   const offerDescription = String(cfg?.offer_description || "").trim();
-  const offerPrice = String(cfg?.offer_price || "").trim();
+  const firstProductPrice = Array.isArray(cfg?.products) ? (cfg.products.find((p) => p?.price)?.price || "") : "";
+  const offerPrice = firstProductPrice || "";
   const structured = getStructuredOfferContext(cfg);
 const whatYouDo = getEffectiveWhatYouDo(cfg);
   const whatTheyGet = structured.what_they_get;
@@ -2705,7 +2704,7 @@ const context = {
   booking_url_present: !!bookingUrl,
   booking_url: bookingUrl || null,
 
-  offer_price: cfg?.offer_price || null,
+  offer_price: (Array.isArray(cfg?.products) ? cfg.products.find((p) => p?.price)?.price : null) || null,
   offer_description: cfg?.offer_description || null,
   what_you_do: getEffectiveWhatYouDo(cfg),
   what_they_get: structuredOffer.what_they_get || null,
