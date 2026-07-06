@@ -305,6 +305,10 @@
       val(qs("#vocabulary"), c.vocabulary);
       val(qs("#system_prompt"), c.system_prompt);
       if (c.example_messages) val(qs("#example_messages"), c.example_messages);
+      val(qs("#voice_price_reply"), c.voice_price_reply);
+      val(qs("#voice_objection_reply"), c.voice_objection_reply);
+      val(qs("#voice_booking_push"), c.voice_booking_push);
+      val(qs("#voice_quiet_lead"), c.voice_quiet_lead);
       // Feature 4: custom follow-up message
       val(qs("#followup_message"), c.followup_message);
 
@@ -765,6 +769,10 @@
             vocabulary: String(qs("#vocabulary")?.value || "").trim() || null,
             system_prompt: String(qs("#system_prompt")?.value || "").trim() || null,
             example_messages: exParsed.value || null,
+            voice_price_reply: String(qs("#voice_price_reply")?.value || "").trim() || null,
+            voice_objection_reply: String(qs("#voice_objection_reply")?.value || "").trim() || null,
+            voice_booking_push: String(qs("#voice_booking_push")?.value || "").trim() || null,
+            voice_quiet_lead: String(qs("#voice_quiet_lead")?.value || "").trim() || null,
             followup_message: String(qs("#followup_message")?.value || "").trim() || null,
             response_delay_ms: Number(qs("#response_delay_ms")?.value || 90) * 1000,
             products,

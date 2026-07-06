@@ -125,8 +125,12 @@ const AdminDashboard = {
     qs("resetPwCancelBtn")?.addEventListener("click", () => this.closeModal("resetPwModal"));
     qs("resetPwConfirmBtn")?.addEventListener("click", () => this.resetPassword());
 
+    // Offboard modal
+    qs("offboardCancelBtn")?.addEventListener("click", () => this.closeModal("offboardModal"));
+    qs("offboardConfirmBtn")?.addEventListener("click", () => this.offboardClient());
+
     // Close modals on backdrop click
-    ["configModal", "credsModal", "resetPwModal"].forEach((id) => {
+    ["configModal", "credsModal", "resetPwModal", "offboardModal"].forEach((id) => {
       const el = qs(id);
       if (el) {
         el.addEventListener("click", (e) => {
@@ -187,10 +191,12 @@ const AdminDashboard = {
       const badgeCls = status === "active" || status === "trialing" || status === "demo" ? "ok" : status === "past_due" ? "warn" : "off";
       const niche = cfg.niche || "generic";
       const muted = !!c.alerts_muted;
+      const offboarded = !!c.offboarded_at || c.is_active === false;
       return `<tr>
         <td style="font-weight:700;">
           ${escHtml(c.name || "Unnamed")}
           ${muted ? `<span class="badge muted" style="margin-left:6px;font-size:10px;">Muted</span>` : ""}
+          ${offboarded ? `<span class="badge offboarded" style="margin-left:6px;font-size:10px;">Offboarded</span>` : ""}
         </td>
         <td class="tdMuted" style="font-family:monospace;font-size:11px;">${escHtml(c.id)}</td>
         <td class="tdMuted">${escHtml(niche)}</td>
@@ -198,11 +204,16 @@ const AdminDashboard = {
         <td class="tdMuted">${escHtml(fmtDate(c.created_at))}</td>
         <td>
           <div class="actionBtns">
+            ${offboarded ? `
+            <button class="btn sm primary" onclick="AdminDashboard.reactivateClient('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Reactivate</button>
+            ` : `
             <button class="btn sm" onclick="AdminDashboard.openConfigModal('${escHtml(c.id)}')">Edit config</button>
             <button class="btn sm primary" onclick="AdminDashboard.loginAsCoach('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Access dashboard</button>
             <button class="btn sm" onclick="AdminDashboard.openCredsModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Show credentials</button>
             <button class="btn sm danger" onclick="AdminDashboard.openResetPwModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Reset password</button>
             <button class="btn sm${muted ? " muted-on" : ""}" onclick="AdminDashboard.toggleMute('${escHtml(c.id)}', ${muted})">${muted ? "Unmute alerts" : "Mute alerts"}</button>
+            <button class="btn sm danger" onclick="AdminDashboard.openOffboardModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Offboard</button>
+            `}
           </div>
         </td>
       </tr>`;
@@ -224,6 +235,60 @@ const AdminDashboard = {
       }
     } catch (e) {
       alert("Failed to toggle mute: " + (e.message || e));
+    }
+  },
+
+  // ── Offboard / reactivate ──────────────────────────────────────────────────
+
+  openOffboardModal(clientId, clientName) {
+    this._activeClientId = clientId;
+    const qs = (id) => document.getElementById(id);
+    if (qs("offboardModalSub")) qs("offboardModalSub").textContent = `Offboard "${clientName || clientId}"? This cannot be undone easily.`;
+    if (qs("offboardErr")) { qs("offboardErr").textContent = ""; qs("offboardErr").style.display = "none"; }
+    const confirmBtn = qs("offboardConfirmBtn");
+    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = "Yes, offboard client"; }
+    this.openModal("offboardModal");
+  },
+
+  async offboardClient() {
+    const clientId = this._activeClientId;
+    if (!clientId) return;
+    const qs = (id) => document.getElementById(id);
+    const errEl = qs("offboardErr");
+    const btn = qs("offboardConfirmBtn");
+
+    if (errEl) { errEl.style.display = "none"; }
+    if (btn) { btn.disabled = true; btn.textContent = "Offboarding..."; }
+
+    try {
+      await apiFetch(`/admin/api/clients/${clientId}/offboard`, { method: "POST" });
+      this.closeModal("offboardModal");
+      const client = this._clients.find((c) => c.id === clientId);
+      if (client) {
+        client.is_active = false;
+        client.offboarded_at = new Date().toISOString();
+        if (client.config) client.config.stripe_subscription_status = "canceled";
+        this.renderClientTable();
+      }
+    } catch (e) {
+      if (errEl) { errEl.textContent = e.message || "Offboard failed."; errEl.style.display = "block"; }
+      if (btn) { btn.disabled = false; btn.textContent = "Yes, offboard client"; }
+    }
+  },
+
+  async reactivateClient(clientId, clientName) {
+    if (!confirm(`Reactivate "${clientName || clientId}"? This will restore their account but you will need to manually reinstate their Stripe subscription.`)) return;
+    try {
+      await apiFetch(`/admin/api/clients/${clientId}/reactivate`, { method: "POST" });
+      const client = this._clients.find((c) => c.id === clientId);
+      if (client) {
+        client.is_active = true;
+        client.offboarded_at = null;
+        client.scheduled_deletion_at = null;
+        this.renderClientTable();
+      }
+    } catch (e) {
+      alert("Reactivate failed: " + (e.message || e));
     }
   },
 

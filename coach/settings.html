@@ -321,45 +321,29 @@
         <div class="takeoverTitle" style="font-size:16px;">Get your bot working in minutes</div>
         <div class="takeoverSub" style="margin-top:4px;">Fill these in and your bot is ready. Everything else has smart defaults.</div>
 
-        <label style="margin-top:4px;">Instagram handle</label>
-        <input id="instagram_handle" placeholder="looped.ltd" style="max-width:320px;" />
+        <div style="margin-top:16px; font-size:14px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">Instagram handle</div>
+        <input id="instagram_handle" placeholder="looped.ltd" style="max-width:320px; margin-top:6px;" />
         <div class="helper">Without the @. Used to personalise the bot's voice.</div>
 
         <div class="divider"></div>
 
-        <label>Your real DMs <span style="font-weight:800; color: var(--primary);">- most important field for making the bot sound like you</span></label>
-        <textarea id="example_messages" style="min-height:320px;">user: how much is it?
-assistant: it's £200 to get started then £90 after that
+        <div style="font-size:14px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">Your real DMs <span style="color: var(--primary);">- most important section for making the bot sound like you</span></div>
+        <div style="color:var(--muted); font-size:13px; margin-top:6px; margin-bottom:4px;">Write exactly what you'd say in each situation. The bot learns your voice from these.</div>
 
-user: what do you actually help with?
-assistant: i help beginners get in shape properly with a plan, support and accountability
+        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">What do you say when someone asks the price?</div>
+        <textarea id="voice_price_reply" style="min-height:90px;" placeholder="e.g.&#10;it's £200 to get started then £90 a month after that&#10;&#10;fair, what were you expecting to pay"></textarea>
 
-user: i'm not sure if it's for me
-assistant: fair, what's making you think that
+        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">What do you say when someone has an objection like "I need to think about it"?</div>
+        <textarea id="voice_objection_reply" style="min-height:90px;" placeholder="e.g.&#10;fair, what's holding you back&#10;&#10;totally get that — is it the price or the timing?"></textarea>
 
-user: i've never really done gym before
-assistant: that's calm, most people haven't. what are you actually trying to get out of it
+        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">What do you say to guide them toward booking a call?</div>
+        <textarea id="voice_booking_push" style="min-height:90px;" placeholder="e.g.&#10;want me to send you the link so we can go through it properly?&#10;&#10;sounds good - use this and get yourself booked in"></textarea>
 
-user: £200 is a bit much
-assistant: fair, what were you expecting to pay
+        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">How do you handle someone who goes quiet?</div>
+        <textarea id="voice_quiet_lead" style="min-height:90px;" placeholder="e.g.&#10;hey just checking in - still here if you want to chat&#10;&#10;no worries either way, just let me know if you want to pick it back up"></textarea>
 
-user: i'll think about it
-assistant: fair, what's holding you back
-
-user: not sure it'll work
-assistant: what part are you unsure about
-
-user: i don't have time
-assistant: how much time do you actually have realistically
-
-user: sounds good
-assistant: good, want me to send the link
-
-user: send me the link
-assistant: use this and get booked in
-</textarea>
-        <div class="tip">Copy and paste real conversations you've had in DMs. Include objections, price replies, and your closing lines.</div>
-        <div class="tip">Format: <code style="background:rgba(15,23,42,0.06); padding:2px 6px; border-radius:6px; font-size:12px;">user: ...</code> then <code style="background:rgba(15,23,42,0.06); padding:2px 6px; border-radius:6px; font-size:12px;">assistant: ...</code> with a blank line between each pair.</div>
+        <!-- Kept for backward compatibility — not shown to users -->
+        <textarea id="example_messages" style="display:none;"></textarea>
       </div>
 
       <!-- SECTION 2: Optional Customisation wizard -->
@@ -368,7 +352,7 @@ assistant: use this and get booked in
       </div>
       <div class="card" id="wizardCard">
         <div class="optionalNote" style="margin-top:0;">
-          <strong>All optional.</strong> The bot uses smart defaults if you leave anything blank. Fill in what you know and skip the rest.
+          <strong>All optional.</strong> The bot uses smart defaults if you leave anything blank. Fill in what you can to the best of your ability.
         </div>
 
         <!-- Progress -->

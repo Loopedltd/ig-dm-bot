@@ -57,6 +57,7 @@
     .badge.warn { background: var(--warnBg); border: 1px solid var(--warnBorder); color: var(--warnText); }
     .badge.off { background: rgba(15,23,42,0.05); border: 1px solid var(--border); color: var(--muted); }
     .badge.muted { background: rgba(181,71,8,0.08); border: 1px solid rgba(181,71,8,0.25); color: #b54708; }
+    .badge.offboarded { background: rgba(15,23,42,0.06); border: 1px solid rgba(15,23,42,0.14); color: var(--muted); }
     .actionBtns { display: flex; gap: 6px; flex-wrap: wrap; }
     .emptyState { padding: 50px 20px; text-align: center; color: var(--muted); }
     /* Tabs */
@@ -259,6 +260,29 @@
       <div class="modalFooter">
         <button class="btn" id="resetPwCancelBtn">Close</button>
         <button class="btn danger" id="resetPwConfirmBtn">Generate new password</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Offboard confirmation modal -->
+  <div class="modal" id="offboardModal">
+    <div class="modalBox" style="max-width:480px;">
+      <h2>Offboard client</h2>
+      <div class="sub" id="offboardModalSub">This will cancel their subscription and revoke access.</div>
+
+      <div style="background:rgba(180,35,24,0.06);border:1px solid rgba(180,35,24,0.18);border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.6;margin-top:4px;">
+        <strong>This will:</strong><br>
+        Cancel their Stripe subscription<br>
+        Revoke Instagram account access<br>
+        Deactivate their account<br>
+        Schedule their data for deletion in 30 days
+      </div>
+
+      <div class="errMsg" id="offboardErr"></div>
+
+      <div class="modalFooter">
+        <button class="btn" id="offboardCancelBtn">Cancel</button>
+        <button class="btn danger" id="offboardConfirmBtn">Yes, offboard client</button>
       </div>
     </div>
   </div>

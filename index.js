@@ -2540,10 +2540,36 @@ const examplesToUse = hasStrongCustomExamples(cfg?.example_messages)
   ? parseExampleMessages(cfg?.example_messages)
   : getDefaultFallbackExamples(niche);
 
-  const exampleMessages = examplesToUse.flatMap((ex) => [
-    { role: "user", content: ex.user },
-    { role: "assistant", content: ex.assistant },
-  ]);
+// Build structured voice few-shot pairs from the 4 question-based fields
+const structuredVoicePairs = [];
+const voiceFieldMap = [
+  { userLine: "how much is it?", key: "voice_price_reply" },
+  { userLine: "i need to think about it", key: "voice_objection_reply" },
+  { userLine: "that sounds good, how do i get started?", key: "voice_booking_push" },
+  { userLine: "just checking in", key: "voice_quiet_lead" },
+];
+for (const { userLine, key } of voiceFieldMap) {
+  const ans = String(cfg?.[key] || "").trim();
+  if (ans) {
+    structuredVoicePairs.push({ role: "user", content: userLine });
+    structuredVoicePairs.push({ role: "assistant", content: ans });
+  }
+}
+
+// If structured voice fields are filled in, use them as primary voice examples.
+// Supplement with custom example_messages if also present.
+// Fall back to niche defaults only when neither is set.
+const exampleMessages = structuredVoicePairs.length > 0
+  ? [
+      ...structuredVoicePairs,
+      ...(hasStrongCustomExamples(cfg?.example_messages)
+        ? examplesToUse.flatMap((ex) => [{ role: "user", content: ex.user }, { role: "assistant", content: ex.assistant }])
+        : []),
+    ]
+  : examplesToUse.flatMap((ex) => [
+      { role: "user", content: ex.user },
+      { role: "assistant", content: ex.assistant },
+    ]);
 
   const systemPrompt = `
 You are a real person replying to Instagram DMs on behalf of a coach.
@@ -4264,6 +4290,155 @@ app.patch("/admin/api/health-issues/:issueId/notes", requireAdmin, async (req, r
   }
 });
 
+// ── Client offboarding ────────────────────────────────────────────────────────
+app.post("/admin/api/clients/:clientId/offboard", requireAdmin, async (req, res) => {
+  const { clientId } = req.params;
+  const steps = [];
+
+  try {
+    // 1. Fetch client + config + coach user email
+    const { data: client, error: clientErr } = await supabase
+      .from("clients")
+      .select("id, name")
+      .eq("id", clientId)
+      .single();
+    if (clientErr || !client) return safeJson(res, 404, { error: "Client not found" });
+
+    const { data: cfg } = await supabase
+      .from("client_configs")
+      .select("stripe_subscription_id, stripe_customer_id")
+      .eq("client_id", clientId)
+      .maybeSingle();
+
+    const { data: coachUser } = await supabase
+      .from("coach_users")
+      .select("email")
+      .eq("client_id", clientId)
+      .maybeSingle();
+
+    const clientEmail = coachUser?.email || null;
+    const clientName = client.name || clientId;
+
+    // 2. Cancel Stripe subscription
+    const subId = cfg?.stripe_subscription_id;
+    if (subId && stripe) {
+      try {
+        await stripe.subscriptions.cancel(subId);
+        steps.push("stripe_cancelled");
+        log("offboard_stripe_cancelled", { clientId, subId });
+      } catch (e) {
+        // If already cancelled, treat as success
+        if (e?.code === "resource_missing" || String(e?.message).includes("No such subscription")) {
+          steps.push("stripe_already_cancelled");
+        } else {
+          console.warn("offboard: stripe cancel failed", e?.message);
+          steps.push("stripe_cancel_failed");
+        }
+      }
+    } else {
+      steps.push("stripe_no_subscription");
+    }
+
+    // 3. Revoke Instagram token — delete the ig_accounts row(s) to deactivate
+    try {
+      const { data: igAccounts } = await supabase
+        .from("ig_accounts")
+        .select("id, page_access_token, ig_user_id, page_id")
+        .eq("client_id", clientId)
+        .eq("is_active", true);
+
+      for (const acc of igAccounts || []) {
+        // Instagram doesn't have a direct "revoke" API — deactivate by clearing token
+        await supabase
+          .from("ig_accounts")
+          .update({ is_active: false, page_access_token: null })
+          .eq("id", acc.id);
+      }
+      steps.push("ig_deactivated");
+      log("offboard_ig_deactivated", { clientId, count: (igAccounts || []).length });
+    } catch (e) {
+      console.warn("offboard: ig deactivation failed", e?.message);
+      steps.push("ig_deactivation_failed");
+    }
+
+    // 4. Update client row: deactivate + schedule deletion in 30 days
+    const scheduledDeletion = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    await supabase
+      .from("clients")
+      .update({
+        is_active: false,
+        offboarded_at: new Date().toISOString(),
+        scheduled_deletion_at: scheduledDeletion,
+      })
+      .eq("id", clientId);
+
+    // 5. Mark subscription as cancelled in client_configs
+    await supabase
+      .from("client_configs")
+      .update({ stripe_subscription_status: "canceled" })
+      .eq("client_id", clientId);
+
+    steps.push("client_deactivated");
+    log("offboard_complete", { clientId, clientName, steps });
+
+    // 6. Send offboard email to coach
+    if (resend && clientEmail) {
+      try {
+        const deletionDate = new Date(scheduledDeletion).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+        await resend.emails.send({
+          from: ALERT_FROM,
+          to: clientEmail,
+          subject: "Your Looped account has been deactivated",
+          html: `
+            <div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+              <h2 style="margin:0 0 16px;font-size:22px;font-weight:900;">Your Looped account has been deactivated</h2>
+              <p style="color:#333;font-size:15px;line-height:1.6;">Hi ${escHtml(clientName)},</p>
+              <p style="color:#333;font-size:15px;line-height:1.6;">
+                Your Looped account has been deactivated. Your Instagram connection has been removed and your subscription has been cancelled.
+              </p>
+              <p style="color:#333;font-size:15px;line-height:1.6;">
+                Your account data (leads, messages, and settings) will be permanently deleted on <strong>${deletionDate}</strong>.
+                If you believe this was done in error, please contact us before that date.
+              </p>
+              <p style="color:#555;font-size:13px;margin-top:24px;">The Looped team</p>
+            </div>
+          `,
+        });
+        steps.push("email_sent");
+      } catch (e) {
+        console.warn("offboard: email failed", e?.message);
+        steps.push("email_failed");
+      }
+    }
+
+    return safeJson(res, 200, { ok: true, steps, scheduled_deletion_at: scheduledDeletion });
+  } catch (e) {
+    console.error("offboard error:", e?.message || e);
+    return safeJson(res, 500, { error: String(e?.message || e), steps });
+  }
+});
+
+// ── Reactivate client (reverse offboard) ─────────────────────────────────────
+app.post("/admin/api/clients/:clientId/reactivate", requireAdmin, async (req, res) => {
+  const { clientId } = req.params;
+  try {
+    await supabase
+      .from("clients")
+      .update({ is_active: true, scheduled_deletion_at: null, offboarded_at: null })
+      .eq("id", clientId);
+
+    await supabase
+      .from("ig_accounts")
+      .update({ is_active: true })
+      .eq("client_id", clientId);
+
+    log("client_reactivated", { clientId });
+    return safeJson(res, 200, { ok: true });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
 /**
  * ===========================
  * COACH AUTH + SUBSCRIPTION PROTECTION
@@ -4829,6 +5004,12 @@ if (typeof patch.calendly_api_key === "string" || patch.calendly_api_key === nul
 // Feature 4: custom 24h follow-up message
 if (typeof patch.followup_message === "string" || patch.followup_message === null) {
   allowed.followup_message = patch.followup_message || null;
+}
+// Structured voice training fields
+for (const key of ["voice_price_reply", "voice_objection_reply", "voice_booking_push", "voice_quiet_lead"]) {
+  if (typeof patch[key] === "string" || patch[key] === null) {
+    allowed[key] = patch[key] || null;
+  }
 }
 // Feature 6: response delay (clamped server-side to 30s–180s)
 if (patch.response_delay_ms != null) {
@@ -9351,6 +9532,48 @@ async function runHealthMonitor() {
   }
 }
 
+// ── Nightly client deletion job ───────────────────────────────────────────────
+async function runClientDeletionJob() {
+  const now = new Date().toISOString();
+  const { data: dueClients, error } = await supabase
+    .from("clients")
+    .select("id, name")
+    .eq("is_active", false)
+    .not("scheduled_deletion_at", "is", null)
+    .lte("scheduled_deletion_at", now);
+
+  if (error) {
+    console.error("client_deletion_job: fetch failed", error.message);
+    return;
+  }
+  if (!dueClients || dueClients.length === 0) {
+    log("client_deletion_job: no clients due for deletion");
+    return;
+  }
+
+  for (const client of dueClients) {
+    const clientId = client.id;
+    try {
+      // Delete in dependency order: leads → ig_accounts → client_configs → clients
+      const { error: leadsErr } = await supabase.from("leads").delete().eq("client_id", clientId);
+      if (leadsErr) throw new Error(`leads delete failed: ${leadsErr.message}`);
+
+      const { error: igErr } = await supabase.from("ig_accounts").delete().eq("client_id", clientId);
+      if (igErr) throw new Error(`ig_accounts delete failed: ${igErr.message}`);
+
+      const { error: cfgErr } = await supabase.from("client_configs").delete().eq("client_id", clientId);
+      if (cfgErr) throw new Error(`client_configs delete failed: ${cfgErr.message}`);
+
+      const { error: clientErr } = await supabase.from("clients").delete().eq("id", clientId);
+      if (clientErr) throw new Error(`clients delete failed: ${clientErr.message}`);
+
+      log("client_deletion_job: deleted client", { clientId, clientName: client.name });
+    } catch (e) {
+      console.error("client_deletion_job: deletion failed for", clientId, e?.message || e);
+    }
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 
@@ -9400,5 +9623,13 @@ app.listen(PORT, () => {
       runHealthMonitor().catch((e) => console.error("health_monitor: error", e?.message || e));
     }, 5 * 60 * 1000);
   }, 2 * 60 * 1000);
+
+  // Client deletion job — runs once daily at startup check, then every 24 hours
+  setTimeout(() => {
+    runClientDeletionJob().catch((e) => console.error("client_deletion_job: startup run failed", e?.message || e));
+  }, 5 * 60 * 1000);
+  setInterval(() => {
+    runClientDeletionJob().catch((e) => console.error("client_deletion_job: error", e?.message || e));
+  }, 24 * 60 * 60 * 1000);
 });
 
