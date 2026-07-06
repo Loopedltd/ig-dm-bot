@@ -7098,6 +7098,7 @@ async function processDmEvent(messaging, igAccount, overrideText) {
           if (!lead.client_id) return;
 
           const cfg = await getClientConfig(lead.client_id);
+          const niche = getEffectiveNiche(cfg);
 
           let historyMessages = [];
           try {
