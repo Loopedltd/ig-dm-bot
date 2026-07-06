@@ -950,7 +950,7 @@ function renderLeadRow(lead) {
       <button class="leadChatBtn" data-id="${lead.id}" data-name="${escHtml(name)}" data-sub="${escHtml(subLine)}">View chat</button>
     </div>
     <span class="badge stageBadge stage-${escHtml(stage)}">${escHtml(stageLabel)}</span>
-    ${isPaused ? `<span class="badge leadPausedBadge">Bot paused</span>` : `<span class="badge leadPausedBadge leadPausedBadge--hidden"></span>`}
+    ${isPaused ? `<span class="badge leadPausedBadge">Action required</span>` : `<span class="badge leadPausedBadge leadPausedBadge--hidden"></span>`}
     <button class="leadResetBtn${botOn ? " leadResetBtn--hidden" : ""}" data-id="${lead.id}" title="Clear the pause and resume the bot for this lead immediately">Reset bot</button>
     <div class="leadToggleWrap">
       <div class="leadToggleRow">
@@ -1141,13 +1141,11 @@ function wireLeadToggles() {
     btn.addEventListener("click", async () => {
       const id = btn.getAttribute("data-id");
       btn.disabled = true;
-      btn.textContent = "Resetting…";
+      btn.textContent = "Resuming…";
 
       try {
-        await apiFetch(`${API}/leads/${id}/manual-override`, {
-          method: "POST",
-          body: JSON.stringify({ enabled: false, reason: "Reset by coach" }),
-        });
+        // Calls /resume: clears the pause AND immediately sends the next AI reply
+        await apiFetch(`${API}/leads/${id}/resume`, { method: "POST" });
 
         const lead = allLeads.find((l) => l.id === id);
         if (lead) lead.manual_override = false;

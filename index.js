@@ -2555,6 +2555,7 @@ CORE RULES — follow every single one:
 - never repeat a phrase you’ve already used in this conversation (check recent_assistant_replies)
 - do not invent services, outcomes, pricing, or niche details — only use what’s in the context provided
 - if a products array is present in the context, identify which product best matches what this lead has described and reference it naturally — do not list all products unprompted
+- if the matched product has a url field and the lead is asking about that product or requesting more info or a link, include the url in your reply naturally (e.g. "here's the link: https://...") — do not include a url unless the lead has asked about that product or explicitly asked for a link
 - never assume the niche is fitness or money coaching unless the context clearly says so
 - if a booking link was already sent, don’t send it again unless they ask for it
 - NEVER mention budget, investment, pricing, or money in the first 2 messages of any conversation — even if it feels relevant
@@ -4906,6 +4907,107 @@ app.post("/coach/api/leads/:leadId/manual-override", requireCoach, async (req, r
     return safeJson(res, 200, { ok: true, lead: updated });
   } catch (e) {
     return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+// Resume bot for a lead: clears manual_override then immediately generates + sends a reply
+// based on the lead's last inbound message, so the coach doesn't need to wait.
+app.post("/coach/api/leads/:leadId/resume", requireCoach, async (req, res) => {
+  try {
+    const leadId = req.params.leadId;
+    const clientId = req.coach.client_id;
+
+    // 1. Fetch lead
+    const { data: lead, error: leadErr } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", leadId)
+      .eq("client_id", clientId)
+      .single();
+    if (leadErr || !lead) return safeJson(res, 404, { error: "Lead not found" });
+
+    // 2. Clear the pause
+    await setLeadManualOverride({ leadId, clientId, enabled: false, reason: "Reset by coach", actor: "coach" });
+
+    // 3. Respond early — the reply generation runs async
+    safeJson(res, 200, { ok: true });
+
+    // 4. Get last inbound message text
+    const { data: msgs } = await supabase
+      .from("messages")
+      .select("text, direction, created_at")
+      .eq("lead_id", leadId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    const lastInbound = (msgs || []).find((m) => m.direction === "in" && m.text);
+    if (!lastInbound?.text) return; // Nothing to reply to
+
+    const userText = lastInbound.text;
+
+    // 5. Build everything needed for generateAiReply
+    const cfg = await getClientConfig(clientId);
+    const niche = getEffectiveNiche(cfg);
+    const igAccount = await getIgAccountByClientId(clientId).catch(() => null);
+    if (!igAccount?.page_access_token) return;
+
+    const historyMessages = await getLeadMessageHistory(leadId, 30).catch(() => []);
+    const { data: memRow } = await supabase.from("lead_memory").select("*").eq("lead_id", leadId).maybeSingle();
+    const leadMemory = memRow || null;
+
+    const userIntent = detectUserIntent(userText);
+    const bookingUrl = cfg?.booking_url || "";
+    const conversationState = deriveConversationState({ lead, leadMemory, userIntent });
+    let turnStrategy = decideTurnStrategyFromIntent({ userIntent, conversationState, lead, leadMemory, text: userText, bookingUrl });
+    turnStrategy = preventRepeatedReplyType(turnStrategy, leadMemory);
+
+    const thinkAboutIt = detectThinkAboutIt(userText);
+    const asksPrice = detectPriceQuestion(userText);
+    const highIntent = detectHighIntent(userText);
+
+    const aiResult = await generateAiReply({
+      cfg, lead, historyMessages, leadMemory, turnStrategy,
+      postCallMode: !!lead?.call_completed,
+      asksPrice, highIntent, bookingUrl, thinkAboutIt, userText,
+    });
+
+    if (!aiResult?.reply) return;
+
+    const replyText = sanitizeReply(aiResult.reply);
+    if (!replyText) return;
+
+    const { sendResp } = await sendInstagramTextMessage({
+      accessToken: igAccount.page_access_token,
+      recipientId: lead.ig_psid,
+      text: replyText,
+      useInstagramApi: !igAccount.page_id,
+    });
+
+    if (!sendResp.ok) return;
+
+    await supabase.from("messages").insert({
+      lead_id: leadId,
+      client_id: clientId,
+      direction: "out",
+      text: replyText,
+      created_at: new Date().toISOString(),
+    });
+
+    await updateLeadTracking(leadId, {
+      last_outbound_at: new Date().toISOString(),
+      last_outbound_text: replyText,
+    }).catch(() => {});
+
+    const leadName = lead.ig_name || `Lead ${String(lead.ig_psid || "").slice(-6)}`;
+    emitActivityEvent(clientId, {
+      type: "reply_sent",
+      leadName,
+      igPsid: lead.ig_psid,
+      preview: replyText.slice(0, 120),
+    });
+    log("resume_reply_sent", { leadId, clientId });
+  } catch (e) {
+    console.error("resume endpoint error:", e?.message || e);
   }
 });
 
