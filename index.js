@@ -4920,16 +4920,21 @@ app.get("/coach/api/me", requireCoach, async (req, res) => {
 
 app.get("/coach/api/config", requireCoach, async (req, res) => {
   try {
+    const clientId = req.coach.client_id;
     const { data, error } = await supabase
       .from("client_configs")
       .select("*")
-      .eq("client_id", req.coach.client_id)
-      .single();
+      .eq("client_id", clientId)
+      .maybeSingle(); // maybeSingle: returns null (not error) when 0 rows
 
-    if (error) return safeJson(res, 500, error);
+    console.log("[config load] client_id:", clientId, "found:", !!data, "error:", error?.message || null);
+
+    if (error) return safeJson(res, 500, { error: error.message || String(error) });
+    if (!data) return safeJson(res, 404, { error: "No config found for this account. Please contact support." });
 
     return safeJson(res, 200, { ok: true, config: data });
   } catch (e) {
+    console.error("[config load] exception:", e?.message);
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
 });
@@ -5212,21 +5217,22 @@ if (Array.isArray(patch.booking_items)) {
   const firstBooking = allowed.booking_items.find((i) => i.type === "booking");
   if (firstBooking?.url) allowed.booking_url = firstBooking.url;
 }
-    console.log("[config save] allowed keys being written:", Object.keys(allowed));
-    console.log("[config save] comment_keyword_dm_enabled in allowed:", allowed.comment_keyword_dm_enabled);
+    allowed.client_id = req.coach.client_id; // required for upsert conflict resolution
+
+    console.log("[config save] client_id:", req.coach.client_id, "writing keys:", Object.keys(allowed));
+
     const { data, error } = await supabase
       .from("client_configs")
-      .update(allowed)
-      .eq("client_id", req.coach.client_id)
+      .upsert(allowed, { onConflict: "client_id" })
       .select()
       .single();
 
     if (error) {
-      console.error("[config save] supabase update error:", error?.message, error?.code, error?.details);
+      console.error("[config save] supabase upsert error:", error?.message, "code:", error?.code, "details:", error?.details);
       return safeJson(res, 500, { error: error?.message || String(error) });
     }
 
-    console.log("[config save] success - comment_keyword_dm_enabled now:", data?.comment_keyword_dm_enabled);
+    console.log("[config save] success for client_id:", req.coach.client_id, "niche:", data?.niche, "instagram_handle:", data?.instagram_handle);
     return safeJson(res, 200, { ok: true, config: data });
   } catch (e) {
     console.error("[config save] caught exception:", e?.message);
