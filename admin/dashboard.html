@@ -99,6 +99,15 @@
     .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
     .createForm { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow); }
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .inputPrefix { display: flex; align-items: center; border: 1px solid var(--border2); border-radius: 10px; overflow: hidden; background: #fff; }
+    .inputPrefix span { padding: 10px 10px 10px 12px; font-size: 13px; font-weight: 700; color: var(--muted); flex-shrink: 0; }
+    .inputPrefix input { border: none; border-radius: 0; box-shadow: none; padding-left: 2px; width: 100%; }
+    .inputPrefix input:focus { box-shadow: none; border-color: transparent; }
+    .inputPrefix:focus-within { border-color: rgba(45,107,255,0.5); box-shadow: 0 0 0 3px rgba(45,107,255,0.1); }
+    .setupLinkBox { margin-top: 10px; background: var(--okBg); border: 1px solid var(--okBorder); border-radius: 10px; padding: 10px 12px; font-size: 12px; display: none; }
+    .setupLinkBox .setupLinkLabel { font-weight: 700; color: var(--ok); margin-bottom: 6px; }
+    .setupLinkBox a { word-break: break-all; color: #1d4ed8; font-size: 12px; }
+    .setupLinkCopy { margin-top: 6px; }
     @media(max-width:600px) { .row2 { grid-template-columns: 1fr; } .actionBtns { flex-direction: column; } }
   </style>
 </head>
@@ -143,10 +152,32 @@
             <input id="newEmail" type="email" placeholder="coach@example.com" />
           </div>
         </div>
-        <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div class="row2" style="margin-top:10px;">
+          <div>
+            <label>Setup fee</label>
+            <div class="inputPrefix">
+              <span>£</span>
+              <input id="newSetupFee" type="number" min="0" step="1" value="0" />
+            </div>
+          </div>
+          <div>
+            <label>Monthly retainer</label>
+            <div class="inputPrefix">
+              <span>£</span>
+              <input id="newMonthlyRetainer" type="number" min="0" step="1" value="0" />
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <button class="btn primary" id="createClientBtn">Create client</button>
-          <span class="errMsg" id="createErr" style="display:inline;"></span>
-          <span class="okMsg" id="createOk" style="display:inline;"></span>
+          <span class="errMsg" id="createErr"></span>
+        </div>
+        <div class="setupLinkBox" id="setupLinkBox">
+          <div class="setupLinkLabel">Client created. Send this password setup link to the coach:</div>
+          <a id="setupLinkAnchor" href="#" target="_blank"></a>
+          <div class="setupLinkCopy">
+            <button class="btn sm" id="copySetupLinkBtn">Copy link</button>
+          </div>
         </div>
       </div>
 

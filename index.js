@@ -3707,11 +3707,13 @@ app.get("/admin/api/clients", requireAdmin, async (req, res) => {
 
 app.post("/admin/api/clients/create", requireAdmin, async (req, res) => {
   try {
-    const { name, email, timezone } = req.body || {};
+    const { name, email, timezone, setup_fee, monthly_retainer } = req.body || {};
 
     const clientName = String(name || "").trim();
     const coachEmail = String(email || "").trim().toLowerCase();
     const clientTimezone = String(timezone || "").trim() || "Europe/London";
+    const setupFeePence = Number.isFinite(Number(setup_fee)) ? Math.round(Number(setup_fee)) : 0;
+    const monthlyRetainerPence = Number.isFinite(Number(monthly_retainer)) ? Math.round(Number(monthly_retainer)) : 0;
 
     if (!clientName) {
       return safeJson(res, 400, { error: "name is required" });
@@ -3726,6 +3728,8 @@ app.post("/admin/api/clients/create", requireAdmin, async (req, res) => {
       .insert({
         name: clientName,
         timezone: clientTimezone,
+        setup_fee: setupFeePence,
+        monthly_retainer: monthlyRetainerPence,
       })
       .select()
       .single();
@@ -3775,11 +3779,21 @@ keyword_auto_dm_text: null,
       return safeJson(res, 500, { error: String(configErr.message || configErr) });
     }
 
+    // Generate a password setup token so the coach can set their password immediately
+    const setupToken = crypto.randomBytes(24).toString("hex");
+    await supabase.from("payment_links").insert({
+      token: setupToken,
+      client_id: client.id,
+      email: coachEmail,
+    });
+    const setupUrl = `${APP_PUBLIC_URL}/set-password?token=${setupToken}`;
+
     return safeJson(res, 200, {
       ok: true,
       client,
       config,
       email: coachEmail,
+      setup_url: setupUrl,
     });
   } catch (e) {
     return safeJson(res, 500, { error: String(e?.message || e) });

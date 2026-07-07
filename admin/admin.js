@@ -298,11 +298,15 @@ const AdminDashboard = {
     const qs = (id) => document.getElementById(id);
     const name = (qs("newName")?.value || "").trim();
     const email = (qs("newEmail")?.value || "").trim();
+    const setupFeePounds = parseFloat(qs("newSetupFee")?.value || "0") || 0;
+    const monthlyRetainerPounds = parseFloat(qs("newMonthlyRetainer")?.value || "0") || 0;
     const errEl = qs("createErr");
-    const okEl = qs("createOk");
+    const linkBox = qs("setupLinkBox");
+    const linkAnchor = qs("setupLinkAnchor");
+    const copyBtn = qs("copySetupLinkBtn");
 
     if (errEl) { errEl.textContent = ""; errEl.style.display = "none"; }
-    if (okEl) { okEl.textContent = ""; okEl.style.display = "none"; }
+    if (linkBox) linkBox.style.display = "none";
 
     if (!name) { if (errEl) { errEl.textContent = "Name is required."; errEl.style.display = "inline"; } return; }
     if (!email) { if (errEl) { errEl.textContent = "Email is required."; errEl.style.display = "inline"; } return; }
@@ -313,11 +317,33 @@ const AdminDashboard = {
     try {
       const data = await apiFetch("/admin/api/clients/create", {
         method: "POST",
-        body: JSON.stringify({ name, email }),
+        body: JSON.stringify({
+          name,
+          email,
+          setup_fee: Math.round(setupFeePounds * 100),
+          monthly_retainer: Math.round(monthlyRetainerPounds * 100),
+        }),
       });
-      if (okEl) { okEl.textContent = `Created: ${data.client?.id || "ok"}. Send password setup link to the coach.`; okEl.style.display = "inline"; }
+
       if (qs("newName")) qs("newName").value = "";
       if (qs("newEmail")) qs("newEmail").value = "";
+      if (qs("newSetupFee")) qs("newSetupFee").value = "0";
+      if (qs("newMonthlyRetainer")) qs("newMonthlyRetainer").value = "0";
+
+      if (data.setup_url && linkBox && linkAnchor) {
+        linkAnchor.href = data.setup_url;
+        linkAnchor.textContent = data.setup_url;
+        linkBox.style.display = "block";
+        if (copyBtn) {
+          copyBtn.onclick = () => {
+            navigator.clipboard.writeText(data.setup_url).then(() => {
+              copyBtn.textContent = "Copied!";
+              setTimeout(() => { copyBtn.textContent = "Copy link"; }, 2000);
+            });
+          };
+        }
+      }
+
       await this.loadClients();
     } catch (e) {
       if (errEl) { errEl.textContent = e.message || "Create failed."; errEl.style.display = "inline"; }
