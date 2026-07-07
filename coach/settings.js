@@ -115,6 +115,12 @@
     let json;
     try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
     if (!res.ok) {
+      // Token expired/invalid — clear it so login page starts fresh
+      if (res.status === 401) {
+        clearToken();
+        window.location.href = "/login";
+        throw new Error("Session expired. Please log in again.");
+      }
       const msg = json?.error || json?.message || json?.raw || `Request failed (${res.status})`;
       const err = new Error(msg);
       err.status = res.status;
@@ -371,7 +377,8 @@
       }
     } catch (e) {
       if (e?.status === 401) {
-        window.location.href = "/coach/login.html";
+        clearToken();
+        window.location.href = "/login";
         return;
       }
       badgeEl.className = "badge warn";
@@ -911,7 +918,7 @@
     btn.__wired = true;
     btn.addEventListener("click", () => {
       clearToken();
-      window.location.href = "/coach/login.html";
+      window.location.href = "/login";
     });
   }
 
@@ -919,7 +926,7 @@
 
   document.addEventListener("DOMContentLoaded", async () => {
     if (!getToken()) {
-      window.location.href = "/coach/login.html";
+      window.location.href = "/login";
       return;
     }
 

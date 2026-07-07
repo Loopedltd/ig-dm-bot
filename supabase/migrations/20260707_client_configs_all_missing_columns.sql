@@ -62,5 +62,12 @@ ALTER TABLE client_configs ADD COLUMN IF NOT EXISTS new_follower_dm_text TEXT;
 -- Contact collection
 ALTER TABLE client_configs ADD COLUMN IF NOT EXISTS contact_collection_enabled BOOLEAN DEFAULT false;
 
+-- Comment keyword auto-DM (trigger on comment keywords, send DM + optional reply)
+ALTER TABLE client_configs ADD COLUMN IF NOT EXISTS comment_keyword_dm_enabled      BOOLEAN DEFAULT false;
+ALTER TABLE client_configs ADD COLUMN IF NOT EXISTS comment_keyword_trigger         TEXT;
+ALTER TABLE client_configs ADD COLUMN IF NOT EXISTS comment_keyword_dm_text         TEXT;
+ALTER TABLE client_configs ADD COLUMN IF NOT EXISTS comment_keyword_reply_enabled   BOOLEAN DEFAULT false;
+ALTER TABLE client_configs ADD COLUMN IF NOT EXISTS comment_keyword_reply_text      TEXT;
+
 -- Verify after running:
 -- SELECT column_name FROM information_schema.columns WHERE table_name = 'client_configs' ORDER BY column_name;

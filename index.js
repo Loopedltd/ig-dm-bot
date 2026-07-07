@@ -5636,20 +5636,27 @@ app.post("/coach/api/leads/:leadId/reply", requireCoach, async (req, res) => {
 
 app.get("/coach/api/leads", requireCoach, async (req, res) => {
   try {
+    const clientId = req.coach.client_id;
+    console.log("[leads] fetching for client_id:", clientId);
     const { data: leads, error } = await supabase
       .from("leads")
       .select(
         "id,created_at,ig_psid,ig_name,stage,booking_sent,call_completed,manual_override,manual_override_reason,manual_override_by,manual_override_at,last_inbound_at,last_outbound_at,email,phone,followup_sent"
       )
-      .eq("client_id", req.coach.client_id)
+      .eq("client_id", clientId)
       .order("last_inbound_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(500);
 
-    if (error) return safeJson(res, 500, error);
+    if (error) {
+      console.error("[leads] supabase error:", error?.message, "code:", error?.code);
+      return safeJson(res, 500, { error: error?.message || String(error) });
+    }
 
+    console.log("[leads] returned", (leads || []).length, "rows for client_id:", clientId);
     return safeJson(res, 200, { ok: true, leads: leads || [] });
   } catch (e) {
+    console.error("[leads] exception:", e?.message);
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
 });
