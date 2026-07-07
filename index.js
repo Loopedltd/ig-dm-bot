@@ -572,6 +572,69 @@ function isCleanExamplePair(userText, assistantText) {
 // Kept strict to avoid false positives — a lead saying "can we hop on a call?" must not trigger this.
 // Returns true when a message is clearly unrelated to coaching or the coach's niche.
 // Used to trigger confidence_pause immediately rather than letting the AI guess.
+// ── Casual greeting detector ─────────────────────────────────────────────────
+// Returns true when the lead's first message is a social opener with no intent
+// signal — bot should warm up before qualifying rather than jumping to questions.
+function isCasualGreeting(text) {
+  if (!text) return false;
+  const t = text.toLowerCase().trim();
+  // Match short greetings only (≤ 6 words) — longer messages likely have content
+  if (t.split(/\s+/).length > 6) return false;
+  return /^(hey|hi|hello|hiya|heya|yo|sup|wassup|what'?s up|hows it going|how are you|good morning|good afternoon|good evening|morning|afternoon|evening|alright|alright\?|you good|hope you'?re? well)[\s!?.]*$/.test(t);
+}
+
+// ── Direct product / link request detector ───────────────────────────────────
+// Returns true when the lead is explicitly asking to receive a product link or
+// programme link right now — bot should send immediately rather than qualifying.
+function detectDirectProductRequest(text, products) {
+  if (!text) return false;
+  const t = text.toLowerCase();
+  // Generic link/programme requests
+  const genericLinkRequest = /\b(send me|can i (get|have|see)|give me|share|drop|dm me|what'?s the link|get (the|your) link|link (please|pls|me)?|your (programme|program|product|plan|course|guide|pdf|freebie|resource))\b/.test(t);
+  if (genericLinkRequest) return true;
+  // Named product requests — check against saved products
+  if (Array.isArray(products) && products.length > 0) {
+    return products.some((p) => {
+      const name = String(p.name || "").toLowerCase();
+      return name.length > 2 && t.includes(name);
+    });
+  }
+  return false;
+}
+
+// ── Personal question detector ───────────────────────────────────────────────
+// Returns true when the lead asks about personal details of the coach (location,
+// appearance, lifestyle) that cannot be answered from the saved config.
+// The bot must not guess — flag for coach input instead.
+function detectPersonalQuestion(text) {
+  if (!text) return false;
+  const t = text.toLowerCase();
+  return /\b(where (are|do) you (live|based|from|stay)|where('?s| is) your (house|home|flat|apartment|gym|studio|office)|what (city|town|country|area) (are you|do you live)|your hair|your makeup|your nails|your skin|your routine|your diet outside|your personal|do you have (kids|children|a partner|a boyfriend|a girlfriend|a husband|a wife)|are you (married|single|in a relationship)|how old are you|your age|your height|your weight outside coaching|your personal life|where do you get|where did you get|who does your|who cut your|your tattoo|your piercing)\b/.test(t);
+}
+
+// ── Unknown product mention detector ────────────────────────────────────────
+// Returns the mentioned product name if the lead references a specific product
+// by name that is NOT in the saved products list.
+function detectUnknownProductMention(text, products) {
+  if (!text) return null;
+  const t = text.toLowerCase();
+  // Look for "your [product]" or "the [product]" patterns with product-like nouns
+  const productLikeNouns = ["programme", "program", "plan", "course", "guide", "pdf", "ebook", "product", "supplement", "kit", "pack", "bundle", "membership", "subscription", "challenge", "bootcamp", "workshop", "masterclass", "coaching", "service"];
+  for (const noun of productLikeNouns) {
+    if (t.includes(noun)) {
+      // Check if any saved product name matches this context
+      const savedNames = (products || []).map((p) => String(p.name || "").toLowerCase()).filter(Boolean);
+      const matchesSaved = savedNames.some((name) => t.includes(name));
+      if (!matchesSaved) {
+        // Extract approximate mention for logging
+        const match = new RegExp(`(?:your|the|a|that)\\s+(?:\\w+\\s+)?${noun}`).exec(t);
+        return match ? match[0] : noun;
+      }
+    }
+  }
+  return null;
+}
+
 function detectOffTopicMessage(text, niche) {
   const t = String(text || "").toLowerCase().trim();
   if (!t || t.split(" ").length < 3) return false; // too short to judge
@@ -2052,6 +2115,16 @@ if (turnStrategy?.type === "answer_what_do_i_get_after_cta") {
     }
   }
 
+  if (turnStrategy?.type === "warm_greeting") return "hey! how can i help?";
+  if (turnStrategy?.type === "send_product_link_now") {
+    // Try to find a product URL in cfg
+    const products = Array.isArray(cfg?.products) ? cfg.products : [];
+    const withUrl = products.find((p) => p?.url);
+    if (withUrl?.url) return `here’s the link: ${withUrl.url}`;
+    if (cfg?.booking_url) return `here’s the link: ${cfg.booking_url}`;
+    return null;
+  }
+
   return null;
 }
 function deriveConversationState({ lead, leadMemory, userIntent }) {
@@ -2116,7 +2189,23 @@ function decideTurnStrategyFromIntent({
   leadMemory,
   text,
   bookingUrl,
+  isFirstMessage,
+  products,
 }) {
+  // ── GREETING RULE ───────────────────────────────────────────────────────────
+  // On the very first message, if the lead is just saying hi, warm up first.
+  // Never jump to qualifying questions on a greeting — build rapport first.
+  if (isFirstMessage && isCasualGreeting(text)) {
+    return { type: "warm_greeting", intentScore: 0, shouldSendBookingLink: false };
+  }
+
+  // ── DIRECT PRODUCT / LINK REQUEST ───────────────────────────────────────────
+  // If the lead is explicitly asking for a product or programme link, send it
+  // immediately. Don't ask another question when they're ready to receive.
+  if (detectDirectProductRequest(text, products)) {
+    return { type: "send_product_link_now", intentScore: 3, shouldSendBookingLink: false };
+  }
+
   const intentScore = inferIntentScore(text, leadMemory);
 
   const bookingRecentlySent =
@@ -2605,6 +2694,20 @@ Only ask a question when you genuinely need more info or to gently move things f
 Good questions: "what’s the main thing holding you back?", "how long has that been going on?", "what does your current routine look like?", "is it timing or price?"
 Bad questions: "what do you think?", "how are you feeling about it?", "tell me more"
 
+GREETING RULE:
+When the lead’s message is a casual greeting like "hey", "hi", or "how are you" and there is no goal or intent yet:
+- respond warmly and naturally: "hey! how can I help?" or "hey, what’s on your mind?" or similar
+- do NOT immediately ask about their goals or jump to qualifying questions
+- build rapport first — one warm reply, then wait for them to share more
+- the turn_strategy will be "warm_greeting" — honour it
+
+DIRECT PRODUCT REQUEST RULE:
+When the turn_strategy is "send_product_link_now" OR the lead is directly asking for a product, programme, or link:
+- send the relevant product link or booking link immediately — do not ask another question first
+- use the products array to find the best match and include the url naturally
+- if no specific product matches, send the booking_url as the next best thing
+- never make them ask twice for something they already asked for
+
 MEMORY RULE:
 Before writing any reply, check lead_memory for what the person has already told you.
 Memory is not optional — it is how you avoid sounding like a script and make every reply feel personal.
@@ -2670,6 +2773,30 @@ The person may phrase things awkwardly. Answer what they meant, not just what th
 - "how much" → give the price directly
 - "I’ll think about it" → validate, then ask what they need to make a decision
 
+PROACTIVE PRODUCT INTRODUCTION RULE:
+When the lead's message touches on a topic that closely matches a saved product or service by name or description:
+- recognise this as a signal to introduce the product naturally — not as a hard sell
+- use framing like "I actually have [product name] that could help with that — want me to send you the link?"
+- if the lead shows interest or asks for it, include the url in your reply
+- lean toward sharing the link rather than holding back
+- if the conversation topic matches but you are not certain, introduce the product gently and let them decide
+- NEVER list all products at once — only the most relevant one
+- if the lead mentions a specific product by name that is NOT in the products array, set should_pause_for_coach: true and return an empty reply
+
+PRODUCT vs BOOKING LINK RULE:
+Products and booking links are completely different — never confuse them:
+- if an item in booking_items has type "product": use it as a product recommendation — "I have this [name] that might help"
+- if an item in booking_items has type "booking": use it ONLY for booking a call — "want to jump on a quick call?"
+- never send a product URL as a booking link or vice versa
+- only send any link ONCE per conversation unless the lead asks for it again — check recent_assistant_replies to see if the link was already sent
+
+PERSONAL QUESTION RULE:
+If the lead asks about personal details of the coach that are not in the provided context (e.g. where they live, their appearance, their personal life, family, relationships, daily routine outside coaching):
+- do NOT guess or make anything up
+- return an empty reply string: ""
+- set should_pause_for_coach: true in your response
+- the system will flag this for the coach to answer personally
+
 COACH CONTEXT RULE:
 - use main_result to understand the core promised outcome
 - use best_fit_leads when answering "is this for me?" questions
@@ -2715,7 +2842,8 @@ Return ONLY valid JSON in this exact shape:
 {
   "reply": "string",
   "reply_type": "answer|answer_then_nudge|question|close|objection",
-  "should_send_booking_link": false
+  "should_send_booking_link": false,
+  "should_pause_for_coach": false
 }
   `.trim();
 const coachSystemPrompt = String(cfg?.system_prompt || "").trim();
@@ -2871,6 +2999,7 @@ reply = sanitizeReply(
       reply,
       reply_type: String(parsed?.reply_type || "answer"),
       should_send_booking_link: !!parsed?.should_send_booking_link,
+      should_pause_for_coach: !!parsed?.should_pause_for_coach,
     };
   } catch (e) {
     console.warn("⚠️ OpenAI error:", e?.message || e);
@@ -2886,6 +3015,8 @@ async function setLeadManualOverride({ leadId, clientId, enabled, reason, actor 
     manual_override_reason: reason ? String(reason).slice(0, 200) : null,
     manual_override_by: actor,
     manual_override_at: nowIso(),
+    // Clear notification flag when override is cleared so next pause triggers a new email
+    ...(enabled === false && { coach_notified_at: null }),
   };
 
   let q = supabase.from("leads").update(patch).eq("id", leadId);
@@ -2893,6 +3024,11 @@ async function setLeadManualOverride({ leadId, clientId, enabled, reason, actor 
 
   const { data, error } = await q.select("*").single();
   if (error) throw error;
+
+  // Clear from in-memory set so a future pause sends a fresh notification
+  // (coachNotifiedLeads is defined later in the file but is always initialised by runtime)
+  if (enabled === false && typeof coachNotifiedLeads !== "undefined") coachNotifiedLeads.delete(leadId);
+
   return data;
 }
 
@@ -7538,17 +7674,29 @@ async function processDmEvent(messaging, igAccount, overrideText) {
             storyContext = await fetchStoryContext(igAccount.page_access_token, messaging).catch(() => storyContext);
           }
 
+          // Pre-compute non-voice attachment info for message row enrichment
+          const _attachmentsForRow = messaging?.message?.attachments || [];
+          const _firstNonVoiceForRow = _attachmentsForRow.find((a) => {
+            const t = String(a?.type || "").toLowerCase();
+            return t !== "audio" && t !== "voice_clip" && !String(a?.payload?.mime_type || "").startsWith("audio/");
+          });
+          const inlineAttachmentUrl = _firstNonVoiceForRow?.payload?.url || null;
+          const inlineAttachmentType = _firstNonVoiceForRow ? String(_firstNonVoiceForRow.type || "media").toLowerCase() : null;
+
           const messageRow = {
             lead_id: lead.id,
             client_id: lead.client_id,
             direction: isEcho ? "out" : "in",
             text: text || "[non-text message]",
             created_at: new Date().toISOString(),
-            message_type: isStoryReply ? "story_reply" : "dm",
+            message_type: isStoryReply ? "story_reply" : (inlineAttachmentType ? inlineAttachmentType : "dm"),
             ...(isStoryReply && {
               story_id: storyContext.storyId,
               story_url: storyContext.storyUrl,
               story_media_url: storyContext.storyMediaUrl,
+            }),
+            ...(inlineAttachmentUrl && !isStoryReply && {
+              story_url: inlineAttachmentUrl,
             }),
           };
 
@@ -7632,6 +7780,43 @@ async function processDmEvent(messaging, igAccount, overrideText) {
                 useInstagramApi: !voiceAcc.page_id,
               });
             }
+            return;
+          }
+
+          // ── NON-VOICE MEDIA (image, reel, post, share) ───────────────────────────
+          // When lead sends a non-voice attachment, detect the type and store it.
+          // If there is accompanying text, proceed with text processing below.
+          // If there is NO text, flag for coach review rather than going silent.
+          const nonVoiceAttachments = attachments.filter((a) => {
+            const t = String(a?.type || "").toLowerCase();
+            return t !== "audio" && t !== "voice_clip";
+          });
+          const hasNonVoiceMedia = nonVoiceAttachments.length > 0;
+
+          if (hasNonVoiceMedia && !text) {
+            // No text — flag for coach and stay silent
+            const mediaType = String(nonVoiceAttachments[0]?.type || "media").toLowerCase();
+            const attachmentUrl = nonVoiceAttachments[0]?.payload?.url || null;
+            log("media_no_text_received", { leadId: lead.id, clientId: lead.client_id, mediaType, attachmentUrl });
+            try {
+              await setLeadManualOverride({
+                leadId: lead.id,
+                clientId: lead.client_id,
+                enabled: true,
+                reason: "Media received — coach input needed",
+                actor: "system",
+              });
+            } catch (e) {
+              console.warn("media_no_text confidence_pause: setLeadManualOverride failed", e?.message || e);
+            }
+            const leadName = leadNameCache.get(`${lead.client_id}:${senderId}`) || lead.ig_name || `Lead ${String(senderId).slice(-6)}`;
+            emitActivityEvent(lead.client_id, {
+              type: "confidence_pause",
+              leadName,
+              igPsid: senderId,
+              preview: `[${mediaType} received]`,
+            });
+            await sendCoachPauseNotification(lead.id, lead.client_id);
             return;
           }
 
@@ -7946,6 +8131,8 @@ log("ig_trigger_opener_sent", {
             leadMemory,
             text,
             bookingUrl: cfg?.booking_url || null,
+            isFirstMessage: historyMessages.length === 0,
+            products: Array.isArray(cfg?.products) ? cfg.products : [],
           });
 
           turnStrategy = preventRepeatedReplyType(turnStrategy, leadMemory);
@@ -7974,6 +8161,34 @@ log("ig_trigger_opener_sent", {
               igPsid: senderId,
               preview: text ? String(text).slice(0, 120) : "[non-text message]",
             });
+            await sendCoachPauseNotification(lead.id, lead.client_id);
+            return;
+          }
+
+          // ── PERSONAL QUESTION GUARD ──────────────────────────────────────────────────
+          // If the lead asks about personal details the bot cannot know from config,
+          // flag immediately rather than hallucinating an answer.
+          if (text && detectPersonalQuestion(text)) {
+            const leadName = leadNameCache.get(`${lead.client_id}:${senderId}`) || lead.ig_name || `Lead ${String(senderId).slice(-6)}`;
+            log("confidence_pause_personal_question", { leadId: lead.id, clientId: lead.client_id, senderId, text: text.slice(0, 120) });
+            try {
+              await setLeadManualOverride({
+                leadId: lead.id,
+                clientId: lead.client_id,
+                enabled: true,
+                reason: "Personal question — coach input needed",
+                actor: "system",
+              });
+            } catch (e) {
+              console.warn("personal_question confidence_pause: setLeadManualOverride failed", e?.message || e);
+            }
+            emitActivityEvent(lead.client_id, {
+              type: "confidence_pause",
+              leadName,
+              igPsid: senderId,
+              preview: text ? String(text).slice(0, 120) : "[non-text message]",
+            });
+            await sendCoachPauseNotification(lead.id, lead.client_id);
             return;
           }
 
@@ -7997,6 +8212,23 @@ log("ig_trigger_opener_sent", {
             thinkAboutIt,
             userText: text,
           });
+
+          // Unknown product mention or personal question — pause for coach if AI flagged it
+          if (aiResult?.should_pause_for_coach) {
+            const leadName = leadNameCache.get(`${lead.client_id}:${senderId}`) || lead.ig_name || `Lead ${String(senderId).slice(-6)}`;
+            try {
+              await setLeadManualOverride({
+                leadId: lead.id,
+                clientId: lead.client_id,
+                enabled: true,
+                reason: "Coach input needed — personal question or unknown product",
+                actor: "system",
+              });
+            } catch {}
+            emitActivityEvent(lead.client_id, { type: "confidence_pause", leadName, igPsid: senderId, preview: text ? String(text).slice(0, 120) : "" });
+            await sendCoachPauseNotification(lead.id, lead.client_id);
+            return;
+          }
 
           let reply = aiResult?.reply || null;
 
@@ -8031,6 +8263,17 @@ log("ig_trigger_opener_sent", {
             }
           } else if (highIntent && canSendNewBookingPush) {
             reply = getEscalatedBookingReply(cfg.booking_url, leadMemory, "normal");
+          }
+
+          // send_product_link_now: find first product with a URL and send it
+          if (!reply && turnStrategy?.type === "send_product_link_now") {
+            const cfgProducts = Array.isArray(cfg?.products) ? cfg.products : [];
+            const productWithUrl = cfgProducts.find((p) => p?.url);
+            if (productWithUrl?.url) {
+              reply = `here's the link: ${productWithUrl.url}`;
+            } else if (cfg?.booking_url) {
+              reply = `here's the link: ${cfg.booking_url}`;
+            }
           }
 
           if (!reply || looksIncompleteReply(reply)) {
@@ -8077,6 +8320,7 @@ log("ig_trigger_opener_sent", {
               preview: text ? String(text).slice(0, 120) : "[non-text message]",
             });
             log("confidence_pause", { leadId: lead.id, clientId: lead.client_id, senderId });
+            await sendCoachPauseNotification(lead.id, lead.client_id);
             return;
           }
 
@@ -9527,9 +9771,86 @@ function shouldSendAlert(clientId, type, cooldownMs = 30 * 60 * 1000) {
   return true;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// COACH PAUSE NOTIFICATION — sends one email to the coach when a lead is paused
+// and awaiting their input. Completely separate from the admin health monitor.
+// Never mentions system issues or technical details.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Track which leads have already had a notification sent this session
+// (secondary guard alongside the coach_notified_at DB column)
+const coachNotifiedLeads = new Set();
+
+async function sendCoachPauseNotification(leadId, clientId) {
+  // In-memory guard — never spam within same process lifetime
+  if (coachNotifiedLeads.has(leadId)) return;
+
+  if (!resend) return;
+
+  try {
+    // DB guard — only send once ever per lead pause event
+    const { data: lead } = await supabase
+      .from("leads")
+      .select("coach_notified_at, client_id")
+      .eq("id", leadId)
+      .single();
+
+    if (lead?.coach_notified_at) return; // already notified
+
+    // Get the coach's login email from coach_users
+    const { data: coachUser } = await supabase
+      .from("coach_users")
+      .select("email")
+      .eq("client_id", clientId)
+      .maybeSingle();
+
+    const coachEmail = coachUser?.email;
+    if (!coachEmail) return; // no coach registered yet
+
+    // Hard guard: never send to the admin alert email address
+    if (coachEmail.toLowerCase() === ALERT_EMAIL.toLowerCase()) return;
+
+    const dashboardUrl = `${process.env.APP_PUBLIC_URL || "https://app.looped.ltd"}/dashboard`;
+
+    await resend.emails.send({
+      from: "Looped <hello@looped.ltd>",
+      to: coachEmail,
+      subject: "You have a lead waiting for your reply",
+      html: `
+        <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px;">
+          <p style="font-size:16px;margin:0 0 16px;">Hey,</p>
+          <p style="font-size:16px;margin:0 0 16px;">You have a lead waiting for your reply in your Looped dashboard.</p>
+          <p style="margin:0 0 24px;">
+            <a href="${dashboardUrl}" style="background:#2d6bff;color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;display:inline-block;">View your leads</a>
+          </p>
+          <p style="color:#999;font-size:13px;margin:0;">Looped · <a href="${dashboardUrl}" style="color:#999;">looped.ltd</a></p>
+        </div>
+      `,
+    });
+
+    // Mark as notified in DB so we never send again for this pause event
+    await supabase
+      .from("leads")
+      .update({ coach_notified_at: new Date().toISOString() })
+      .eq("id", leadId);
+
+    coachNotifiedLeads.add(leadId);
+    log("coach_pause_notification_sent", { leadId, clientId, coachEmail });
+  } catch (e) {
+    console.warn("sendCoachPauseNotification: failed", e?.message || e);
+  }
+}
+
 async function sendHealthAlert({ clientName, clientId, issues }) {
   if (!resend) {
     console.warn("health_monitor: RESEND_API_KEY not set — skipping email");
+    return;
+  }
+  // HARD GUARD: health monitor alerts must ONLY ever go to the admin address.
+  // This is enforced here unconditionally — the constant cannot be overridden.
+  const HEALTH_ALERT_RECIPIENT = "james@looped.ltd";
+  if (ALERT_EMAIL !== HEALTH_ALERT_RECIPIENT) {
+    console.error("health_monitor: ALERT_EMAIL has been tampered — refusing to send", { ALERT_EMAIL });
     return;
   }
 

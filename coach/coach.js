@@ -1560,6 +1560,22 @@ function wireQueueRefreshButton() {
     container.innerHTML = messages.map((m) => {
       const dir = m.direction === "out" ? "out" : "in";
 
+      if (m.message_type && m.message_type !== "dm" && m.message_type !== "story_reply") {
+        // Image, reel, post, or other media — show preview thumbnail if URL available
+        const mediaUrl = m.story_url || m.story_media_url || null;
+        const typeLabel = m.message_type === "image" ? "Image" : m.message_type === "video" ? "Video" : m.message_type === "reel" ? "Reel" : "Media";
+        const thumbHtml = mediaUrl
+          ? `<img class="storyReplyThumb" src="${escHtml(mediaUrl)}" alt="${typeLabel}" loading="lazy" style="max-width:180px;border-radius:8px;display:block;margin-bottom:6px;">`
+          : `<div style="background:rgba(15,23,42,0.06);border-radius:8px;padding:10px 14px;font-size:12px;color:rgba(15,23,42,0.45);margin-bottom:6px;">[${typeLabel}]</div>`;
+        return `<div class="inboxBubbleRow inboxBubbleRow--${dir}">
+          <div class="inboxBubble inboxBubble--${dir} inboxBubble--storyReply">
+            <div class="storyReplyContext">${thumbHtml}<span class="storyReplyLabel">Sent a ${typeLabel.toLowerCase()}</span></div>
+            ${m.text && m.text !== "[non-text message]" ? `<div class="storyReplyText">${escHtml(m.text)}</div>` : ""}
+          </div>
+          <div class="inboxTime">${fmtMsgTime(m.created_at)}</div>
+        </div>`;
+      }
+
       if (m.message_type === "story_reply") {
         // story_media_url = fetched from Graph API at webhook time
         // story_url       = CDN link delivered directly in the webhook payload (fallback)
