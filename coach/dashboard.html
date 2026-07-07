@@ -419,11 +419,13 @@ input:focus, textarea:focus, select:focus{
       /* ---- Stage badge colours ---- */
       .stageBadge{ font-size:11px; }
       .stageBadge.stage-new{ background:rgba(15,23,42,0.04); color:rgba(15,23,42,0.6); border-color:rgba(15,23,42,0.1); }
-      .stageBadge.stage-engaged{ background:rgba(45,107,255,0.07); color:#1d4ed8; border-color:rgba(45,107,255,0.18); }
+      .stageBadge.stage-opener_sent{ background:rgba(45,107,255,0.07); color:#1d4ed8; border-color:rgba(45,107,255,0.18); }
+      .stageBadge.stage-warm{ background:rgba(45,107,255,0.07); color:#1d4ed8; border-color:rgba(45,107,255,0.18); }
       .stageBadge.stage-high_intent{ background:rgba(124,58,237,0.07); color:#6d28d9; border-color:rgba(124,58,237,0.18); }
-      .stageBadge.stage-booking_pushed{ background:rgba(2,122,72,0.07); color:#027a48; border-color:rgba(2,122,72,0.16); }
+      .stageBadge.stage-booking_sent{ background:rgba(2,122,72,0.07); color:#027a48; border-color:rgba(2,122,72,0.16); }
       .stageBadge.stage-booked{ background:rgba(2,122,72,0.12); color:#027a48; border-color:rgba(2,122,72,0.22); }
-      .stageBadge.stage-lost{ background:rgba(181,71,8,0.07); color:#b54708; border-color:rgba(181,71,8,0.18); }
+      .stageBadge.stage-call_completed{ background:rgba(2,122,72,0.12); color:#027a48; border-color:rgba(2,122,72,0.22); }
+      .stageBadge.stage-closed{ background:rgba(181,71,8,0.07); color:#b54708; border-color:rgba(181,71,8,0.18); }
 
       /* ---- Lead row layout ---- */
       .leadRow{
@@ -1102,10 +1104,13 @@ input:focus, textarea:focus, select:focus{
           <select id="broadcastStageFilter" style="max-width:220px;">
             <option value="all">All leads</option>
             <option value="new">New</option>
-            <option value="engaged">Engaged</option>
+            <option value="opener_sent">Opener sent</option>
+            <option value="warm">Warm</option>
             <option value="high_intent">High intent</option>
-            <option value="booking_pushed">Booking pushed</option>
+            <option value="booking_sent">Booking sent</option>
             <option value="booked">Booked</option>
+            <option value="call_completed">Call completed</option>
+            <option value="closed">Closed</option>
           </select>
 
           <div id="broadcastLeadList" style="margin-top:12px; display:none;">
@@ -1122,7 +1127,7 @@ input:focus, textarea:focus, select:focus{
           <textarea
             id="broadcastMessage"
             placeholder="Example:
-Hey — just checking in. If you're still thinking about it, happy to answer any questions."
+Hey, just checking in. If you're still thinking about it, happy to answer any questions."
             style="min-height:100px;"
           ></textarea>
 

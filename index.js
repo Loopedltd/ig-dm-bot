@@ -2271,12 +2271,12 @@ function deriveLeadStage({
   turnStrategy,
   leadMemory,
 }) {
-  if (lead?.call_completed) return "post_call";
+  if (lead?.call_completed) return "call_completed";
 
-  if (turnStrategy?.type === "send_booking_link_now") return "booking_pushed";
-  if (turnStrategy?.type === "soft_close_to_booking") return "booking_pushed";
-  if (turnStrategy?.type === "handle_price_then_cta") return "objection_pending";
-  if (turnStrategy?.type === "handle_think_about_it") return "objection_pending";
+  if (turnStrategy?.type === "send_booking_link_now") return "booking_sent";
+  if (turnStrategy?.type === "soft_close_to_booking") return "booking_sent";
+  if (turnStrategy?.type === "handle_price_then_cta") return "high_intent";
+  if (turnStrategy?.type === "handle_think_about_it") return "high_intent";
 
   if (
     leadMemory?.intent_level === "hot" ||
@@ -2301,7 +2301,7 @@ function deriveLeadStage({
     leadMemory?.event_name ||
     leadMemory?.motivation
   ) {
-    return "qualified";
+    return "warm";
   }
 
   return lead?.stage || "new";
@@ -7724,7 +7724,7 @@ log("ig_trigger_opener_sent", {
                 lead = await updateLeadTracking(lead.id, {
                   last_outbound_at: nowIso(),
                   last_outbound_text: opener,
-                  stage: "warm",
+                  stage: "opener_sent",
                 });
               } catch (e) {
                 console.warn(
@@ -8143,7 +8143,7 @@ log("ig_trigger_opener_sent", {
                 booking_sent_count: sentBookingLink
                   ? (lead.booking_sent_count || 0) + 1
                   : lead.booking_sent_count || 0,
-                stage: sentBookingLink ? "booking_pushed" : lead.stage,
+                stage: sentBookingLink ? "booking_sent" : lead.stage,
               });
 
               const replyTrackingPatch = buildReplyTrackingPatch(

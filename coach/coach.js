@@ -797,7 +797,7 @@ const resetTime = getTimeUntilTomorrow();
 el.textContent =
   remaining > 0
     ? `${remaining} / ${max} prompt generations left today (resets in ${resetTime})`
-    : `Limit reached — resets in ${resetTime}`;
+    : `Limit reached, resets in ${resetTime}`;
     el.style.color = remaining <= 2 ? "#b54708" : "var(--muted)";
  } catch (e) {
     el.textContent = "Could not load prompt usage";
@@ -890,11 +890,13 @@ let allLeads = [];
 
 const STAGE_LABELS = {
   new: "New",
-  engaged: "Engaged",
+  opener_sent: "Opener sent",
+  warm: "Warm",
   high_intent: "High intent",
-  booking_pushed: "Link sent",
+  booking_sent: "Booking sent",
   booked: "Booked",
-  lost: "Lost",
+  call_completed: "Call completed",
+  closed: "Closed",
 };
 
 function leadDisplayName(lead) {
@@ -1480,7 +1482,7 @@ function wireQueueRefreshButton() {
           const lead = allLeads.find((l) => String(l.ig_psid) === String(event.igPsid));
           if (lead) {
             lead.manual_override = true;
-            lead.manual_override_reason = "Low confidence — coach input needed";
+            lead.manual_override_reason = "Low confidence, coach input needed";
             renderLeadsList();
           }
         }
