@@ -9020,37 +9020,70 @@ app.get("/auth/facebook/callback", async (req, res) => {
       : null;
     const page = matchedPage || pages[0];
 
+    // The IGBID is the instagram_business_account.id on the Facebook page object.
+    // This is the authoritative ID that webhooks use for event routing.
+    // igRow.ig_user_id may be the ASID (returned by /me?fields=id at connect time)
+    // which differs from the IGBID — subscriptions against the ASID don't receive events.
+    const igbid = String(page?.instagram_business_account?.id || "").trim() || null;
+    const storedId = igRow?.ig_user_id || null;
+
     console.log("fb_callback: page matched", {
       clientId,
       pageId: page?.id,
       pageName: page?.name,
       matched: !!matchedPage,
-      igUserId: igRow?.ig_user_id,
+      storedIgUserId: storedId,
+      igbidFromPage: igbid,
+      idMismatch: igbid && storedId && igbid !== storedId,
       igRowId: igRow?.id,
       hasPageToken: !!page?.access_token,
     });
 
-    // Store fb_page_id and fb_page_token on the Instagram Login row
+    // Store fb_page_id and fb_page_token on the Instagram Login row.
+    // Also correct ig_user_id to the IGBID if it was stored as the ASID.
     if (igRow?.id && page?.access_token && page?.id) {
+      const dbPatch = { fb_page_id: page.id, fb_page_token: page.access_token };
+      if (igbid && storedId && igbid !== storedId) {
+        dbPatch.ig_user_id = igbid;
+        console.log(`fb_callback: correcting ig_user_id from ASID ${storedId} to IGBID ${igbid}`);
+      }
+
       const { error: updateErr } = await supabase
         .from("ig_accounts")
-        .update({ fb_page_id: page.id, fb_page_token: page.access_token })
+        .update(dbPatch)
         .eq("id", igRow.id);
 
       if (updateErr) {
         console.error("fb_callback: failed to store fb_page_id/fb_page_token", updateErr?.message);
       } else {
-        console.log("fb_callback: stored fb_page_id:", page.id, "for ig_account:", igRow.id);
+        console.log("fb_callback: stored fb_page_id:", page.id, "ig_user_id now:", dbPatch.ig_user_id || storedId);
       }
 
-      // Resubscribe the Instagram per-account webhook now that we have the comments
-      // permission. This opts the account into both messages AND comments events on
-      // the instagram object. We use the IG access token (not the FB page token) because
-      // the subscription endpoint is on graph.instagram.com, not graph.facebook.com.
-      // pages_manage_metadata is NOT needed for this — instagram_manage_comments is sufficient.
-      if (igRow?.page_access_token && igRow?.ig_user_id) {
-        void subscribeIgWebhook(igRow.page_access_token, igRow.ig_user_id).then(result => {
-          console.log("fb_callback: subscribeIgWebhook (messages+comments) result", { igUserId: igRow.ig_user_id, ok: result.ok, status: result.httpStatus, data: result.data });
+      // Subscribe using the IGBID (not the stored ASID). Webhooks route events by IGBID,
+      // so a subscription registered against the ASID will never receive comment events.
+      const subscribeId = igbid || storedId;
+      if (igRow?.page_access_token && subscribeId) {
+        // Diagnostic: check what subscriptions are currently registered for both IDs
+        const checkIds = igbid && storedId && igbid !== storedId
+          ? [storedId, igbid]
+          : [subscribeId];
+        for (const checkId of checkIds) {
+          fetch(
+            `https://graph.instagram.com/v21.0/${encodeURIComponent(checkId)}/subscribed_apps` +
+            `?access_token=${encodeURIComponent(igRow.page_access_token)}`
+          )
+            .then(r => r.json().catch(() => ({})))
+            .then(d => console.log(`fb_callback: GET subscribed_apps for ${checkId}:`, JSON.stringify(d)))
+            .catch(e => console.warn(`fb_callback: GET subscribed_apps for ${checkId} failed:`, e?.message));
+        }
+
+        void subscribeIgWebhook(igRow.page_access_token, subscribeId).then(result => {
+          console.log("fb_callback: subscribeIgWebhook (messages+comments) result", {
+            subscribeId,
+            ok: result.ok,
+            status: result.httpStatus,
+            data: result.data,
+          });
         }).catch((e) =>
           console.error("fb_callback: subscribeIgWebhook threw", e?.message || e)
         );
