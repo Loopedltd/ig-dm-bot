@@ -1561,12 +1561,17 @@ function wireQueueRefreshButton() {
       const dir = m.direction === "out" ? "out" : "in";
 
       if (m.message_type && m.message_type !== "dm" && m.message_type !== "story_reply") {
-        // Image, reel, post, or other media — show preview thumbnail if URL available
-        const mediaUrl = m.story_url || m.story_media_url || null;
+        // Image, reel, post, or other media — thumbnail_url stored in story_media_url, original in story_url
+        const thumbSrc  = m.story_media_url || m.story_url || null; // prefer thumbnail_url for display
+        const clickHref = m.story_url || m.story_media_url || null; // original media URL for click
         const typeLabel = m.message_type === "image" ? "Image" : m.message_type === "video" ? "Video" : m.message_type === "reel" ? "Reel" : "Media";
-        const thumbHtml = mediaUrl
-          ? `<img class="storyReplyThumb" src="${escHtml(mediaUrl)}" alt="${typeLabel}" loading="lazy" style="max-width:180px;border-radius:8px;display:block;margin-bottom:6px;">`
-          : `<div style="background:rgba(15,23,42,0.06);border-radius:8px;padding:10px 14px;font-size:12px;color:rgba(15,23,42,0.45);margin-bottom:6px;">[${typeLabel}]</div>`;
+        const imgTag = thumbSrc
+          ? `<img class="storyReplyThumb" src="${escHtml(thumbSrc)}" alt="${typeLabel}" loading="lazy" style="max-width:180px;border-radius:8px;display:block;margin-bottom:6px;cursor:${clickHref ? "pointer" : "default"};" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='block');">`
+          : "";
+        const fallbackTag = `<div style="background:rgba(15,23,42,0.06);border-radius:8px;padding:10px 14px;font-size:12px;color:rgba(15,23,42,0.45);margin-bottom:6px;${thumbSrc ? "display:none;" : ""}">[${typeLabel}]</div>`;
+        const thumbHtml = clickHref
+          ? `<a href="${escHtml(clickHref)}" target="_blank" rel="noopener noreferrer" style="display:block;">${imgTag}${fallbackTag}</a>`
+          : `${imgTag}${fallbackTag}`;
         return `<div class="inboxBubbleRow inboxBubbleRow--${dir}">
           <div class="inboxBubble inboxBubble--${dir} inboxBubble--storyReply">
             <div class="storyReplyContext">${thumbHtml}<span class="storyReplyLabel">Sent a ${typeLabel.toLowerCase()}</span></div>

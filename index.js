@@ -2590,6 +2590,7 @@ async function generateAiReply({
   bookingUrl,
   thinkAboutIt,
   userText,
+  conversationGap,
 }) {
   if (!openai) return null;
   const now = Date.now();
@@ -2701,6 +2702,14 @@ When the lead’s message is a casual greeting like "hey", "hi", or "how are you
 - build rapport first — one warm reply, then wait for them to share more
 - the turn_strategy will be "warm_greeting" — honour it
 
+GAP AWARENESS RULE:
+Use the conversation_gap field to adjust how you open your reply:
+- "first_message": this is their first ever message — greet them naturally, no re-opener needed
+- "same_session": under 6 hours since their last message — continue naturally, no re-opener needed
+- "medium_gap": 6–24 hours since their last message — open with a subtle acknowledgment before continuing, e.g. "hey, good to hear from you" or "good to have you back" — then carry on from where you left off
+- "long_gap": 24 hours or more since their last message — open with a warm re-opener e.g. "hey, welcome back" or "good to hear from you again", then briefly reference what was discussed before (check lead_memory and conversation history) to re-establish context
+Do NOT acknowledge the gap if conversation_gap is "same_session" or "first_message". The re-opener should always feel natural, not scripted.
+
 DIRECT PRODUCT REQUEST RULE:
 When the turn_strategy is "send_product_link_now" OR the lead is directly asking for a product, programme, or link:
 - send the relevant product link or booking link immediately — do not ask another question first
@@ -2722,6 +2731,14 @@ Memory is not optional — it is how you avoid sounding like a script and make e
 The golden rule: if the person mentioned something earlier in the conversation, connect it to what they’re asking now.
 Never ask someone what their goal is if they already told you.
 Never give a generic answer when you have their specific context in memory.
+
+CONVERSATION HISTORY RULE:
+The full conversation history is in the messages above — read it before writing anything.
+- if the lead mentioned they struggle with something earlier (e.g. consistency, time, motivation), reference it naturally rather than asking again
+- never ask a question that has already been answered earlier in this conversation — check the history first
+- build on the rapport that’s already been established — the lead should feel like you remember them, not like you’re starting fresh each time
+- if they shared personal context (their goals, situation, job, schedule) in a previous message, use those details to personalise your reply
+- the conversation history is your primary source of personalisation — use it
 
 THREE-PHASE CONVERSATION RULE:
 Read the phase from high_intent, asks_price, and lead_memory.cta_attempts in the context.
@@ -2774,14 +2791,16 @@ The person may phrase things awkwardly. Answer what they meant, not just what th
 - "I’ll think about it" → validate, then ask what they need to make a decision
 
 PROACTIVE PRODUCT INTRODUCTION RULE:
-When the lead's message touches on a topic that closely matches a saved product or service by name or description:
+When the lead's message touches on a topic that is semantically related to a saved product or service — even if they don't use the exact product name:
+- match by topic, theme, and description — not just exact keywords: e.g. someone mentioning "blush" or "makeup" should connect to a beauty product; someone asking about "staying consistent" or "building a routine" should connect to a coaching programme; someone mentioning "losing weight" or "getting lean" should connect to a fitness product
+- use the product description and who_its_for fields to judge relevance, not just the name
 - recognise this as a signal to introduce the product naturally — not as a hard sell
 - use framing like "I actually have [product name] that could help with that — want me to send you the link?"
 - if the lead shows interest or asks for it, include the url in your reply
 - lean toward sharing the link rather than holding back
 - if the conversation topic matches but you are not certain, introduce the product gently and let them decide
 - NEVER list all products at once — only the most relevant one
-- if the lead mentions a specific product by name that is NOT in the products array, set should_pause_for_coach: true and return an empty reply
+- if the lead mentions a specific product by name that does NOT exist in the products array, set should_pause_for_coach: true and return an empty reply
 
 PRODUCT vs BOOKING LINK RULE:
 Products and booking links are completely different — never confuse them:
@@ -2932,6 +2951,8 @@ const context = {
   contact_collection_enabled: !!cfg?.contact_collection_enabled,
   email_already_collected: !!lead?.email,
   phone_already_collected: !!lead?.phone,
+
+  conversation_gap: conversationGap || "first_message",
 };
 
   const messages = [
@@ -7710,6 +7731,9 @@ async function processDmEvent(messaging, igAccount, overrideText) {
             }),
             ...(inlineAttachmentUrl && !isStoryReply && {
               story_url: inlineAttachmentUrl,
+              ...(_firstNonVoiceForRow?.payload?.thumbnail_url
+                ? { story_media_url: _firstNonVoiceForRow.payload.thumbnail_url }
+                : {}),
             }),
           };
 
@@ -7721,6 +7745,7 @@ async function processDmEvent(messaging, igAccount, overrideText) {
             console.error("messages insert incoming failed:", JSON.stringify(insertIncomingError));
           }
 
+          const prevLastInboundAt = lead.last_inbound_at;
           if (!isEcho) {
             try {
               lead = await updateLeadTracking(lead.id, {
@@ -7740,6 +7765,15 @@ async function processDmEvent(messaging, igAccount, overrideText) {
           try {
             historyMessages = await getLeadMessageHistory(lead.id, 30);
           } catch {}
+
+          // Gap since previous inbound — drives the re-opener in the AI reply
+          const _gapMs = prevLastInboundAt && historyMessages.length > 0
+            ? Date.now() - new Date(prevLastInboundAt).getTime()
+            : null;
+          const conversationGap = _gapMs === null ? "first_message"
+            : _gapMs >= 86400000 ? "long_gap"
+            : _gapMs >= 21600000 ? "medium_gap"
+            : "same_session";
 
           if (!isEcho && cfg?.bot_paused) return;
 
@@ -8178,6 +8212,36 @@ log("ig_trigger_opener_sent", {
             return;
           }
 
+          // ── UNKNOWN PRODUCT GUARD ────────────────────────────────────────────────────
+          // If the lead mentions a product-like noun that doesn't match any saved product,
+          // flag for the coach rather than the AI inventing details.
+          if (text && Array.isArray(cfg?.products) && cfg.products.length > 0) {
+            const unknownProduct = detectUnknownProductMention(text, cfg.products);
+            if (unknownProduct) {
+              const leadName = leadNameCache.get(`${lead.client_id}:${senderId}`) || lead.ig_name || `Lead ${String(senderId).slice(-6)}`;
+              log("confidence_pause_unknown_product", { leadId: lead.id, clientId: lead.client_id, senderId, mention: unknownProduct });
+              try {
+                await setLeadManualOverride({
+                  leadId: lead.id,
+                  clientId: lead.client_id,
+                  enabled: true,
+                  reason: "Lead mentioned unknown product — coach input needed",
+                  actor: "system",
+                });
+              } catch (e) {
+                console.warn("unknown_product confidence_pause: setLeadManualOverride failed", e?.message || e);
+              }
+              emitActivityEvent(lead.client_id, {
+                type: "confidence_pause",
+                leadName,
+                igPsid: senderId,
+                preview: text ? String(text).slice(0, 120) : "[non-text message]",
+              });
+              await sendCoachPauseNotification(lead.id, lead.client_id);
+              return;
+            }
+          }
+
           // ── PERSONAL QUESTION GUARD ──────────────────────────────────────────────────
           // If the lead asks about personal details the bot cannot know from config,
           // flag immediately rather than hallucinating an answer.
@@ -8224,6 +8288,7 @@ log("ig_trigger_opener_sent", {
             bookingUrl: cfg?.booking_url || null,
             thinkAboutIt,
             userText: text,
+            conversationGap,
           });
 
           // Unknown product mention or personal question — pause for coach if AI flagged it
