@@ -104,10 +104,6 @@
     .inputPrefix input { border: none; border-radius: 0; box-shadow: none; padding-left: 2px; width: 100%; }
     .inputPrefix input:focus { box-shadow: none; border-color: transparent; }
     .inputPrefix:focus-within { border-color: rgba(45,107,255,0.5); box-shadow: 0 0 0 3px rgba(45,107,255,0.1); }
-    .setupLinkBox { margin-top: 10px; background: var(--okBg); border: 1px solid var(--okBorder); border-radius: 10px; padding: 10px 12px; font-size: 12px; display: none; }
-    .setupLinkBox .setupLinkLabel { font-weight: 700; color: var(--ok); margin-bottom: 6px; }
-    .setupLinkBox a { word-break: break-all; color: #1d4ed8; font-size: 12px; }
-    .setupLinkCopy { margin-top: 6px; }
     @media(max-width:600px) { .row2 { grid-template-columns: 1fr; } .actionBtns { flex-direction: column; } }
   </style>
 </head>
@@ -172,13 +168,7 @@
           <button class="btn primary" id="createClientBtn">Create client</button>
           <span class="errMsg" id="createErr"></span>
         </div>
-        <div class="setupLinkBox" id="setupLinkBox">
-          <div class="setupLinkLabel">Client created. Send this password setup link to the coach:</div>
-          <a id="setupLinkAnchor" href="#" target="_blank"></a>
-          <div class="setupLinkCopy">
-            <button class="btn sm" id="copySetupLinkBtn">Copy link</button>
-          </div>
-        </div>
+        <div class="okMsg" id="createOkMsg" style="margin-top:10px;"></div>
       </div>
 
       <!-- Client list -->

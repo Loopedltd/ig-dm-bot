@@ -3776,21 +3776,11 @@ keyword_auto_dm_text: null,
       return safeJson(res, 500, { error: String(configErr.message || configErr) });
     }
 
-    // Generate a password setup token so the coach can set their password immediately
-    const setupToken = crypto.randomBytes(24).toString("hex");
-    await supabase.from("payment_links").insert({
-      token: setupToken,
-      client_id: client.id,
-      email: coachEmail,
-    });
-    const setupUrl = `${APP_PUBLIC_URL}/set-password?token=${setupToken}`;
-
     return safeJson(res, 200, {
       ok: true,
       client,
       config,
       email: coachEmail,
-      setup_url: setupUrl,
     });
   } catch (e) {
     return safeJson(res, 500, { error: String(e?.message || e) });

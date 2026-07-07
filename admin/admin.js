@@ -350,12 +350,10 @@ const AdminDashboard = {
     const setupFeePounds = parseFloat(qs("newSetupFee")?.value || "0") || 0;
     const monthlyRetainerPounds = parseFloat(qs("newMonthlyRetainer")?.value || "0") || 0;
     const errEl = qs("createErr");
-    const linkBox = qs("setupLinkBox");
-    const linkAnchor = qs("setupLinkAnchor");
-    const copyBtn = qs("copySetupLinkBtn");
+    const okBox = qs("createOkMsg");
 
     if (errEl) { errEl.textContent = ""; errEl.style.display = "none"; }
-    if (linkBox) linkBox.style.display = "none";
+    if (okBox) okBox.style.display = "none";
 
     if (!name) { if (errEl) { errEl.textContent = "Name is required."; errEl.style.display = "inline"; } return; }
     if (!email) { if (errEl) { errEl.textContent = "Email is required."; errEl.style.display = "inline"; } return; }
@@ -379,18 +377,9 @@ const AdminDashboard = {
       if (qs("newSetupFee")) qs("newSetupFee").value = "0";
       if (qs("newMonthlyRetainer")) qs("newMonthlyRetainer").value = "0";
 
-      if (data.setup_url && linkBox && linkAnchor) {
-        linkAnchor.href = data.setup_url;
-        linkAnchor.textContent = data.setup_url;
-        linkBox.style.display = "block";
-        if (copyBtn) {
-          copyBtn.onclick = () => {
-            navigator.clipboard.writeText(data.setup_url).then(() => {
-              copyBtn.textContent = "Copied!";
-              setTimeout(() => { copyBtn.textContent = "Copy link"; }, 2000);
-            });
-          };
-        }
+      if (okBox) {
+        okBox.textContent = `Client created. Use the Payment link button in the client row to generate their Stripe checkout link.`;
+        okBox.style.display = "block";
       }
 
       await this.loadClients();
