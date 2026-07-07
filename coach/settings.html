@@ -146,7 +146,7 @@
 
     <div class="wrap">
       <h1>Settings</h1>
-      <div class="sub">Configure your bot, triggers, and offer details.</div>
+      <div class="sub">Configure your assistant, triggers, and offer details.</div>
 
       <!-- ── Onboarding success banner (shown after Instagram connect) -->
       <div id="igConnectedBanner" style="display:none; background:var(--okBg); border:1px solid var(--okBorder); color:var(--okText); border-radius:14px; padding:14px 16px; font-size:14px; font-weight:600; margin-bottom:4px;">
@@ -237,7 +237,7 @@
       <!-- Response Delay -->
       <div class="card" style="margin-top:12px;">
         <div class="takeoverTitle" style="font-size:16px;">Response delay</div>
-        <div class="takeoverSub" style="margin-top:4px;">How long the bot waits before replying. A longer delay feels more natural.</div>
+        <div class="takeoverSub" style="margin-top:4px;">How long the assistant waits before replying. A longer delay feels more natural.</div>
         <div style="margin-top:14px; max-width:420px;">
           <label style="margin-top:0;">Delay: <strong id="delayLabel">90s</strong></label>
           <input type="range" id="response_delay_ms" min="30" max="180" step="5" value="90"
@@ -279,7 +279,7 @@
             </select>
             <label>Public reply text</label>
             <input id="comment_keyword_reply_text" placeholder="Example: Sent you a DM!" />
-            <div class="helper" style="margin-top:14px;">When public reply is on, the bot will also reply to the comment publicly so other viewers can see it.</div>
+            <div class="helper" style="margin-top:14px;">When public reply is on, the assistant will also reply to the comment publicly so other viewers can see it.</div>
           </div>
         </div>
       </div>
@@ -289,7 +289,7 @@
         <div class="takeoverHeader">
           <div>
             <div class="takeoverTitle">Contact Collection</div>
-            <div class="takeoverSub">When on, the bot naturally asks leads for their email and phone during conversation and saves them.</div>
+            <div class="takeoverSub">When on, the assistant naturally asks leads for their email and phone during conversation and saves them.</div>
           </div>
           <span class="badge" id="contactCollectionBadge">Off</span>
         </div>
@@ -307,10 +307,10 @@
       <div class="sectionLabel">Products &amp; Services</div>
       <div class="card" id="productsCard">
         <div class="takeoverTitle" style="font-size:16px;">Products &amp; Services</div>
-        <div class="takeoverSub" style="margin-top:4px;">Add each product or service so the bot can identify which one fits each lead and pitch it naturally.</div>
+        <div class="takeoverSub" style="margin-top:4px;">Add each product or service so the assistant can identify which one fits each lead and pitch it naturally.</div>
         <div id="productsList" style="margin-top:14px; display:flex; flex-direction:column; gap:12px;"></div>
         <button class="btn" id="addProductBtn" style="margin-top:14px;">+ Add product</button>
-        <div class="helper" style="margin-top:8px;">If you offer multiple products, the bot picks the most relevant one per lead based on what they share.</div>
+        <div class="helper" style="margin-top:8px;">If you offer multiple products, the assistant picks the most relevant one per lead based on what they share.</div>
       </div>
 
       <!-- ─── SECTION 1: Essential Setup ─────────────────────────────── -->
@@ -318,32 +318,51 @@
         <span class="sectionNum">1</span> Essential Setup
       </div>
       <div class="card">
-        <div class="takeoverTitle" style="font-size:16px;">Get your bot working in minutes</div>
-        <div class="takeoverSub" style="margin-top:4px;">Fill these in and your bot is ready. Everything else has smart defaults.</div>
+        <div class="takeoverTitle" style="font-size:16px;">Get your assistant working in minutes</div>
+        <div class="takeoverSub" style="margin-top:4px;">Fill these in and your assistant is ready. Everything else has smart defaults.</div>
 
         <div style="margin-top:16px; font-size:14px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">Instagram handle</div>
         <input id="instagram_handle" placeholder="looped.ltd" style="max-width:320px; margin-top:6px;" />
-        <div class="helper">Without the @. Used to personalise the bot's voice.</div>
+        <div class="helper">Without the @. Used to personalise the assistant's voice.</div>
 
         <div class="divider"></div>
 
-        <div style="font-size:14px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">Your real DMs <span style="color: var(--primary);">- most important section for making the bot sound like you</span></div>
-        <div style="color:var(--muted); font-size:13px; margin-top:6px; margin-bottom:4px;">Write exactly what you'd say in each situation. The bot learns your voice from these.</div>
+        <div style="font-size:14px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">Your real DMs <span style="color: var(--primary);">- most important section for making the assistant sound like you</span></div>
+        <div style="color:var(--muted); font-size:13px; margin-top:6px; margin-bottom:4px;">Write exactly what you'd say in each situation. Add multiple replies as bullet points. The assistant learns your voice from these.</div>
 
         <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">What do you say when someone asks the price?</div>
-        <textarea id="voice_price_reply" style="min-height:90px;" placeholder="e.g.&#10;it's £200 to get started then £90 a month after that&#10;&#10;fair, what were you expecting to pay"></textarea>
+        <textarea id="voice_price_reply" style="min-height:90px;" placeholder="• it's £200 to get started then £90 a month after that&#10;• fair, what were you expecting to pay"></textarea>
 
-        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">What do you say when someone has an objection like "I need to think about it"?</div>
-        <textarea id="voice_objection_reply" style="min-height:90px;" placeholder="e.g.&#10;fair, what's holding you back&#10;&#10;totally get that — is it the price or the timing?"></textarea>
+        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">What do you say when someone asks what you actually help with?</div>
+        <textarea id="voice_what_you_do" style="min-height:90px;" placeholder="• i help people get in shape properly with a real plan, support and accountability&#10;• basically i take care of the structure so you just have to show up"></textarea>
 
-        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">What do you say to guide them toward booking a call?</div>
-        <textarea id="voice_booking_push" style="min-height:90px;" placeholder="e.g.&#10;want me to send you the link so we can go through it properly?&#10;&#10;sounds good - use this and get yourself booked in"></textarea>
+        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">What do you say when someone is not sure if it's for them?</div>
+        <textarea id="voice_not_sure_fit" style="min-height:90px;" placeholder="• fair, what's making you think that&#10;• most people feel that way at first, what's the main thing putting you off"></textarea>
 
-        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">How do you handle someone who goes quiet?</div>
-        <textarea id="voice_quiet_lead" style="min-height:90px;" placeholder="e.g.&#10;hey just checking in - still here if you want to chat&#10;&#10;no worries either way, just let me know if you want to pick it back up"></textarea>
+        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">What do you say when someone has never done this before?</div>
+        <textarea id="voice_never_done" style="min-height:90px;" placeholder="• that's fine, most people haven't. what are you actually trying to get out of it&#10;• honestly that's the best time to start, you haven't picked up any bad habits yet"></textarea>
+
+        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">What do you say when someone says the price is too much?</div>
+        <textarea id="voice_too_expensive" style="min-height:90px;" placeholder="• fair, what were you expecting to invest&#10;• totally get that, is it the upfront cost or the monthly that's the sticking point"></textarea>
+
+        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">What do you say when someone says they need to think about it?</div>
+        <textarea id="voice_objection_reply" style="min-height:90px;" placeholder="• fair, what's holding you back&#10;• makes sense, what would help you feel more confident about it"></textarea>
+
+        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">What do you say when someone is not sure it will work?</div>
+        <textarea id="voice_wont_work" style="min-height:90px;" placeholder="• what part are you unsure about&#10;• fair enough, what have you tried before that didn't stick"></textarea>
+
+        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">What do you say when someone says they don't have time?</div>
+        <textarea id="voice_no_time" style="min-height:90px;" placeholder="• how much time do you actually have realistically&#10;• what does your week look like at the moment"></textarea>
+
+        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">What do you say when someone sounds interested and ready to book?</div>
+        <textarea id="voice_booking_push" style="min-height:90px;" placeholder="• good, want me to send you the link&#10;• let me send you the details and we can go from there"></textarea>
+
+        <div style="margin-top:16px; font-size:13px; font-weight:800; color:var(--text); user-select:text; pointer-events:none;">What do you say when someone asks for the booking link?</div>
+        <textarea id="voice_send_link" style="min-height:90px;" placeholder="• use this and get yourself booked in&#10;• here's the link, pick a time that works for you"></textarea>
 
         <!-- Kept for backward compatibility — not shown to users -->
         <textarea id="example_messages" style="display:none;"></textarea>
+        <textarea id="voice_quiet_lead" style="display:none;"></textarea>
       </div>
 
       <!-- SECTION 2: Optional Customisation wizard -->
@@ -352,7 +371,7 @@
       </div>
       <div class="card" id="wizardCard">
         <div class="optionalNote" style="margin-top:0;">
-          <strong>All optional.</strong> The bot uses smart defaults if you leave anything blank. Fill in what you can to the best of your ability.
+          <strong>All optional.</strong> The assistant uses smart defaults if you leave anything blank. Fill in what you can to the best of your ability.
         </div>
 
         <!-- Progress -->
@@ -368,7 +387,7 @@
 
           <div class="wizardStep active" data-step="0">
             <div class="wizardQuestion">What do you do?</div>
-            <div class="wizardHint">Describe your service in plain English. The bot uses this when leads ask what you offer.</div>
+            <div class="wizardHint">Describe your service in plain English. The assistant uses this when leads ask what you offer.</div>
             <textarea id="offer_what" placeholder="e.g. I help busy men over 30 get in shape with a tailored training and nutrition plan - no gym required."></textarea>
           </div>
 
@@ -380,13 +399,13 @@
 
           <div class="wizardStep" data-step="2">
             <div class="wizardQuestion">Who is this for?</div>
-            <div class="wizardHint">Be specific. The bot uses this to qualify leads and spot a good fit early.</div>
+            <div class="wizardHint">Be specific. The assistant uses this to qualify leads and spot a good fit early.</div>
             <textarea id="offer_audience" placeholder="e.g.&#10;- Men over 30 who want to build muscle without spending hours in the gym&#10;- Busy people who need structure and accountability&#10;- Beginners who've tried before but couldn't stay consistent"></textarea>
           </div>
 
           <div class="wizardStep" data-step="3">
             <div class="wizardQuestion">How does working with you actually work?</div>
-            <div class="wizardHint">Walk through the steps from first contact to being a client. Helps the bot explain the process when leads ask.</div>
+            <div class="wizardHint">Walk through the steps from first contact to being a client. Helps the assistant explain the process when leads ask.</div>
             <textarea id="offer_process" placeholder="e.g.&#10;1. Book a free call&#10;2. We go through your goals and situation&#10;3. If it's a fit, you get onboarded and we start that week"></textarea>
           </div>
 
@@ -398,42 +417,42 @@
 
           <div class="wizardStep" data-step="5">
             <div class="wizardQuestion">Who are your best-fit leads?</div>
-            <div class="wizardHint">The type of person who gets the best results and is easiest to convert. The bot uses this to spot warm leads early.</div>
+            <div class="wizardHint">The type of person who gets the best results and is easiest to convert. The assistant uses this to spot warm leads early.</div>
             <textarea id="best_fit_leads" placeholder="e.g.&#10;- People serious about making a lasting change&#10;- Anyone who's struggled to stay consistent on their own&#10;- People who want a clear plan and someone to hold them accountable"></textarea>
           </div>
 
           <div class="wizardStep" data-step="6">
             <div class="wizardQuestion">Who is NOT a good fit?</div>
-            <div class="wizardHint">Leads the bot should gently filter out or not push hard to close.</div>
+            <div class="wizardHint">Leads the assistant should gently filter out or not push hard to close.</div>
             <textarea id="not_a_fit" placeholder="e.g.&#10;- People looking for a quick fix or instant results&#10;- Anyone not willing to commit to the process&#10;- Those who just want a cheap meal plan with no support"></textarea>
           </div>
 
           <div class="wizardStep" data-step="7">
             <div class="wizardQuestion">What objections do you usually get, and how do you handle them?</div>
-            <div class="wizardHint">The bot will use this to respond naturally when leads push back.</div>
+            <div class="wizardHint">The assistant will use this to respond naturally when leads push back.</div>
             <textarea id="common_objections" placeholder="e.g.&#10;Too expensive: Ask what they expected to invest, then reframe around the cost of staying where they are&#10;Not sure it'll work: Ask what they've tried before and what got in the way&#10;Need to think: Ask what specifically they're unsure about"></textarea>
           </div>
 
           <div class="wizardStep" data-step="8">
-            <div class="wizardQuestion">When should the bot send the booking link?</div>
-            <div class="wizardHint">Tell the bot exactly when to offer the link, and when not to. The more specific the better.</div>
+            <div class="wizardQuestion">When should the assistant send the booking link?</div>
+            <div class="wizardHint">Tell the assistant exactly when to offer the link, and when not to. The more specific the better.</div>
             <textarea id="closing_triggers" placeholder="e.g. Send the link when they ask how to get started, ask for the link directly, say it sounds good, or ask about price and still seem interested. Don't send it in the first message or if they seem unsure."></textarea>
           </div>
 
           <div class="wizardStep" data-step="9">
             <div class="wizardQuestion">Why should someone act now rather than later?</div>
-            <div class="wizardHint">What usually triggers a lead to finally commit? The bot can reference this naturally in conversation.</div>
+            <div class="wizardHint">What usually triggers a lead to finally commit? The assistant can reference this naturally in conversation.</div>
             <textarea id="urgency_reason" placeholder="e.g. Most people come to me when something has clicked - a holiday coming up, they've had enough of not seeing progress, or they've just decided enough is enough."></textarea>
           </div>
 
           <div class="wizardStep" data-step="10">
             <div class="wizardQuestion">What builds trust with your leads?</div>
-            <div class="wizardHint">Proof points, guarantees, or things that make you stand out. The bot mentions these when leads seem hesitant.</div>
+            <div class="wizardHint">Proof points, guarantees, or things that make you stand out. The assistant mentions these when leads seem hesitant.</div>
             <textarea id="trust_builders" placeholder="e.g.&#10;- Tailored plans - nothing generic&#10;- Real results from real clients&#10;- Direct support, not just a portal&#10;- You can message me any time"></textarea>
           </div>
 
           <div class="wizardStep" data-step="11">
-            <div class="wizardQuestion">Anything else the bot should know?</div>
+            <div class="wizardQuestion">Anything else the assistant should know?</div>
             <div class="wizardHint">FAQ, how you work, policies, anything that comes up regularly in DMs.</div>
             <textarea id="faq" placeholder="e.g.&#10;Check-ins: Weekly via DM or video&#10;Support: Available Mon–Fri&#10;Start time: Same week as onboarding&#10;No long-term contracts"></textarea>
           </div>
@@ -510,7 +529,7 @@
       <!-- Save -->
       <div class="card" style="margin-top:16px;">
         <div class="actions" style="margin-top:0;">
-          <button class="btn" id="previewBtn">Preview my bot</button>
+          <button class="btn" id="previewBtn">Preview my assistant</button>
           <button class="btn primary" id="saveBtn">Save settings</button>
         </div>
         <div class="err" id="err"></div>
@@ -524,7 +543,7 @@
         <div class="previewHeader">
           <div class="previewAvatar" id="previewAvatarEl">B</div>
           <div class="previewHeaderText">
-            <div class="previewHeaderName" id="previewBotName">Your bot</div>
+            <div class="previewHeaderName" id="previewBotName">Your assistant</div>
             <div class="previewHeaderSub">Instagram DM preview</div>
           </div>
           <button class="previewCloseBtn" id="previewCloseBtn" title="Close">

@@ -104,7 +104,7 @@
       const isConfidencePause = paused &&
         String(lead.manual_override_reason || "").includes("Low confidence");
       const botBadge = isConfidencePause
-        ? `<span class="badge needs-review" title="Bot couldn't reply - open Instagram to respond manually">Needs review</span>`
+        ? `<span class="badge needs-review" title="Assistant couldn't reply - open Instagram to respond manually">Needs review</span>`
         : paused
           ? `<span class="badge paused">Paused</span>`
           : `<span class="badge active">Active</span>`;
@@ -167,7 +167,7 @@
 
   function exportCsv() {
     const leads = getFiltered();
-    const headers = ["Name", "Email", "Phone", "Stage", "Last Message", "Bot Status", "Instagram PSID", "Created"];
+    const headers = ["Name", "Email", "Phone", "Stage", "Last Message", "Assistant Status", "Instagram PSID", "Created"];
     const rows = leads.map((lead) => [
       leadDisplayName(lead),
       lead.email || "",

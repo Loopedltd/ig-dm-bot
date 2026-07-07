@@ -42,6 +42,11 @@
     .btn.primary:hover { filter: brightness(1.04); }
     .btn.danger { background: #fff0f0; border-color: rgba(180,35,24,0.2); color: var(--danger); }
     .btn.muted-on { background: rgba(181,71,8,0.08); border-color: rgba(181,71,8,0.25); color: #b54708; }
+    .inputPrefix { display:flex; align-items:center; }
+    .inputPrefix span { background:rgba(15,23,42,0.05); border:1px solid var(--border2); border-right:none; padding:10px 10px; border-radius:10px 0 0 10px; font-size:13px; color:var(--muted); flex-shrink:0; }
+    .inputPrefix input { border-radius:0 10px 10px 0; margin-top:0; }
+    .payLinkResult { margin-top:12px; display:none; }
+    .payLinkUrl { background:rgba(45,107,255,0.05); border:1px solid rgba(45,107,255,0.18); border-radius:10px; padding:10px 12px; font-size:12px; font-family:monospace; word-break:break-all; color:var(--text); margin-bottom:8px; }
     .btn.sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
     .sectionLabel { font-size: 11px; font-weight: 800; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin: 28px 0 10px; }
     .card { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
@@ -143,6 +148,22 @@
             <input id="newEmail" type="email" placeholder="coach@example.com" />
           </div>
         </div>
+        <div class="row2" style="margin-top:10px;">
+          <div>
+            <label>Setup fee <span style="font-weight:500;">(one-off, enter 0 if none)</span></label>
+            <div class="inputPrefix">
+              <span>£</span>
+              <input id="newSetupFee" type="number" min="0" step="1" placeholder="199" />
+            </div>
+          </div>
+          <div>
+            <label>Monthly retainer</label>
+            <div class="inputPrefix">
+              <span>£</span>
+              <input id="newMonthlyRetainer" type="number" min="0" step="1" placeholder="99" />
+            </div>
+          </div>
+        </div>
         <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <button class="btn primary" id="createClientBtn">Create client</button>
           <span class="errMsg" id="createErr" style="display:inline;"></span>
@@ -223,7 +244,21 @@
       <label>Offer price</label>
       <input id="cfgOfferPrice" placeholder="e.g. £200/month" />
 
-      <label>Subscription status</label>
+      <div class="divider"></div>
+
+      <label>Setup fee <span style="font-weight:500;">(one-off, enter 0 if none)</span></label>
+      <div class="inputPrefix">
+        <span>£</span>
+        <input id="cfgSetupFee" type="number" min="0" step="1" placeholder="199" />
+      </div>
+
+      <label style="margin-top:14px;">Monthly retainer</label>
+      <div class="inputPrefix">
+        <span>£</span>
+        <input id="cfgMonthlyRetainer" type="number" min="0" step="1" placeholder="99" />
+      </div>
+
+      <label style="margin-top:14px;">Subscription status</label>
       <select id="cfgStripeStatus">
         <option value="active">active</option>
         <option value="trialing">trialing</option>
@@ -260,6 +295,38 @@
       <div class="modalFooter">
         <button class="btn" id="resetPwCancelBtn">Close</button>
         <button class="btn danger" id="resetPwConfirmBtn">Generate new password</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment link modal -->
+  <div class="modal" id="paymentLinkModal">
+    <div class="modalBox" style="max-width:480px;">
+      <h2>Generate payment link</h2>
+      <div class="sub" id="paymentLinkModalSub">Create a Stripe payment link for this client.</div>
+
+      <label>Setup fee <span style="font-weight:500;">(one-off, enter 0 if none)</span></label>
+      <div class="inputPrefix">
+        <span>£</span>
+        <input id="plSetupFee" type="number" min="0" step="1" placeholder="199" />
+      </div>
+
+      <label style="margin-top:14px;">Monthly retainer</label>
+      <div class="inputPrefix">
+        <span>£</span>
+        <input id="plMonthlyRetainer" type="number" min="1" step="1" placeholder="99" />
+      </div>
+
+      <div class="errMsg" id="paymentLinkErr"></div>
+
+      <div class="payLinkResult" id="payLinkResult">
+        <div class="payLinkUrl" id="payLinkUrl"></div>
+        <button class="btn primary" id="copyPayLinkBtn">Copy link</button>
+      </div>
+
+      <div class="modalFooter">
+        <button class="btn" id="paymentLinkCancelBtn">Close</button>
+        <button class="btn primary" id="paymentLinkGenerateBtn">Generate link</button>
       </div>
     </div>
   </div>
