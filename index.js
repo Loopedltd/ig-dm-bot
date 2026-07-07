@@ -377,6 +377,12 @@ function extractPostCommentEvents(reqBody) {
   const entries = Array.isArray(reqBody?.entry) ? reqBody.entry : [];
   const commentEvents = [];
 
+  // Log every change field seen so we can confirm comment events arrive
+  const allChangeFields = entries.flatMap((e) =>
+    Array.isArray(e?.changes) ? e.changes.map((c) => c?.field || "(no field)") : []
+  );
+  console.log("[comment_webhook] extractPostCommentEvents: change fields seen in this request:", allChangeFields.length ? allChangeFields : "(none)");
+
   for (const entry of entries) {
     const changes = Array.isArray(entry?.changes) ? entry.changes : [];
     for (const change of changes) {
@@ -7127,8 +7133,13 @@ app.post("/webhook", async (req, res) => {
       void handleNewFollowerDm(igAccountId, followerId);
     }
 
+    console.log("[comment_webhook] comment events extracted from this request:", commentEvents.length,
+      commentEvents.length === 0
+        ? "— if you expect comment events, the account may need to resubscribe with the 'comments' field (POST /coach/api/instagram/resubscribe)"
+        : ""
+    );
     for (const { igAccountId, commentId, commenterId, commenterUsername, commentText } of commentEvents) {
-      console.log("webhook: comment event received", { igAccountId, commentId, commenterId, commentText: commentText?.slice(0, 80) });
+      console.log("[comment_webhook] dispatching comment event", { igAccountId, commentId, commenterId, commentText: commentText?.slice(0, 80) });
       void handlePostCommentKeyword(igAccountId, commentId, commenterId, commenterUsername, commentText);
       void handlePostCommentAutoDm(igAccountId, commentId, commenterId, commenterUsername, commentText);
     }
@@ -7478,6 +7489,15 @@ async function processDmEvent(messaging, igAccount, overrideText) {
 
           // Detect story reply and fetch media context (non-blocking on failure)
           const isStoryReply = !isEcho && isStoryReplyTrigger(messaging);
+          console.log("[trigger:story_reply] isStoryReplyTrigger result:", {
+            isStoryReply,
+            isEcho,
+            referralSource: messaging?.referral?.source || messaging?.postback?.referral?.source || null,
+            hasReplyToStory: !!(messaging?.message?.reply_to?.story),
+            hasReplyToStoryId: !!(messaging?.message?.reply_to?.story_id),
+            isStoryReplyField: messaging?.message?.is_story_reply ?? null,
+            rawReplyTo: messaging?.message?.reply_to || null,
+          });
           let storyContext = { storyId: null, storyUrl: null, storyMediaUrl: null };
           if (isStoryReply) {
             storyContext = await fetchStoryContext(igAccount.page_access_token, messaging).catch(() => storyContext);
@@ -7738,6 +7758,28 @@ async function processDmEvent(messaging, igAccount, overrideText) {
             }
           }
 
+// ── TRIGGER EVALUATION ────────────────────────────────────────────────────────
+// NOTE: alreadyHasOutbound blocks all triggers when the lead has any prior
+// outbound message. If this is true and triggers should fire, that is the bug.
+console.log("[trigger:eval] inputs", {
+  isEcho,
+  alreadyHasOutbound,
+  text: text ? text.slice(0, 80) : null,
+  // Story auto-DM inputs
+  story_reply_auto_dm_enabled: !!cfg?.story_reply_auto_dm_enabled,
+  story_reply_auto_dm_text: cfg?.story_reply_auto_dm_text ? cfg.story_reply_auto_dm_text.slice(0, 60) : null,
+  isStoryReplyTrigger_result: isStoryReplyTrigger(messaging),
+  // Keyword DM inputs
+  keyword_auto_dm_enabled: !!cfg?.keyword_auto_dm_enabled,
+  keyword_trigger_text: cfg?.keyword_trigger_text || null,
+  keyword_auto_dm_text: cfg?.keyword_auto_dm_text ? cfg.keyword_auto_dm_text.slice(0, 60) : null,
+  shouldUseKeywordAutoDm_result: isPlainTextMessage(messaging) ? shouldUseKeywordAutoDm(cfg, text) : "(no plain text)",
+  // Comment reply DM inputs
+  comment_reply_auto_dm_enabled: !!cfg?.comment_reply_auto_dm_enabled,
+  comment_reply_auto_dm_text: cfg?.comment_reply_auto_dm_text ? cfg.comment_reply_auto_dm_text.slice(0, 60) : null,
+  isCommentReplyTrigger_result: isCommentReplyTrigger(messaging),
+});
+
 const storyAutoDmMatched =
   !isEcho &&
   !alreadyHasOutbound &&
@@ -7753,6 +7795,18 @@ const keywordAutoDmMatched =
   !alreadyHasOutbound &&
   isPlainTextMessage(messaging) &&
   shouldUseKeywordAutoDm(cfg, text);
+
+console.log("[trigger:eval] results", {
+  storyAutoDmMatched,
+  commentAutoDmMatched,
+  keywordAutoDmMatched,
+  anyTriggered: storyAutoDmMatched || commentAutoDmMatched || keywordAutoDmMatched,
+  blockedByAlreadyHasOutbound: alreadyHasOutbound && (
+    shouldUseStoryAutoDm(cfg, messaging) ||
+    shouldUseCommentAutoDm(cfg, messaging) ||
+    (isPlainTextMessage(messaging) && shouldUseKeywordAutoDm(cfg, text))
+  ),
+});
 
 if (storyAutoDmMatched || commentAutoDmMatched || keywordAutoDmMatched) {
   const opener = storyAutoDmMatched
