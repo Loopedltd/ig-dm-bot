@@ -120,37 +120,22 @@ app.get("/cancel", (req, res) => {
 });
 
 app.get("/login", (req, res) => {
-  if (!isAppHost(req) && process.env.NODE_ENV === "production") {
-    return res.status(404).send("Not Found");
-  }
   return res.sendFile(path.join(__dirname, "coach", "login.html"));
 });
 
 app.get("/dashboard", (req, res) => {
-  if (!isAppHost(req) && process.env.NODE_ENV === "production") {
-    return res.status(404).send("Not Found");
-  }
   return res.sendFile(path.join(__dirname, "coach", "dashboard.html"));
 });
 
 app.get("/stats", (req, res) => {
-  if (!isAppHost(req) && process.env.NODE_ENV === "production") {
-    return res.status(404).send("Not Found");
-  }
   return res.sendFile(path.join(__dirname, "coach", "stats.html"));
 });
 
 app.get("/settings", (req, res) => {
-  if (!isAppHost(req) && process.env.NODE_ENV === "production") {
-    return res.status(404).send("Not Found");
-  }
   return res.sendFile(path.join(__dirname, "coach", "settings.html"));
 });
 
 app.get("/leads-page", (req, res) => {
-  if (!isAppHost(req) && process.env.NODE_ENV === "production") {
-    return res.status(404).send("Not Found");
-  }
   return res.sendFile(path.join(__dirname, "coach", "leads-page.html"));
 });
 
