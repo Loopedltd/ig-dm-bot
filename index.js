@@ -9,6 +9,23 @@ import { fileURLToPath } from "url";
 import Stripe from "stripe";
 import { Resend } from "resend";
 import { supabase } from "./supabaseClient.js";
+import {
+  PITCH_DISMISSAL_MESSAGE,
+  normaliseTriggerText,
+  parseKeywordFromPhrase,
+  computeConversationGap,
+  isCasualGreeting,
+  detectDirectProductRequest,
+  detectPersonalQuestion,
+  detectUnknownProductMention,
+  detectSalesPitch,
+  detectGenuineLeadQuestion,
+  isStoryReplyTrigger,
+  shouldUseStoryAutoDm,
+  isCommentReplyTrigger,
+  shouldUseCommentAutoDm,
+  shouldUseKeywordAutoDm,
+} from "./lib/conversationLogic.js";
 
 // ─── Real-time activity stream (SSE) ─────────────────────────────────────────
 /** clientId -> Set<Express res> */
@@ -410,62 +427,12 @@ function extractPhone(text) {
   if (digits.length < 7 || digits.length > 15) return null;
   return match[1].trim();
 }
-function normaliseTriggerText(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/^["']|["']$/g, "")
-    .replace(/\s+/g, " ");
-}
-
-function parseKeywordFromPhrase(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-
-  // If coach types: dm me "START"
-  const quoted = raw.match(/["']([^"']+)["']/);
-  if (quoted?.[1]) {
-    return normaliseTriggerText(quoted[1]);
-  }
-
-  // fallback: use whole field
-  return normaliseTriggerText(raw);
-}
-
-function isStoryReplyTrigger(messaging) {
-  // Meta payloads can vary depending on the exact entry point.
-  // This is defensive so you can log and tighten later if needed.
-  return !!(
-    messaging?.message?.reply_to?.story ||
-    messaging?.message?.reply_to?.mid ||
-    messaging?.postback?.referral?.source === "story_mention" ||
-    messaging?.referral?.source === "story_mention" ||
-    messaging?.message?.is_story_reply === true
-  );
-}
+// normaliseTriggerText, parseKeywordFromPhrase, isStoryReplyTrigger,
+// shouldUseStoryAutoDm, shouldUseKeywordAutoDm, isCommentReplyTrigger,
+// shouldUseCommentAutoDm — imported from ./lib/conversationLogic.js
 
 function isPlainTextMessage(messaging) {
   return !!String(messaging?.message?.text || "").trim();
-}
-
-function shouldUseStoryAutoDm(cfg, messaging) {
-  return !!(
-    cfg?.story_reply_auto_dm_enabled &&
-    String(cfg?.story_reply_auto_dm_text || "").trim() &&
-    isStoryReplyTrigger(messaging)
-  );
-}
-
-function shouldUseKeywordAutoDm(cfg, text) {
-  if (!cfg?.keyword_auto_dm_enabled) return false;
-
-  const trigger = parseKeywordFromPhrase(cfg?.keyword_trigger_text);
-  if (!trigger) return false;
-
-  const incoming = normaliseTriggerText(text);
-  if (!incoming) return false;
-
-  return incoming === trigger;
 }
 
 function getStoryAutoDmText(cfg) {
@@ -474,37 +441,6 @@ function getStoryAutoDmText(cfg) {
 
 function getKeywordAutoDmText(cfg) {
   return String(cfg?.keyword_auto_dm_text || "").trim();
-}
-function isCommentReplyTrigger(messaging) {
-  const referralSource = String(
-    messaging?.referral?.source ||
-    messaging?.postback?.referral?.source ||
-    ""
-  ).toLowerCase();
-
-  const referralType = String(
-    messaging?.referral?.type ||
-    messaging?.postback?.referral?.type ||
-    ""
-  ).toLowerCase();
-
-  const replyTo = messaging?.message?.reply_to || null;
-
-  return !!(
-    messaging?.message?.is_comment_reply === true ||
-    replyTo?.comment_id ||
-    referralSource === "comments" ||
-    referralSource === "post" ||
-    referralType === "comment_mention"
-  );
-}
-
-function shouldUseCommentAutoDm(cfg, messaging) {
-  return !!(
-    cfg?.comment_reply_auto_dm_enabled &&
-    String(cfg?.comment_reply_auto_dm_text || "").trim() &&
-    isCommentReplyTrigger(messaging)
-  );
 }
 
 function getCommentAutoDmText(cfg) {
@@ -568,72 +504,8 @@ function isCleanExamplePair(userText, assistantText) {
   return true;
 }
 
-// Phrases that are unambiguously someone pitching TO the coach, never a lead buying from them.
-// Kept strict to avoid false positives — a lead saying "can we hop on a call?" must not trigger this.
-// Returns true when a message is clearly unrelated to coaching or the coach's niche.
-// Used to trigger confidence_pause immediately rather than letting the AI guess.
-// ── Casual greeting detector ─────────────────────────────────────────────────
-// Returns true when the lead's first message is a social opener with no intent
-// signal — bot should warm up before qualifying rather than jumping to questions.
-function isCasualGreeting(text) {
-  if (!text) return false;
-  const t = text.toLowerCase().trim();
-  // Match short greetings only (≤ 6 words) — longer messages likely have content
-  if (t.split(/\s+/).length > 6) return false;
-  return /^(hey|hi|hello|hiya|heya|yo|sup|wassup|what'?s up|hows it going|how are you|good morning|good afternoon|good evening|morning|afternoon|evening|alright|alright\?|you good|hope you'?re? well)[\s!?.]*$/.test(t);
-}
-
-// ── Direct product / link request detector ───────────────────────────────────
-// Returns true when the lead is explicitly asking to receive a product link or
-// programme link right now — bot should send immediately rather than qualifying.
-function detectDirectProductRequest(text, products) {
-  if (!text) return false;
-  const t = text.toLowerCase();
-  // Generic link/programme requests
-  const genericLinkRequest = /\b(send me|can i (get|have|see)|give me|share|drop|dm me|what'?s the link|get (the|your) link|link (please|pls|me)?|your (programme|program|product|plan|course|guide|pdf|freebie|resource))\b/.test(t);
-  if (genericLinkRequest) return true;
-  // Named product requests — check against saved products
-  if (Array.isArray(products) && products.length > 0) {
-    return products.some((p) => {
-      const name = String(p.name || "").toLowerCase();
-      return name.length > 2 && t.includes(name);
-    });
-  }
-  return false;
-}
-
-// ── Personal question detector ───────────────────────────────────────────────
-// Returns true when the lead asks about personal details of the coach (location,
-// appearance, lifestyle) that cannot be answered from the saved config.
-// The bot must not guess — flag for coach input instead.
-function detectPersonalQuestion(text) {
-  if (!text) return false;
-  const t = text.toLowerCase();
-  return /\b(where (are|do) you (live|based|from|stay)|where('?s| is) your (house|home|flat|apartment|gym|studio|office)|what (city|town|country|area) (are you|do you live)|your hair|your makeup|your nails|your skin|your routine|your diet outside|your personal|do you have (kids|children|a partner|a boyfriend|a girlfriend|a husband|a wife)|are you (married|single|in a relationship)|how old are you|your age|your height|your weight outside coaching|your personal life|where do you get|where did you get|who does your|who cut your|your tattoo|your piercing)\b/.test(t);
-}
-
-// ── Unknown product mention detector ────────────────────────────────────────
-// Returns the mentioned product name if the lead references a specific product
-// by name that is NOT in the saved products list.
-function detectUnknownProductMention(text, products) {
-  if (!text) return null;
-  const t = text.toLowerCase();
-  // Look for "your [product]" or "the [product]" patterns with product-like nouns
-  const productLikeNouns = ["programme", "program", "plan", "course", "guide", "pdf", "ebook", "product", "supplement", "kit", "pack", "bundle", "membership", "subscription", "challenge", "bootcamp", "workshop", "masterclass", "coaching", "service"];
-  for (const noun of productLikeNouns) {
-    if (t.includes(noun)) {
-      // Check if any saved product name matches this context
-      const savedNames = (products || []).map((p) => String(p.name || "").toLowerCase()).filter(Boolean);
-      const matchesSaved = savedNames.some((name) => t.includes(name));
-      if (!matchesSaved) {
-        // Extract approximate mention for logging
-        const match = new RegExp(`(?:your|the|a|that)\\s+(?:\\w+\\s+)?${noun}`).exec(t);
-        return match ? match[0] : noun;
-      }
-    }
-  }
-  return null;
-}
+// isCasualGreeting, detectDirectProductRequest, detectPersonalQuestion,
+// detectUnknownProductMention — imported from ./lib/conversationLogic.js
 
 function detectOffTopicMessage(text, niche) {
   const t = String(text || "").toLowerCase().trim();
@@ -685,102 +557,7 @@ function detectOffTopicMessage(text, niche) {
   return false;
 }
 
-function detectSalesPitch(text) {
-  const t = String(text || "").toLowerCase();
-
-  // Explicit first-person pitch openers: "I help coaches like you", "we offer X", etc.
-  const pitchPhrases = [
-    "i can help you get more clients",
-    "i can help you grow your business",
-    "i can help grow your",
-    "i help coaches like you",
-    "i help businesses like yours",
-    "i help people like you",
-    "we help coaches like you",
-    "we help businesses like yours",
-    "i'm reaching out because i",
-    "i wanted to reach out to you",
-    "i noticed your profile and",
-    "i came across your profile and",
-    "i've been following your content and",
-    "i saw your profile and",
-    "we specialize in helping coaches",
-    "we specialise in helping coaches",
-    "we specialize in helping businesses",
-    "we specialise in helping businesses",
-    "lead generation for coaches",
-    "leads for coaches",
-    "i can run your ads",
-    "run ads for your business",
-    "manage your social media",
-    "social media management for",
-    "seo for your business",
-    "seo for coaches",
-    "website for your business",
-    "build your website",
-    "i have a proposal for you",
-    "i have an offer for you",
-    "partnership opportunity for you",
-    "collab opportunity for you",
-    "collaboration opportunity for you",
-    "book a call with me",
-    "schedule a call with me",
-    "dm me if you're interested",
-    "dm me if interested",
-    "reply if you're interested",
-    "reply if interested",
-    "let me know if you'd like to work together",
-    "interested in working together",
-    "our agency can",
-    "our software can",
-    "our platform can",
-    "our tool can",
-    "our service includes",
-    "our services include",
-    "our solution for",
-  ];
-
-  if (pitchPhrases.some((phrase) => t.includes(phrase))) return true;
-
-  // Pattern: "I [verb] [coaches/businesses/people like you]" — catches variants not in list
-  if (/\bi (help|assist|support|work with|grow|build|scale) (coaches|business owners|entrepreneurs|content creators) (like|such as) you\b/.test(t)) return true;
-
-  // Pattern: "we offer / we provide / we do X for coaches/businesses"
-  if (/\bwe (offer|provide|do|handle|specialise in|specialize in)\b/.test(t) &&
-      /\b(coaches|businesses|clients|leads|social media|ads|seo|content|websites|marketing)\b/.test(t)) return true;
-
-  return false;
-}
-
-// Returns true if the message is a genuine question about the coach's services,
-// or is clearly unrelated to pitching — used to resume bot after pitch deflection.
-function detectGenuineLeadQuestion(text) {
-  const t = String(text || "").toLowerCase().trim();
-
-  // Explicit buying signals and interest in the coach's offering
-  if (/\b(how much|what does it cost|what'?s the price|pricing|your price|price of)\b/.test(t)) return true;
-  if (/\b(how do(es)? it work|what do you (do|offer|help with|include)|tell me more|more info|more details)\b/.test(t)) return true;
-  if (/\bi'?m interested\b/.test(t)) return true;
-  if (/\bim interested\b/.test(t)) return true;
-  if (/\bi want (your|to (know|find out|learn|join|sign up|get started|book|buy|purchase))\b/.test(t)) return true;
-  if (/\binterested in (your|this|the|what)\b/.test(t)) return true;
-  if (/\b(i'?d (like|love|want) to|i want (in|this|that|it))\b/.test(t)) return true;
-  if (/\b(sounds (good|great|interesting|amazing)|that sounds|this sounds)\b/.test(t)) return true;
-  if (/\b(let'?s do it|count me in|sign me up|i'?m in)\b/.test(t)) return true;
-  if (/\b(what('?s| is) (included|in it|in the (program|coaching|package)))\b/.test(t)) return true;
-  if (/\b(book(ing)?|sign up|get started|start|join|enrol|enroll)\b/.test(t)) return true;
-  if (/\b(can i (ask|know|get|book|join)|do you (offer|have|work with))\b/.test(t)) return true;
-  if (/\b(coaching|program|package|course|service|session|call with you|work with you)\b/.test(t)) return true;
-  if (/\b(results|transformation|testimonials|success stories)\b/.test(t)) return true;
-  if (/\b(what do (i|you)|how does|when (can|do|would)|where (do|can|should))\b/.test(t)) return true;
-  if (/\bsorry\b/.test(t)) return true; // Likely backpedaling after pitch
-
-  // Any message that isn't a pitch and isn't blank is treated as genuine
-  // (after a pitch has been dismissed, benefit of the doubt goes to the lead)
-  if (t.length > 0 && !detectSalesPitch(text)) return true;
-
-  return false;
-}
+// detectSalesPitch, detectGenuineLeadQuestion — imported from ./lib/conversationLogic.js
 
 function sanitizeReply(text) {
   let out = String(text || "").trim();
@@ -3302,10 +3079,9 @@ async function subscribeIgWebhook(accessToken, igUserId) {
   // some Instagram API versions don't resolve `me` for this endpoint.
   const url = `https://graph.instagram.com/v21.0/${encodeURIComponent(igUserId)}/subscribed_apps`;
 
-  // Only subscribe to `messages` — the one field Instagram Business Login
-  // actually supports for DMs. `messaging_postbacks` is Messenger-only and
-  // causes the request to be rejected.
-  const body = new URLSearchParams({ subscribed_fields: "messages" }).toString();
+  // Subscribe to `messages` (DMs) and `comments` (post comment events).
+  // `messaging_postbacks` is Messenger-only and causes the request to be rejected.
+  const body = new URLSearchParams({ subscribed_fields: "messages,comments" }).toString();
 
   console.log("subscribeIgWebhook: calling", { url, body });
 
@@ -7476,12 +7252,12 @@ log("ig_event_debug", {
             if (validRows.length === 1) {
               fallback = validRows[0];
             } else if (validRows.length > 1) {
-              // For each candidate, call /me to get its ASID and cross-check via subscribed_apps
-              // which confirms the token belongs to the account that received this webhook.
+              // For each candidate, call /me?fields=id to get the account's own IGBID
+              // and compare it with the webhook recipientId.
               for (const row of validRows) {
                 try {
                   const checkResp = await fetch(
-                    `https://graph.instagram.com/v21.0/${encodeURIComponent(recipientId)}/subscribed_apps?access_token=${encodeURIComponent(row.page_access_token)}`
+                    `https://graph.instagram.com/v21.0/me?fields=id&access_token=${encodeURIComponent(row.page_access_token)}`
                   );
                   const checkData = await checkResp.json().catch(() => ({}));
                   console.log("ig_accounts_auto_heal_api_check", {
@@ -7489,11 +7265,10 @@ log("ig_event_debug", {
                     candidateIgUserId: row.ig_user_id,
                     recipientId,
                     httpStatus: checkResp.status,
-                    responseOk: checkResp.ok,
-                    data: checkData,
+                    meId: checkData?.id || null,
                   });
-                  // A 200 response means this token has access to the recipientId account
-                  if (checkResp.ok) {
+                  // Match: this token's account ID equals the incoming webhook recipient
+                  if (checkResp.ok && String(checkData?.id) === String(recipientId)) {
                     fallback = row;
                     break;
                   }
@@ -7767,13 +7542,7 @@ async function processDmEvent(messaging, igAccount, overrideText) {
           } catch {}
 
           // Gap since previous inbound — drives the re-opener in the AI reply
-          const _gapMs = prevLastInboundAt && historyMessages.length > 0
-            ? Date.now() - new Date(prevLastInboundAt).getTime()
-            : null;
-          const conversationGap = _gapMs === null ? "first_message"
-            : _gapMs >= 86400000 ? "long_gap"
-            : _gapMs >= 21600000 ? "medium_gap"
-            : "same_session";
+          const conversationGap = computeConversationGap(prevLastInboundAt, historyMessages.length);
 
           if (!isEcho && cfg?.bot_paused) return;
 
@@ -7875,7 +7644,7 @@ async function processDmEvent(messaging, igAccount, overrideText) {
               await sendInstagramTextMessage({
                 accessToken: pitchAcc.page_access_token,
                 recipientId: senderId,
-                text: "Thanks for reaching out - we're not looking for that right now.",
+                text: PITCH_DISMISSAL_MESSAGE,
                 useInstagramApi: !pitchAcc.page_id,
               });
             }
