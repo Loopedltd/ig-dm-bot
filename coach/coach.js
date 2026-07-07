@@ -103,7 +103,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const password = document.getElementById("newPassword")?.value || "";
     const confirm = document.getElementById("confirmPassword")?.value || "";
 
-    if (!token) { showErr("Invalid or missing setup token. Please use the link from your payment confirmation."); return; }
+    if (!token) { showErr("Invalid or missing setup token. Please use the link sent to you by your account manager."); return; }
     if (password.length < 8) { showErr("Password must be at least 8 characters."); return; }
     if (password !== confirm) { showErr("Passwords do not match."); return; }
 
@@ -116,7 +116,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { showErr(j?.error || "Failed to set password. Please try again."); return; }
-      window.location.href = "/coach/login.html?password_set=1";
+      window.location.href = "/login?password_set=1";
     } catch {
       showErr("Network error. Please check your connection and try again.");
     } finally {

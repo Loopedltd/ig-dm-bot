@@ -155,9 +155,6 @@ app.get("/leads-page", (req, res) => {
 });
 
 app.get("/set-password", (req, res) => {
-  if (!isAppHost(req) && process.env.NODE_ENV === "production") {
-    return res.status(404).send("Not Found");
-  }
   return res.sendFile(path.join(__dirname, "public", "set-password.html"));
 });
 
@@ -4065,34 +4062,64 @@ app.get("/admin/api/leads", requireAdmin, async (req, res) => {
 
 app.post("/admin/api/create-payment-link/:clientId", requireAdmin, async (req, res) => {
   try {
+    assertStripeConfigured();
     const clientId = req.params.clientId;
-    const { email } = req.body || {};
+    if (!clientId) return safeJson(res, 400, { error: "clientId required" });
 
-    if (!clientId) {
-      return safeJson(res, 400, { error: "clientId required" });
-    }
+    // Look up client pricing and coach email
+    const { data: client } = await supabase.from("clients").select("setup_fee,monthly_retainer").eq("id", clientId).single();
+    const { data: coachUser } = await supabase.from("coach_users").select("email").eq("client_id", clientId).maybeSingle();
+    const coachEmail = coachUser?.email || null;
 
-    const token = crypto.randomBytes(24).toString("hex");
-
-    const { error } = await supabase
-      .from("payment_links")
-      .insert({
-        token,
-        client_id: clientId,
-        email: email || null,
-      });
-
-    if (error) {
-      return safeJson(res, 500, error);
-    }
-
-const url = `${PAY_PUBLIC_URL}/checkout?token=${token}`;
-
-    return safeJson(res, 200, {
-      ok: true,
-      url,
-      token,
+    // Create setup token BEFORE Stripe so it can go in the success URL
+    const setupToken = crypto.randomBytes(24).toString("hex");
+    const { error: tokenErr } = await supabase.from("payment_links").insert({
+      token: setupToken,
+      client_id: clientId,
+      email: coachEmail,
     });
+    if (tokenErr) return safeJson(res, 500, { error: String(tokenErr.message || tokenErr) });
+
+    // Build line items — use client-specific pricing if set, else default prices
+    const setupFeePence = Number(client?.setup_fee) || 0;
+    const monthlyPence = Number(client?.monthly_retainer) || 0;
+
+    let lineItems;
+    if (monthlyPence > 0) {
+      // Create dynamic Stripe prices for this client's custom pricing
+      const monthlyPrice = await stripe.prices.create({
+        currency: "gbp",
+        unit_amount: monthlyPence,
+        recurring: { interval: "month" },
+        product_data: { name: "Monthly retainer" },
+      });
+      lineItems = [{ price: monthlyPrice.id, quantity: 1 }];
+      if (setupFeePence > 0) {
+        const setupPrice = await stripe.prices.create({
+          currency: "gbp",
+          unit_amount: setupFeePence,
+          product_data: { name: "Setup fee" },
+        });
+        lineItems.push({ price: setupPrice.id, quantity: 1 });
+      }
+    } else {
+      // Fall back to default plan prices
+      lineItems = [{ price: STRIPE_PRICE_MONTHLY, quantity: 1 }];
+      if (setupFeePence > 0) lineItems.push({ price: STRIPE_PRICE_SETUP, quantity: 1 });
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      line_items: lineItems,
+      customer_email: coachEmail || undefined,
+      automatic_tax: { enabled: true },
+      billing_address_collection: "required",
+      metadata: { client_id: String(clientId), payment_token: setupToken },
+      success_url: `${APP_PUBLIC_URL}/set-password?token=${setupToken}`,
+      cancel_url: `${PAY_PUBLIC_URL}/cancel?cancelled=1`,
+    });
+
+    return safeJson(res, 200, { ok: true, url: session.url, token: setupToken });
   } catch (e) {
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
@@ -4536,12 +4563,12 @@ app.post("/coach/api/set-password", async (req, res) => {
       .single();
 
     if (linkErr || !link) {
-      return safeJson(res, 400, { error: "invalid setup token" });
+      return safeJson(res, 400, { error: "This setup link is invalid or has already been used." });
     }
 
     if (!link.email || !link.client_id) {
       return safeJson(res, 400, {
-        error: "payment link is missing email or client_id",
+        error: "Setup link is missing required information. Please contact support.",
       });
     }
 
@@ -4584,6 +4611,9 @@ app.post("/coach/api/set-password", async (req, res) => {
         return safeJson(res, 500, { error: String(insertErr.message || insertErr) });
       }
     }
+
+    // Mark token as used by deleting it so the link cannot be replayed
+    await supabase.from("payment_links").delete().eq("token", token);
 
     return safeJson(res, 200, { ok: true });
   } catch (e) {
@@ -4633,7 +4663,8 @@ app.post("/coach/api/login", async (req, res) => {
     }
 
     const token = signCoachToken(user.client_id);
-    return safeJson(res, 200, { ok: true, token });
+    const setupComplete = !!(cfg?.instagram_handle && String(cfg.instagram_handle).trim());
+    return safeJson(res, 200, { ok: true, token, setup_complete: setupComplete });
   } catch (e) {
     return safeJson(res, 500, { error: String(e?.message || e) });
   }

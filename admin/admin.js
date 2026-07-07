@@ -129,8 +129,12 @@ const AdminDashboard = {
     qs("offboardCancelBtn")?.addEventListener("click", () => this.closeModal("offboardModal"));
     qs("offboardConfirmBtn")?.addEventListener("click", () => this.offboardClient());
 
+    // Payment link modal
+    qs("paymentLinkCancelBtn")?.addEventListener("click", () => this.closeModal("paymentLinkModal"));
+    qs("paymentLinkGenerateBtn")?.addEventListener("click", () => this.generatePaymentLink());
+
     // Close modals on backdrop click
-    ["configModal", "credsModal", "resetPwModal", "offboardModal"].forEach((id) => {
+    ["configModal", "credsModal", "resetPwModal", "offboardModal", "paymentLinkModal"].forEach((id) => {
       const el = qs(id);
       if (el) {
         el.addEventListener("click", (e) => {
@@ -208,6 +212,7 @@ const AdminDashboard = {
             <button class="btn sm primary" onclick="AdminDashboard.reactivateClient('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Reactivate</button>
             ` : `
             <button class="btn sm" onclick="AdminDashboard.openConfigModal('${escHtml(c.id)}')">Edit config</button>
+            <button class="btn sm primary" onclick="AdminDashboard.openPaymentLinkModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Payment link</button>
             <button class="btn sm primary" onclick="AdminDashboard.loginAsCoach('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Access dashboard</button>
             <button class="btn sm" onclick="AdminDashboard.openCredsModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Show credentials</button>
             <button class="btn sm danger" onclick="AdminDashboard.openResetPwModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Reset password</button>
@@ -289,6 +294,50 @@ const AdminDashboard = {
       }
     } catch (e) {
       alert("Reactivate failed: " + (e.message || e));
+    }
+  },
+
+  // ── Payment link ───────────────────────────────────────────────────────────
+
+  openPaymentLinkModal(clientId, clientName) {
+    this._activeClientId = clientId;
+    const qs = (id) => document.getElementById(id);
+    if (qs("paymentLinkModalSub")) qs("paymentLinkModalSub").textContent = `Creates a Stripe checkout link for ${clientName || clientId}. After payment they will be redirected to set their password.`;
+    if (qs("paymentLinkErr")) { qs("paymentLinkErr").textContent = ""; qs("paymentLinkErr").style.display = "none"; }
+    if (qs("paymentLinkReveal")) qs("paymentLinkReveal").style.display = "none";
+    if (qs("paymentLinkGenerateBtn")) { qs("paymentLinkGenerateBtn").disabled = false; qs("paymentLinkGenerateBtn").textContent = "Generate link"; }
+    this.openModal("paymentLinkModal");
+  },
+
+  async generatePaymentLink() {
+    const clientId = this._activeClientId;
+    const qs = (id) => document.getElementById(id);
+    const errEl = qs("paymentLinkErr");
+    const reveal = qs("paymentLinkReveal");
+    const urlEl = qs("paymentLinkUrl");
+    const copyBtn = qs("copyPaymentLinkBtn");
+    const generateBtn = qs("paymentLinkGenerateBtn");
+
+    if (errEl) { errEl.textContent = ""; errEl.style.display = "none"; }
+    if (reveal) reveal.style.display = "none";
+    if (generateBtn) { generateBtn.disabled = true; generateBtn.textContent = "Generating…"; }
+
+    try {
+      const data = await apiFetch(`/admin/api/create-payment-link/${clientId}`, { method: "POST" });
+      if (urlEl) urlEl.textContent = data.url;
+      if (reveal) reveal.style.display = "block";
+      if (copyBtn) {
+        copyBtn.onclick = () => {
+          navigator.clipboard.writeText(data.url).then(() => {
+            copyBtn.textContent = "Copied!";
+            setTimeout(() => { copyBtn.textContent = "Copy link"; }, 2000);
+          });
+        };
+      }
+    } catch (e) {
+      if (errEl) { errEl.textContent = e.message || "Failed to generate payment link."; errEl.style.display = "block"; }
+    } finally {
+      if (generateBtn) { generateBtn.disabled = false; generateBtn.textContent = "Generate link"; }
     }
   },
 

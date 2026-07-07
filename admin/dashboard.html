@@ -318,6 +318,27 @@
     </div>
   </div>
 
+  <!-- Payment link modal -->
+  <div class="modal" id="paymentLinkModal">
+    <div class="modalBox" style="max-width:480px;">
+      <h2>Generate payment link</h2>
+      <div class="sub" id="paymentLinkModalSub">Creates a Stripe checkout link for this client. After payment they will be redirected to set their password.</div>
+
+      <div class="errMsg" id="paymentLinkErr"></div>
+
+      <div class="credReveal" id="paymentLinkReveal" style="word-break:break-all;">
+        <div style="margin-bottom:8px;font-weight:700;color:var(--ok);">Payment link ready. Send this to the client:</div>
+        <div id="paymentLinkUrl" style="font-size:12px;margin-bottom:10px;"></div>
+        <button class="btn sm" id="copyPaymentLinkBtn">Copy link</button>
+      </div>
+
+      <div class="modalFooter">
+        <button class="btn" id="paymentLinkCancelBtn">Close</button>
+        <button class="btn primary" id="paymentLinkGenerateBtn">Generate link</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Credentials modal -->
   <div class="modal" id="credsModal">
     <div class="modalBox" style="max-width:440px;">

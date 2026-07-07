@@ -293,7 +293,7 @@
             return;
           }
           localStorage.setItem("coach_token", res.j.token);
-          window.location.href = "/dashboard";
+          window.location.href = res.j.setup_complete ? "/dashboard" : "/settings";
         })
         .catch(function () {
           if (err) { err.textContent = "Network error. Please try again."; err.style.display = "block"; }
