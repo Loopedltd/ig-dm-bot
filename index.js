@@ -3154,6 +3154,39 @@ async function subscribeIgWebhook(accessToken, igUserId) {
   return { ok: resp.ok && data?.success === true, httpStatus, data };
 }
 
+// ------------------------------------------------------------------
+// subscribeFbPageWebhook — subscribe a Facebook Page to feed (comment)
+// webhook events via graph.facebook.com/{page_id}/subscribed_apps.
+// Only subscribes `feed` (post comments/replies) — NOT `messages`,
+// which requires pages_messaging (not an approved permission).
+// Requires pages_read_engagement on the page access token.
+// This is the mechanism that actually delivers real comment events;
+// the Instagram per-account subscription (/subscribed_apps on
+// graph.instagram.com) returns success for `comments` but does not
+// deliver real comment events for Instagram Business Login accounts.
+// ------------------------------------------------------------------
+async function subscribeFbPageWebhook(pageToken, pageId) {
+  const url = `https://graph.facebook.com/v23.0/${encodeURIComponent(pageId)}/subscribed_apps`;
+  // `feed` covers post comments and comment replies.
+  // Do NOT include `messages` — requires pages_messaging (not approved).
+  const body = new URLSearchParams({ subscribed_fields: "feed" }).toString();
+
+  console.log("subscribeFbPageWebhook: calling", { url, pageId, fields: "feed" });
+
+  const resp = await fetch(`${url}?access_token=${encodeURIComponent(pageToken)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+
+  const httpStatus = resp.status;
+  const data = await resp.json().catch(() => ({}));
+
+  console.log("subscribeFbPageWebhook: response", { pageId, httpStatus, data });
+
+  return { ok: resp.ok && data?.success === true, httpStatus, data };
+}
+
 
 
 // Re-subscribe webhook for the current Instagram Login account (no OAuth round-trip needed).
@@ -9073,8 +9106,13 @@ app.get("/auth/facebook/callback", async (req, res) => {
       // Subscribe using the IGBID (not the stored ASID). Webhooks route events by IGBID,
       // so a subscription registered against the ASID will never receive comment events.
       const subscribeId = igbid || storedId;
+
+      // ── Subscription 1: Instagram per-account (messages) ──────────────────
+      // Delivers DM events via graph.instagram.com. The Instagram endpoint returns
+      // success for `comments` but does NOT deliver real comment events for
+      // Instagram Business Login accounts — only the FB Page feed does.
       if (igRow?.page_access_token && subscribeId) {
-        // Diagnostic: check what subscriptions are currently registered for both IDs
+        // Diagnostic: log current subscription state for both IDs if they differ
         const checkIds = igbid && storedId && igbid !== storedId
           ? [storedId, igbid]
           : [subscribeId];
@@ -9084,12 +9122,12 @@ app.get("/auth/facebook/callback", async (req, res) => {
             `?access_token=${encodeURIComponent(igRow.page_access_token)}`
           )
             .then(r => r.json().catch(() => ({})))
-            .then(d => console.log(`fb_callback: GET subscribed_apps for ${checkId}:`, JSON.stringify(d)))
-            .catch(e => console.warn(`fb_callback: GET subscribed_apps for ${checkId} failed:`, e?.message));
+            .then(d => console.log(`fb_callback: GET ig subscribed_apps for ${checkId}:`, JSON.stringify(d)))
+            .catch(e => console.warn(`fb_callback: GET ig subscribed_apps for ${checkId} failed:`, e?.message));
         }
 
         void subscribeIgWebhook(igRow.page_access_token, subscribeId).then(result => {
-          console.log("fb_callback: subscribeIgWebhook (messages+comments) result", {
+          console.log("fb_callback: subscribeIgWebhook (messages) result", {
             subscribeId,
             ok: result.ok,
             status: result.httpStatus,
@@ -9099,6 +9137,23 @@ app.get("/auth/facebook/callback", async (req, res) => {
           console.error("fb_callback: subscribeIgWebhook threw", e?.message || e)
         );
       }
+
+      // ── Subscription 2: Facebook Page feed (comments) ──────────────────────
+      // This is the mechanism that actually delivers real Instagram post comment
+      // events. The IG per-account subscription returns success for `comments`
+      // but silently drops real events. The FB Page `feed` subscription delivers
+      // them as field==="feed" with item==="comment" and verb==="add".
+      // Requires pages_read_engagement (approved). Does NOT require pages_messaging.
+      void subscribeFbPageWebhook(page.access_token, page.id).then(result => {
+        console.log("fb_callback: subscribeFbPageWebhook (feed) result", {
+          pageId: page.id,
+          ok: result.ok,
+          status: result.httpStatus,
+          data: result.data,
+        });
+      }).catch((e) =>
+        console.error("fb_callback: subscribeFbPageWebhook threw", e?.message || e)
+      );
     } else {
       console.warn("fb_callback: skipping fb_page_id store — missing igRow.id, page.access_token, or page.id", {
         igRowId: igRow?.id,
