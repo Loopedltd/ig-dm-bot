@@ -3085,9 +3085,15 @@ async function subscribeIgWebhook(accessToken, igUserId) {
   // some Instagram API versions don't resolve `me` for this endpoint.
   const url = `https://graph.instagram.com/v21.0/${encodeURIComponent(igUserId)}/subscribed_apps`;
 
-  // Subscribe to `messages` (DMs) and `comments` (post comment events).
+  // Only `messages` is supported for Instagram Business Login accounts via this endpoint.
+  // Post comment/feed events are NOT deliverable through per-account subscribed_apps for
+  // Instagram-only accounts (no Facebook Page). They require:
+  //   1. A Facebook Page connected to the Instagram account
+  //   2. App-level webhook subscription in Meta Developer Dashboard
+  //      (App → Webhooks → instagram object → comments/feed field)
+  // Adding `comments` here is silently ignored — do not add it.
   // `messaging_postbacks` is Messenger-only and causes the request to be rejected.
-  const body = new URLSearchParams({ subscribed_fields: "messages,comments" }).toString();
+  const body = new URLSearchParams({ subscribed_fields: "messages" }).toString();
 
   console.log("subscribeIgWebhook: calling", { url, body });
 
@@ -7263,23 +7269,30 @@ log("ig_event_debug", {
             if (validRows.length === 1) {
               fallback = validRows[0];
             } else if (validRows.length > 1) {
-              // For each candidate, call /me?fields=id to get the account's own IGBID
-              // and compare it with the webhook recipientId.
+              // For each candidate, try to POST-subscribe to /{recipientId}/subscribed_apps.
+              // A 200 + success:true means this token IS the owner of recipientId.
+              // GET /me?fields=id is NOT used here because it returns the ASID (App-Scoped User ID),
+              // which is a different namespace from the IGBID (Instagram Business Account ID)
+              // that webhooks deliver as recipient.id — they do not match for many accounts.
               for (const row of validRows) {
                 try {
-                  const checkResp = await fetch(
-                    `https://graph.instagram.com/v21.0/me?fields=id&access_token=${encodeURIComponent(row.page_access_token)}`
-                  );
+                  const checkUrl = `https://graph.instagram.com/v21.0/${encodeURIComponent(recipientId)}/subscribed_apps?access_token=${encodeURIComponent(row.page_access_token)}`;
+                  const checkResp = await fetch(checkUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: new URLSearchParams({ subscribed_fields: "messages" }).toString(),
+                  });
                   const checkData = await checkResp.json().catch(() => ({}));
                   console.log("ig_accounts_auto_heal_api_check", {
                     candidateId: row.id,
                     candidateIgUserId: row.ig_user_id,
                     recipientId,
                     httpStatus: checkResp.status,
-                    meId: checkData?.id || null,
+                    success: checkData?.success ?? null,
+                    error: checkData?.error?.message || null,
                   });
-                  // Match: this token's account ID equals the incoming webhook recipient
-                  if (checkResp.ok && String(checkData?.id) === String(recipientId)) {
+                  // Success means this token can subscribe to recipientId — it owns that account
+                  if (checkResp.ok && checkData?.success === true) {
                     fallback = row;
                     break;
                   }
@@ -8591,6 +8604,33 @@ app.get("/auth/instagram/callback", async (req, res) => {
       const igUserId = igbidFromToken || igAsid;
       console.log("ig_signup: user IDs resolved", { igAsid, igbidFromToken, storingAs: igUserId });
 
+      // Verify which ID the token actually resolves to for webhook routing by attempting
+      // a POST subscription. If it succeeds, igUserId is correct. If it fails, it means
+      // the stored ID is the ASID (not IGBID) — auto-heal will fix on the first real webhook.
+      // This is diagnostic only — we do not block signup on failure.
+      try {
+        const verifyResp = await fetch(
+          `https://graph.instagram.com/v21.0/${encodeURIComponent(igUserId)}/subscribed_apps?access_token=${encodeURIComponent(longToken)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ subscribed_fields: "messages" }).toString(),
+          }
+        );
+        const verifyData = await verifyResp.json().catch(() => ({}));
+        console.log("ig_signup: webhook subscription verify", {
+          igUserId,
+          httpStatus: verifyResp.status,
+          success: verifyData?.success ?? null,
+          error: verifyData?.error?.message || null,
+          warning: !verifyResp.ok
+            ? "Subscription failed — stored ID may be ASID not IGBID. Auto-heal will correct on first webhook delivery."
+            : null,
+        });
+      } catch (verifyErr) {
+        console.warn("ig_signup: webhook subscription verify threw", verifyErr?.message);
+      }
+
       // Check if this IG account is already linked to a coach
       const { data: existingIgRow } = await supabase
         .from("ig_accounts")
@@ -8738,6 +8778,32 @@ app.get("/auth/instagram/callback", async (req, res) => {
     // Store IGBID (webhook recipient.id) — fall back to ASID if not available
     const igUserId = igbidFromToken || igAsid;
     console.log("ig_connect: user IDs resolved", { igAsid, igbidFromToken, storingAs: igUserId, clientId });
+
+    // Verify the stored ID resolves correctly for webhooks by attempting a POST subscription.
+    // If this fails, the ID is likely an ASID — auto-heal will correct on first webhook delivery.
+    try {
+      const verifyResp = await fetch(
+        `https://graph.instagram.com/v21.0/${encodeURIComponent(igUserId)}/subscribed_apps?access_token=${encodeURIComponent(longToken)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ subscribed_fields: "messages" }).toString(),
+        }
+      );
+      const verifyData = await verifyResp.json().catch(() => ({}));
+      console.log("ig_connect: webhook subscription verify", {
+        igUserId,
+        clientId,
+        httpStatus: verifyResp.status,
+        success: verifyData?.success ?? null,
+        error: verifyData?.error?.message || null,
+        warning: !verifyResp.ok
+          ? "Subscription failed — stored ID may be ASID not IGBID. Auto-heal will correct on first webhook delivery."
+          : null,
+      });
+    } catch (verifyErr) {
+      console.warn("ig_connect: webhook subscription verify threw", verifyErr?.message);
+    }
 
     const igAccountPayload = {
       ig_user_id: igUserId,
