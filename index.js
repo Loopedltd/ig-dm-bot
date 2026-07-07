@@ -7151,6 +7151,17 @@ function flushDmBuffer(bufferKey) {
 
 app.post("/webhook", async (req, res) => {
   try {
+    // ── RAW WEBHOOK LOGGER ────────────────────────────────────────────────────
+    // Logs the complete raw payload BEFORE any processing so we can see exactly
+    // what Meta sends for real comment events vs the test event simulator.
+    console.log("[webhook:raw] headers:", JSON.stringify({
+      "x-hub-signature-256": req.headers["x-hub-signature-256"] || null,
+      "content-type": req.headers["content-type"] || null,
+      "user-agent": req.headers["user-agent"] || null,
+    }));
+    console.log("[webhook:raw] body:", req.rawBody || "(rawBody not set — check bodyParser middleware)");
+    // ─────────────────────────────────────────────────────────────────────────
+
     // X-Hub-Signature-256 verification
     // Try INSTAGRAM_APP_SECRET first, then META_APP_SECRET as fallback — both are
     // valid depending on which app the webhook is registered under in Meta App Dashboard.
@@ -10122,6 +10133,38 @@ async function runClientDeletionJob() {
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+
+  // Diagnostic: log subscribed_apps for every active IG account so we can confirm
+  // which fields (messages, comments) are registered and against which ID (IGBID vs ASID).
+  setTimeout(async () => {
+    try {
+      const { data: accounts } = await supabase
+        .from("ig_accounts")
+        .select("id, ig_user_id, ig_username, page_access_token")
+        .eq("is_active", true);
+
+      if (!Array.isArray(accounts) || !accounts.length) {
+        console.log("[startup:subscribed_apps] no active ig_accounts found");
+        return;
+      }
+
+      for (const acc of accounts) {
+        if (!acc.page_access_token || !acc.ig_user_id) continue;
+        try {
+          const r = await fetch(
+            `https://graph.instagram.com/v21.0/${encodeURIComponent(acc.ig_user_id)}/subscribed_apps` +
+            `?access_token=${encodeURIComponent(acc.page_access_token)}`
+          );
+          const d = await r.json().catch(() => ({}));
+          console.log(`[startup:subscribed_apps] ig_user_id=${acc.ig_user_id} username=${acc.ig_username || "?"}:`, JSON.stringify(d));
+        } catch (e) {
+          console.warn(`[startup:subscribed_apps] fetch failed for ${acc.ig_user_id}:`, e?.message);
+        }
+      }
+    } catch (e) {
+      console.error("[startup:subscribed_apps] query failed:", e?.message);
+    }
+  }, 10 * 1000);
 
   // Feature 3: Missed conversation recovery — runs once 30s after startup
   setTimeout(() => {
