@@ -4546,19 +4546,41 @@ app.post("/coach/api/set-password", async (req, res) => {
       });
     }
 
+    console.log("[set-password] token received:", token);
+
     const { data: link, error: linkErr } = await supabase
       .from("payment_links")
       .select("*")
       .eq("token", token)
       .single();
 
+    console.log("[set-password] link found:", link ? { client_id: link.client_id, email: link.email } : null, "err:", linkErr?.message || null);
+
     if (linkErr || !link) {
       return safeJson(res, 400, { error: "This setup link is invalid or has already been used." });
     }
 
-    if (!link.email || !link.client_id) {
+    if (!link.client_id) {
       return safeJson(res, 400, {
         error: "Setup link is missing required information. Please contact support.",
+      });
+    }
+
+    // If email is null (new client — Stripe webhook populates coach_users after payment), look it up now
+    let coachEmail = link.email;
+    if (!coachEmail) {
+      const { data: webhookUser } = await supabase
+        .from("coach_users")
+        .select("email")
+        .eq("client_id", link.client_id)
+        .maybeSingle();
+      coachEmail = webhookUser?.email || null;
+      console.log("[set-password] email from coach_users lookup:", coachEmail);
+    }
+
+    if (!coachEmail) {
+      return safeJson(res, 400, {
+        error: "Could not find account email. Please contact support.",
       });
     }
 
@@ -4567,7 +4589,7 @@ app.post("/coach/api/set-password", async (req, res) => {
     const { data: existingUsers, error: existingUsersErr } = await supabase
       .from("coach_users")
       .select("*")
-      .eq("email", String(link.email).toLowerCase())
+      .eq("email", String(coachEmail).toLowerCase())
       .limit(1);
 
     if (existingUsersErr) {
@@ -4592,7 +4614,7 @@ app.post("/coach/api/set-password", async (req, res) => {
       const { error: insertErr } = await supabase
         .from("coach_users")
         .insert({
-          email: String(link.email).toLowerCase(),
+          email: String(coachEmail).toLowerCase(),
           password_hash,
           client_id: link.client_id,
         });
