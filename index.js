@@ -7299,8 +7299,41 @@ log("ig_event_debug", {
               validCount: validRows.length,
             });
 
+            // Determine which row to heal:
+            // - 1 candidate: heal it directly
+            // - 2+ candidates: validate each token against Instagram API to find the owner
+            let fallback = null;
             if (validRows.length === 1) {
-              const fallback = validRows[0];
+              fallback = validRows[0];
+            } else if (validRows.length > 1) {
+              // For each candidate, call /me to get its ASID and cross-check via subscribed_apps
+              // which confirms the token belongs to the account that received this webhook.
+              for (const row of validRows) {
+                try {
+                  const checkResp = await fetch(
+                    `https://graph.instagram.com/v21.0/${encodeURIComponent(recipientId)}/subscribed_apps?access_token=${encodeURIComponent(row.page_access_token)}`
+                  );
+                  const checkData = await checkResp.json().catch(() => ({}));
+                  console.log("ig_accounts_auto_heal_api_check", {
+                    candidateId: row.id,
+                    candidateIgUserId: row.ig_user_id,
+                    recipientId,
+                    httpStatus: checkResp.status,
+                    responseOk: checkResp.ok,
+                    data: checkData,
+                  });
+                  // A 200 response means this token has access to the recipientId account
+                  if (checkResp.ok) {
+                    fallback = row;
+                    break;
+                  }
+                } catch (apiErr) {
+                  console.warn("ig_accounts_auto_heal_api_check_err", { candidateId: row.id, error: apiErr?.message });
+                }
+              }
+            }
+
+            if (fallback) {
               const { error: healErr } = await supabase
                 .from("ig_accounts")
                 .update({ ig_user_id: recipientId })
@@ -7314,6 +7347,10 @@ log("ig_event_debug", {
                   newIgUserId: recipientId,
                   pageId: fallback.page_id,
                 });
+                // Re-subscribe with the correct IGBID so future webhooks match directly
+                void subscribeIgWebhook(fallback.page_access_token, recipientId).catch((e) =>
+                  console.error("ig_accounts_auto_heal_resubscribe_err", e?.message || e)
+                );
               } else {
                 console.error("ig_accounts_auto_heal_failed", {
                   accountId: fallback.id,
@@ -7323,7 +7360,7 @@ log("ig_event_debug", {
             } else {
               console.warn("ig_accounts_auto_heal_skipped", {
                 recipientId,
-                reason: validRows.length === 0 ? "no_valid_rows" : "multiple_candidates_ambiguous",
+                reason: validRows.length === 0 ? "no_valid_rows" : "api_check_found_no_match",
                 validCount: validRows.length,
               });
             }
@@ -8348,7 +8385,8 @@ app.get("/auth/instagram/callback", async (req, res) => {
 
     // ── SIGNUP FLOW: Instagram Business Login (api.instagram.com) ────────────
     if (isSignupFlow) {
-      // Stage 1: exchange code for short-lived token
+      // Stage 1: exchange code for short-lived token — read raw body first so we can
+      // extract user_id as a string before JSON.parse() corrupts large IDs via float64.
       const shortTokenResp = await fetch("https://api.instagram.com/oauth/access_token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -8360,7 +8398,12 @@ app.get("/auth/instagram/callback", async (req, res) => {
           code,
         }).toString(),
       });
-      const shortTokenData = await shortTokenResp.json().catch(() => ({}));
+      const shortTokenRaw = await shortTokenResp.text();
+      // Extract user_id as a raw string BEFORE JSON.parse() (large IDs > 2^53 lose
+      // precision as float64 — regex preserves all digits)
+      const igbidMatch = /"user_id"\s*:\s*(\d+)/.exec(shortTokenRaw);
+      const igbidFromToken = igbidMatch ? igbidMatch[1] : null;
+      const shortTokenData = JSON.parse(shortTokenRaw);
 
       if (!shortTokenResp.ok || !shortTokenData?.access_token) {
         console.error("ig_signup: short token exchange failed", shortTokenData);
@@ -8370,9 +8413,6 @@ app.get("/auth/instagram/callback", async (req, res) => {
       }
 
       const shortToken = shortTokenData.access_token;
-      // NOTE: do NOT use shortTokenData.user_id directly — Instagram returns it as a JSON
-      // number and large Instagram IDs (> 2^53) lose precision when parsed as float64.
-      // We get the authoritative string ID from the /me call below instead.
 
       // Stage 2: exchange for long-lived token (~60 days)
       const longTokenResp = await fetch(
@@ -8384,21 +8424,27 @@ app.get("/auth/instagram/callback", async (req, res) => {
         console.warn("ig_signup: long-lived token exchange failed, using short-lived", longTokenData);
       }
 
-      // Get IG user info — id is returned as a string (no float64 precision loss)
+      // Get IG user info — /me returns ASID (app-scoped user ID) as a JSON string.
+      // The IGBID (Instagram Business Account ID, what webhooks deliver as recipient.id)
+      // is in user_id from the short token response — extracted above via regex.
       const igInfoResp = await fetch(
         `https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${encodeURIComponent(longToken)}`
       );
       const igInfo = await igInfoResp.json().catch(() => ({}));
       const igUsername = igInfo?.username || null;
+      const igAsid = igInfo?.id ? String(igInfo.id) : null;
 
-      if (!igInfo?.id) {
+      if (!igAsid) {
         console.error("ig_signup: failed to get user id from /me", igInfo);
         return res.redirect(
           `/coach/login.html?instagram_error=${encodeURIComponent("Failed to retrieve Instagram account ID. Please try again.")}`
         );
       }
-      const igUserId = String(igInfo.id);
-      console.log("ig_signup: igUserId from /me", { igUserId, fromToken: String(shortTokenData.user_id) });
+
+      // Prefer the IGBID (webhook recipient.id) over the ASID for storage.
+      // If not available fall back to ASID — auto-heal will correct on first webhook.
+      const igUserId = igbidFromToken || igAsid;
+      console.log("ig_signup: user IDs resolved", { igAsid, igbidFromToken, storingAs: igUserId });
 
       // Check if this IG account is already linked to a coach
       const { data: existingIgRow } = await supabase
@@ -8491,7 +8537,8 @@ app.get("/auth/instagram/callback", async (req, res) => {
     // ── CONNECT FLOW: authenticated coach reconnecting via Instagram Business Login ──
     // Same Instagram OAuth token exchange as signup; just updates existing account.
 
-    // Stage 1: short-lived token
+    // Stage 1: short-lived token — read raw body first to extract user_id as a string
+    // before JSON.parse() corrupts large IDs (> 2^53) via float64.
     const shortTokenResp = await fetch("https://api.instagram.com/oauth/access_token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -8503,7 +8550,10 @@ app.get("/auth/instagram/callback", async (req, res) => {
         code,
       }).toString(),
     });
-    const shortTokenData = await shortTokenResp.json().catch(() => ({}));
+    const shortTokenRaw = await shortTokenResp.text();
+    const igbidMatch = /"user_id"\s*:\s*(\d+)/.exec(shortTokenRaw);
+    const igbidFromToken = igbidMatch ? igbidMatch[1] : null;
+    const shortTokenData = JSON.parse(shortTokenRaw);
 
     if (!shortTokenResp.ok || !shortTokenData?.access_token) {
       console.error("ig_connect: short token exchange failed", shortTokenData);
@@ -8513,7 +8563,6 @@ app.get("/auth/instagram/callback", async (req, res) => {
     }
 
     const shortToken = shortTokenData.access_token;
-    // NOTE: do NOT use shortTokenData.user_id — large Instagram IDs lose precision as float64.
 
     // Stage 2: long-lived token (~60 days)
     const longTokenResp = await fetch(
@@ -8525,21 +8574,25 @@ app.get("/auth/instagram/callback", async (req, res) => {
       console.warn("ig_connect: long-lived token exchange failed, using short-lived", longTokenData);
     }
 
-    // Get IG user info — id is a string here, no float64 precision loss
+    // /me returns the ASID; the IGBID (what webhooks deliver as recipient.id) comes
+    // from user_id in the short token response (extracted above via regex).
     const igInfoResp = await fetch(
       `https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${encodeURIComponent(longToken)}`
     );
     const igInfo = await igInfoResp.json().catch(() => ({}));
     const igUsername = igInfo?.username || null;
+    const igAsid = igInfo?.id ? String(igInfo.id) : null;
 
-    if (!igInfo?.id) {
+    if (!igAsid) {
       console.error("ig_connect: failed to get user id from /me", igInfo);
       return res.redirect(
         `/settings?instagram_error=${encodeURIComponent("Failed to retrieve Instagram account ID. Please try again.")}`
       );
     }
-    const igUserId = String(igInfo.id);
-    console.log("ig_connect: igUserId from /me", { igUserId, fromToken: String(shortTokenData.user_id), clientId });
+
+    // Store IGBID (webhook recipient.id) — fall back to ASID if not available
+    const igUserId = igbidFromToken || igAsid;
+    console.log("ig_connect: user IDs resolved", { igAsid, igbidFromToken, storingAs: igUserId, clientId });
 
     const igAccountPayload = {
       ig_user_id: igUserId,
