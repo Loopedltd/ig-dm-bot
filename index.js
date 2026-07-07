@@ -35,11 +35,17 @@ const leadNameCache = new Map();
 
 function emitActivityEvent(clientId, event) {
   const clients = activityStreamClients.get(clientId);
-  if (!clients || clients.size === 0) return;
+  if (!clients || clients.size === 0) {
+    console.log(`[activity] emit ${event.type} for ${clientId} — no SSE clients connected`);
+    return;
+  }
+  console.log(`[activity] emit ${event.type} for ${clientId} — broadcasting to ${clients.size} client(s)`);
   const payload = JSON.stringify({ ...event, ts: new Date().toISOString() });
   for (const res of clients) {
     try {
       res.write(`data: ${payload}\n\n`);
+      // Flush immediately so Render/nginx doesn't buffer SSE chunks
+      if (typeof res.flush === "function") res.flush();
     } catch {
       clients.delete(res);
     }
@@ -5092,6 +5098,13 @@ if (Array.isArray(patch.booking_items)) {
     allowed.client_id = req.coach.client_id; // required for upsert conflict resolution
 
     console.log("[config save] client_id:", req.coach.client_id, "writing keys:", Object.keys(allowed));
+    console.log("[config save] trigger values —", {
+      story_reply_auto_dm_enabled: allowed.story_reply_auto_dm_enabled,
+      story_reply_auto_dm_text: allowed.story_reply_auto_dm_text ? String(allowed.story_reply_auto_dm_text).slice(0, 80) : null,
+      keyword_auto_dm_enabled: allowed.keyword_auto_dm_enabled,
+      keyword_trigger_text: allowed.keyword_trigger_text,
+      keyword_auto_dm_text: allowed.keyword_auto_dm_text ? String(allowed.keyword_auto_dm_text).slice(0, 80) : null,
+    });
 
     const { data, error } = await supabase
       .from("client_configs")
@@ -7892,6 +7905,9 @@ if (storyAutoDmMatched || commentAutoDmMatched || keywordAutoDmMatched) {
     ? getCommentAutoDmText(cfg)
     : getKeywordAutoDmText(cfg);
 
+  const triggerName = storyAutoDmMatched ? "story_reply" : commentAutoDmMatched ? "comment_reply" : "keyword_dm";
+  console.log(`[trigger:opener] ${triggerName} matched — opener text: ${opener ? JSON.stringify(opener.slice(0, 80)) : "(empty — will fall through to AI)"}`);
+
             if (opener) {
               const activeIgAccount = await getIgAccountByClientId(lead.client_id);
 
@@ -8885,47 +8901,27 @@ app.get("/auth/instagram/callback", async (req, res) => {
       token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
     };
 
-    // Try UPDATE first — returns the updated rows so we can detect 0-row match
-    console.log("ig_connect: attempting update ig_accounts", { clientId, igUserId });
-    const { data: updatedRows, error: updateErr } = await supabase
+    // Upsert on client_id — handles both first-connect (insert) and reconnect (update)
+    // atomically. The previous update-then-insert pattern failed when Supabase RLS
+    // blocked the .select() after update, causing updatedRows to be empty and triggering
+    // a fallback insert that hit the ig_user_id unique constraint.
+    console.log("ig_connect: upserting ig_accounts", { clientId, igUserId });
+    const { error: upsertErr } = await supabase
       .from("ig_accounts")
-      .update(igAccountPayload)
-      .eq("client_id", clientId)
-      .select();
+      .upsert(
+        { client_id: clientId, ...igAccountPayload },
+        { onConflict: "client_id" }
+      );
 
-    console.log("ig_connect: update result", {
+    console.log("ig_connect: upsert result", {
       clientId,
       igUserId,
-      rowsUpdated: Array.isArray(updatedRows) ? updatedRows.length : null,
-      updateErr: updateErr?.message || null,
+      upsertErr: upsertErr?.message || null,
     });
 
-    if (updateErr) {
-      console.error("ig_connect: update failed", { clientId, igUserId, error: updateErr.message });
-      return res.status(500).send(`Failed to save Instagram account: ${updateErr.message}`);
-    }
-
-    // If no row existed for this client_id (admin-created account, first connect),
-    // the update matched 0 rows — fall back to insert.
-    if (!Array.isArray(updatedRows) || updatedRows.length === 0) {
-      console.log("ig_connect: no existing ig_accounts row — inserting new row", { clientId, igUserId });
-      const { data: insertedRow, error: insertErr } = await supabase
-        .from("ig_accounts")
-        .insert({ client_id: clientId, ...igAccountPayload })
-        .select()
-        .single();
-
-      console.log("ig_connect: insert result", {
-        clientId,
-        igUserId,
-        inserted: !!insertedRow,
-        insertErr: insertErr?.message || null,
-      });
-
-      if (insertErr) {
-        console.error("ig_connect: insert failed", { clientId, igUserId, error: insertErr.message });
-        return res.status(500).send(`Failed to create Instagram account: ${insertErr.message}`);
-      }
+    if (upsertErr) {
+      console.error("ig_connect: upsert failed", { clientId, igUserId, error: upsertErr.message });
+      return res.status(500).send(`Failed to save Instagram account: ${upsertErr.message}`);
     }
 
     // Subscribe webhook (non-blocking)
@@ -9031,13 +9027,14 @@ app.get("/auth/facebook/callback", async (req, res) => {
       return finishRedirect("&facebook_error=no_pages");
     }
 
-    // Match the page whose instagram_business_account.id matches the stored ig_user_id
+    // Match the page whose instagram_business_account.id matches the stored ig_user_id.
+    // Do NOT filter by page_id IS NULL — accounts connected via the old API also need
+    // fb_page_id/fb_page_token stored, and they already have a page_id value.
     const { data: igRows } = await supabase
       .from("ig_accounts")
       .select("id, ig_user_id, page_access_token")
       .eq("client_id", clientId)
       .eq("is_active", true)
-      .is("page_id", null)
       .order("created_at", { ascending: false })
       .limit(1);
 
@@ -9053,21 +9050,37 @@ app.get("/auth/facebook/callback", async (req, res) => {
       pageName: page?.name,
       matched: !!matchedPage,
       igUserId: igRow?.ig_user_id,
+      igRowId: igRow?.id,
+      hasPageToken: !!page?.access_token,
     });
 
     // Store fb_page_id and fb_page_token on the Instagram Login row
     if (igRow?.id && page?.access_token && page?.id) {
-      await supabase
+      const { error: updateErr } = await supabase
         .from("ig_accounts")
         .update({ fb_page_id: page.id, fb_page_token: page.access_token })
         .eq("id", igRow.id);
 
+      if (updateErr) {
+        console.error("fb_callback: failed to store fb_page_id/fb_page_token", updateErr?.message);
+      } else {
+        console.log("fb_callback: stored fb_page_id:", page.id, "for ig_account:", igRow.id);
+      }
+
       // Subscribe the Facebook Page to feed/messages webhook events (non-blocking).
       // This is what enables comment events to arrive — distinct from the Instagram
       // per-account subscription (which only delivers DM messages).
-      void subscribeFbPageWebhook(page.access_token, page.id).catch((e) =>
+      void subscribeFbPageWebhook(page.access_token, page.id).then(result => {
+        console.log("fb_callback: subscribeFbPageWebhook result", { pageId: page.id, ok: result.ok, status: result.httpStatus });
+      }).catch((e) =>
         console.error("fb_callback: subscribeFbPageWebhook threw", e?.message || e)
       );
+    } else {
+      console.warn("fb_callback: skipping fb_page_id store — missing igRow.id, page.access_token, or page.id", {
+        igRowId: igRow?.id,
+        hasPageToken: !!page?.access_token,
+        pageId: page?.id,
+      });
     }
 
     // Resubscribe Instagram webhook now that both tokens are stored (non-blocking)
