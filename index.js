@@ -386,10 +386,10 @@ function extractPostCommentEvents(reqBody) {
   for (const entry of entries) {
     const changes = Array.isArray(entry?.changes) ? entry.changes : [];
     for (const change of changes) {
+      // ── Instagram comment events (field === "comments") ──────────────────────
+      // Arrives when subscribed via /{ig-user-id}/subscribed_apps with "comments"
       if (change?.field === "comments" && change?.value) {
         const v = change.value;
-        // Instagram sends comment text in "text" field (feed webhook); some older
-        // integrations used "message". Accept either.
         const commentText = v?.text || v?.message || "";
         if (v?.from?.id && v?.id && commentText) {
           commentEvents.push({
@@ -401,12 +401,45 @@ function extractPostCommentEvents(reqBody) {
           });
         } else {
           console.log("extractPostCommentEvents: comment dropped — missing field(s)", {
+            field: "comments",
             hasFromId: !!v?.from?.id,
             hasId: !!v?.id,
             hasText: !!v?.text,
             hasMessage: !!v?.message,
             raw: JSON.stringify(v).slice(0, 200),
           });
+        }
+      }
+
+      // ── Facebook Page feed events (field === "feed") ──────────────────────────
+      // Arrives when subscribed via /{page-id}/subscribed_apps with "feed".
+      // Contains post comments, comment replies, etc. Filter to new comments only.
+      if (change?.field === "feed" && change?.value) {
+        const v = change.value;
+        const isNewComment = v?.item === "comment" && v?.verb === "add";
+        if (isNewComment) {
+          const commentText = v?.message || v?.text || "";
+          const commentId = v?.comment_id || v?.id || null;
+          const fromId = v?.from?.id || null;
+          if (fromId && commentId && commentText) {
+            commentEvents.push({
+              igAccountId: entry.id,
+              commentId: String(commentId),
+              commenterId: String(fromId),
+              commenterUsername: v?.from?.name ? String(v.from.name) : null,
+              commentText: String(commentText),
+            });
+          } else {
+            console.log("extractPostCommentEvents: feed comment dropped — missing field(s)", {
+              field: "feed",
+              item: v?.item,
+              verb: v?.verb,
+              hasFromId: !!fromId,
+              hasCommentId: !!commentId,
+              hasText: !!commentText,
+              raw: JSON.stringify(v).slice(0, 200),
+            });
+          }
         }
       }
     }
@@ -3046,7 +3079,9 @@ function buildFacebookOAuthUrl(state) {
   url.searchParams.set("client_id", META_APP_ID);
   url.searchParams.set("redirect_uri", META_FB_REDIRECT_URI);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("config_id", META_CONFIG_ID);
+  url.searchParams.set("scope", "instagram_manage_comments,pages_show_list,pages_read_engagement,public_profile");
+  // config_id pre-configures permissions in Meta Developer Dashboard — use if set
+  if (META_CONFIG_ID) url.searchParams.set("config_id", META_CONFIG_ID);
   url.searchParams.set("state", state);
   return url.toString();
 }
@@ -3107,6 +3142,34 @@ async function subscribeIgWebhook(accessToken, igUserId) {
   const data = await resp.json().catch(() => ({}));
 
   console.log("subscribeIgWebhook: response", { igUserId, httpStatus, data });
+
+  return { ok: resp.ok && data?.success === true, httpStatus, data };
+}
+
+// ------------------------------------------------------------------
+// subscribeFbPageWebhook — subscribe a Facebook Page to comment/feed
+// webhook events. Called after Facebook OAuth completes and page_id
+// is stored. Uses graph.facebook.com (not graph.instagram.com).
+// Requires a page access token with pages_read_engagement permission.
+// ------------------------------------------------------------------
+async function subscribeFbPageWebhook(pageToken, pageId) {
+  const url = `https://graph.facebook.com/v23.0/${encodeURIComponent(pageId)}/subscribed_apps`;
+  // `feed` covers post comments, comment replies, and post events.
+  // `messages` covers Messenger DMs to the Page.
+  const body = new URLSearchParams({ subscribed_fields: "feed,messages" }).toString();
+
+  console.log("subscribeFbPageWebhook: calling", { url, pageId });
+
+  const resp = await fetch(`${url}?access_token=${encodeURIComponent(pageToken)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+
+  const httpStatus = resp.status;
+  const data = await resp.json().catch(() => ({}));
+
+  console.log("subscribeFbPageWebhook: response", { pageId, httpStatus, data });
 
   return { ok: resp.ok && data?.success === true, httpStatus, data };
 }
@@ -6729,9 +6792,9 @@ async function handlePostCommentKeyword(igAccountId, commentId, commenterId, com
   try {
     const { data: igAccount, error: igLookupError } = await supabase
       .from("ig_accounts")
-      .select("client_id, ig_user_id, page_id, page_access_token")
+      .select("client_id, ig_user_id, page_id, page_access_token, fb_page_id, fb_page_token")
       .eq("is_active", true)
-      .or(`page_id.eq.${igAccountId},ig_user_id.eq.${igAccountId}`)
+      .or(`page_id.eq.${igAccountId},ig_user_id.eq.${igAccountId},fb_page_id.eq.${igAccountId}`)
       .maybeSingle();
 
     if (igLookupError || !igAccount?.page_access_token) {
@@ -6841,9 +6904,9 @@ async function handlePostCommentAutoDm(igAccountId, commentId, commenterId, comm
   try {
     const { data: igAccount, error: igLookupError } = await supabase
       .from("ig_accounts")
-      .select("client_id, ig_user_id, page_id, page_access_token")
+      .select("client_id, ig_user_id, page_id, page_access_token, fb_page_id, fb_page_token")
       .eq("is_active", true)
-      .or(`page_id.eq.${igAccountId},ig_user_id.eq.${igAccountId}`)
+      .or(`page_id.eq.${igAccountId},ig_user_id.eq.${igAccountId},fb_page_id.eq.${igAccountId}`)
       .maybeSingle();
 
     if (igLookupError || !igAccount?.page_access_token) {
@@ -7793,9 +7856,11 @@ console.log("[trigger:eval] inputs", {
   isCommentReplyTrigger_result: isCommentReplyTrigger(messaging),
 });
 
+// Story reply and keyword DM fire regardless of conversation history —
+// they are explicit trigger responses, not first-contact openers.
+// Comment reply auto-DM keeps the alreadyHasOutbound guard (first-contact only).
 const storyAutoDmMatched =
   !isEcho &&
-  !alreadyHasOutbound &&
   shouldUseStoryAutoDm(cfg, messaging);
 
 const commentAutoDmMatched =
@@ -7805,7 +7870,6 @@ const commentAutoDmMatched =
 
 const keywordAutoDmMatched =
   !isEcho &&
-  !alreadyHasOutbound &&
   isPlainTextMessage(messaging) &&
   shouldUseKeywordAutoDm(cfg, text);
 
@@ -8714,7 +8778,14 @@ app.get("/auth/instagram/callback", async (req, res) => {
         console.error("ig_signup: webhook subscription threw", e?.message || e)
       );
 
-      // Signup complete — redirect to dashboard. No Facebook chain.
+      // Instagram signup complete — chain to Facebook OAuth to get page token + comment permissions.
+      // The Facebook callback will redirect to dashboard with the coach JWT after it completes.
+      // If the coach skips or denies Facebook, the callback redirects to dashboard anyway.
+      if (META_APP_ID && META_FB_REDIRECT_URI) {
+        const fbState = signFbChainState({ clientId: resolvedClientId, isNew: true });
+        return res.redirect(buildFacebookOAuthUrl(fbState));
+      }
+      // Fallback if Facebook OAuth is not configured
       const token = signCoachToken(resolvedClientId);
       return res.redirect(`/dashboard?token=${encodeURIComponent(token)}&instagram_connected=1`);
     }
@@ -8862,9 +8933,13 @@ app.get("/auth/instagram/callback", async (req, res) => {
       console.error("ig_connect: webhook subscription threw", e?.message || e)
     );
 
-    // Dashboard reconnect: always go straight back to dashboard.
-    // No Facebook chain here — that only runs during initial signup (login page flow).
-    return res.redirect("/dashboard?instagram_connected=1");
+    // Chain to Facebook OAuth to refresh page token + comment permissions.
+    // The Facebook callback redirects back to /settings when complete.
+    if (META_APP_ID && META_FB_REDIRECT_URI) {
+      const fbState = signFbChainState({ clientId, isNew: false });
+      return res.redirect(buildFacebookOAuthUrl(fbState));
+    }
+    return res.redirect("/settings?instagram_connected=1");
   } catch (e) {
     return res.status(500).send(String(e?.message || e));
   }
@@ -8885,18 +8960,20 @@ app.get("/auth/facebook/callback", async (req, res) => {
     const decoded = verifyFbChainState(stateParam);
     clientId = decoded.client_id;
     isNew = !!decoded.is_new;
-    errorDest = isNew ? "/coach/login.html" : "/dashboard";
+    errorDest = isNew ? "/coach/login.html" : "/settings";
   } catch {
-    return res.redirect("/dashboard?facebook_error=Invalid+or+expired+state");
+    return res.redirect("/settings?facebook_error=Invalid+or+expired+state");
   }
 
-  // Helper: redirect to final destination (different for new vs returning coach)
+  // Helper: redirect to final destination
+  // New coaches (signup flow) → dashboard with JWT
+  // Existing coaches (reconnect from settings) → settings page
   const finishRedirect = (extra = "") => {
     if (isNew) {
       const token = signCoachToken(clientId);
       return res.redirect(`/dashboard?token=${encodeURIComponent(token)}&instagram_connected=1${extra}`);
     }
-    return res.redirect(`/dashboard?instagram_connected=1${extra}`);
+    return res.redirect(`/settings?instagram_connected=1${extra}`);
   };
 
   const error = String(req.query.error || "");
@@ -8984,9 +9061,16 @@ app.get("/auth/facebook/callback", async (req, res) => {
         .from("ig_accounts")
         .update({ fb_page_id: page.id, fb_page_token: page.access_token })
         .eq("id", igRow.id);
+
+      // Subscribe the Facebook Page to feed/messages webhook events (non-blocking).
+      // This is what enables comment events to arrive — distinct from the Instagram
+      // per-account subscription (which only delivers DM messages).
+      void subscribeFbPageWebhook(page.access_token, page.id).catch((e) =>
+        console.error("fb_callback: subscribeFbPageWebhook threw", e?.message || e)
+      );
     }
 
-    // Resubscribe webhook now that both tokens are stored (non-blocking)
+    // Resubscribe Instagram webhook now that both tokens are stored (non-blocking)
     if (igRow?.page_access_token && igRow?.ig_user_id) {
       void subscribeIgWebhook(igRow.page_access_token, igRow.ig_user_id).catch((e) =>
         console.error("fb_callback: webhook resubscribe threw", e?.message || e)
