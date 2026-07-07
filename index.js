@@ -3088,7 +3088,7 @@ function buildFacebookOAuthUrl(state) {
   // Approved scopes only. pages_manage_metadata and pages_messaging are NOT requested —
   // they are not approved and not needed since comment webhooks are delivered via the
   // Instagram per-account subscription (instagram object) rather than the FB Page feed.
-  url.searchParams.set("scope", "instagram_manage_comments,instagram_business_manage_comments,pages_show_list,pages_read_engagement,public_profile");
+  url.searchParams.set("scope", "instagram_manage_comments,pages_show_list,pages_read_engagement,public_profile");
   // config_id pre-configures permissions in Meta Developer Dashboard — use if set
   if (META_CONFIG_ID) url.searchParams.set("config_id", META_CONFIG_ID);
   url.searchParams.set("state", state);
