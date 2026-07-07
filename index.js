@@ -7266,16 +7266,41 @@ log("ig_event_debug", {
           // recipientId and continue — this handles ASID vs IGBID namespace mismatches
           // and avoids the manual resubscribe step after every new account connection.
           if (!igLookupError && !igAccount?.client_id) {
-            const { data: fallbackRows } = await supabase
+            const { data: fallbackRows, error: fallbackErr } = await supabase
               .from("ig_accounts")
-              .select("id, client_id, ig_user_id, page_id, page_access_token")
+              .select("id, client_id, ig_user_id, page_id, is_active, page_access_token")
               .eq("is_active", true)
-              .not("page_access_token", "is", null)
               .order("created_at", { ascending: false })
-              .limit(2);
+              .limit(10);
 
-            if (Array.isArray(fallbackRows) && fallbackRows.length === 1) {
-              const fallback = fallbackRows[0];
+            console.log("ig_accounts_auto_heal_candidates", {
+              recipientId,
+              senderId,
+              fallbackErr: fallbackErr?.message || null,
+              rowCount: Array.isArray(fallbackRows) ? fallbackRows.length : null,
+              rows: Array.isArray(fallbackRows) ? fallbackRows.map((r) => ({
+                id: r.id,
+                client_id: r.client_id,
+                ig_user_id: r.ig_user_id,
+                page_id: r.page_id,
+                is_active: r.is_active,
+                has_token: !!r.page_access_token,
+                token_empty: r.page_access_token === "",
+              })) : null,
+            });
+
+            // Filter to rows that have a valid token (non-null, non-empty)
+            const validRows = Array.isArray(fallbackRows)
+              ? fallbackRows.filter((r) => r.page_access_token && r.page_access_token.length > 0)
+              : [];
+
+            console.log("ig_accounts_auto_heal_valid_candidates", {
+              recipientId,
+              validCount: validRows.length,
+            });
+
+            if (validRows.length === 1) {
+              const fallback = validRows[0];
               const { error: healErr } = await supabase
                 .from("ig_accounts")
                 .update({ ig_user_id: recipientId })
@@ -7295,6 +7320,12 @@ log("ig_event_debug", {
                   error: healErr.message,
                 });
               }
+            } else {
+              console.warn("ig_accounts_auto_heal_skipped", {
+                recipientId,
+                reason: validRows.length === 0 ? "no_valid_rows" : "multiple_candidates_ambiguous",
+                validCount: validRows.length,
+              });
             }
           }
 
