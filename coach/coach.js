@@ -100,10 +100,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (errEl) errEl.style.display = "none";
     if (okEl) okEl.style.display = "none";
 
+    const email = document.getElementById("setupEmail")?.value?.trim() || "";
     const password = document.getElementById("newPassword")?.value || "";
     const confirm = document.getElementById("confirmPassword")?.value || "";
 
     if (!token) { showErr("Invalid or missing setup token. Please use the link sent to you by your account manager."); return; }
+    if (!email) { showErr("Please enter your email address."); return; }
     if (password.length < 8) { showErr("Password must be at least 8 characters."); return; }
     if (password !== confirm) { showErr("Passwords do not match."); return; }
 
@@ -112,7 +114,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const r = await fetch("/coach/api/set-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password }),
+        body: JSON.stringify({ token, email, password }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { showErr(j?.error || "Failed to set password. Please try again."); return; }

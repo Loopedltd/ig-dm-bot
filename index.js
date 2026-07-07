@@ -4519,10 +4519,14 @@ async function requireCoach(req, res, next) {
 
 app.post("/coach/api/set-password", async (req, res) => {
   try {
-    const { token, password } = req.body || {};
+    const { token, email: bodyEmail, password } = req.body || {};
 
     if (!token || !password) {
       return safeJson(res, 400, { error: "token and password required" });
+    }
+
+    if (!bodyEmail || !String(bodyEmail).includes("@")) {
+      return safeJson(res, 400, { error: "A valid email address is required." });
     }
 
     if (String(password).length < 8) {
@@ -4531,7 +4535,7 @@ app.post("/coach/api/set-password", async (req, res) => {
       });
     }
 
-    console.log("[set-password] token received:", token);
+    console.log("[set-password] token received:", token, "email:", bodyEmail);
 
     const { data: link, error: linkErr } = await supabase
       .from("payment_links")
@@ -4551,23 +4555,8 @@ app.post("/coach/api/set-password", async (req, res) => {
       });
     }
 
-    // If email is null (new client — Stripe webhook populates coach_users after payment), look it up now
-    let coachEmail = link.email;
-    if (!coachEmail) {
-      const { data: webhookUser } = await supabase
-        .from("coach_users")
-        .select("email")
-        .eq("client_id", link.client_id)
-        .maybeSingle();
-      coachEmail = webhookUser?.email || null;
-      console.log("[set-password] email from coach_users lookup:", coachEmail);
-    }
-
-    if (!coachEmail) {
-      return safeJson(res, 400, {
-        error: "Could not find account email. Please contact support.",
-      });
-    }
+    // Use email from request body (user enters it on the form — no webhook timing dependency)
+    const coachEmail = String(bodyEmail).toLowerCase().trim();
 
     const password_hash = await bcrypt.hash(String(password), 10);
 
