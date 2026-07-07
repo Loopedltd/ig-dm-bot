@@ -7260,32 +7260,41 @@ log("ig_event_debug", {
             lookupErrorCode: igLookupError?.code || null,
           });
 
-          // Self-heal: Instagram Business Login returns an App-Scoped User ID (ASID)
-          // from /me, but the webhook delivers the Instagram Business Account ID (IGBID)
-          // as recipient.id — different namespaces. When the lookup fails and there is
-          // exactly one active Instagram Login account, update ig_user_id to the webhook
-          // recipient ID so all future webhooks match correctly.
+          // Auto-heal: when the recipient ID in the webhook doesn't match any active
+          // ig_accounts row (ig_user_id or page_id), check if there is exactly one active
+          // account with a valid token. If so, update its ig_user_id to the incoming
+          // recipientId and continue — this handles ASID vs IGBID namespace mismatches
+          // and avoids the manual resubscribe step after every new account connection.
           if (!igLookupError && !igAccount?.client_id) {
             const { data: fallbackRows } = await supabase
               .from("ig_accounts")
               .select("id, client_id, ig_user_id, page_id, page_access_token")
               .eq("is_active", true)
-              .is("page_id", null)
+              .not("page_access_token", "is", null)
               .order("created_at", { ascending: false })
               .limit(2);
 
             if (Array.isArray(fallbackRows) && fallbackRows.length === 1) {
               const fallback = fallbackRows[0];
-              console.warn("webhook: ig_user_id mismatch — self-healing", {
-                recipientId,
-                storedId: fallback.ig_user_id,
-                accountId: fallback.id,
-              });
-              await supabase
+              const { error: healErr } = await supabase
                 .from("ig_accounts")
                 .update({ ig_user_id: recipientId })
                 .eq("id", fallback.id);
-              igAccount = { ...fallback, ig_user_id: recipientId };
+              if (!healErr) {
+                igAccount = { ...fallback, ig_user_id: recipientId };
+                console.log("ig_accounts_auto_healed", {
+                  accountId: fallback.id,
+                  clientId: fallback.client_id,
+                  oldIgUserId: fallback.ig_user_id,
+                  newIgUserId: recipientId,
+                  pageId: fallback.page_id,
+                });
+              } else {
+                console.error("ig_accounts_auto_heal_failed", {
+                  accountId: fallback.id,
+                  error: healErr.message,
+                });
+              }
             }
           }
 
