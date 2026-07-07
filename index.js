@@ -3085,7 +3085,10 @@ function buildFacebookOAuthUrl(state) {
   url.searchParams.set("client_id", META_APP_ID);
   url.searchParams.set("redirect_uri", META_FB_REDIRECT_URI);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", "instagram_manage_comments,pages_show_list,pages_read_engagement,public_profile");
+  // Approved scopes only. pages_manage_metadata and pages_messaging are NOT requested —
+  // they are not approved and not needed since comment webhooks are delivered via the
+  // Instagram per-account subscription (instagram object) rather than the FB Page feed.
+  url.searchParams.set("scope", "instagram_manage_comments,instagram_business_manage_comments,pages_show_list,pages_read_engagement,public_profile");
   // config_id pre-configures permissions in Meta Developer Dashboard — use if set
   if (META_CONFIG_ID) url.searchParams.set("config_id", META_CONFIG_ID);
   url.searchParams.set("state", state);
@@ -3126,15 +3129,14 @@ async function subscribeIgWebhook(accessToken, igUserId) {
   // some Instagram API versions don't resolve `me` for this endpoint.
   const url = `https://graph.instagram.com/v21.0/${encodeURIComponent(igUserId)}/subscribed_apps`;
 
-  // Only `messages` is supported for Instagram Business Login accounts via this endpoint.
-  // Post comment/feed events are NOT deliverable through per-account subscribed_apps for
-  // Instagram-only accounts (no Facebook Page). They require:
-  //   1. A Facebook Page connected to the Instagram account
-  //   2. App-level webhook subscription in Meta Developer Dashboard
-  //      (App → Webhooks → instagram object → comments/feed field)
-  // Adding `comments` here is silently ignored — do not add it.
-  // `messaging_postbacks` is Messenger-only and causes the request to be rejected.
-  const body = new URLSearchParams({ subscribed_fields: "messages" }).toString();
+  // `messages` — DMs delivered via Instagram Business Login.
+  // `comments` — post comments delivered via Instagram webhook (instagram object).
+  //   Requires instagram_manage_comments or instagram_business_manage_comments permission
+  //   to be approved on the app AND subscribed at the app level in Meta Developer Dashboard
+  //   (App → Webhooks → instagram object → comments field).
+  //   Do NOT use the Facebook Page /subscribed_apps endpoint for this — it requires
+  //   pages_manage_metadata which is not an approved permission for this app.
+  const body = new URLSearchParams({ subscribed_fields: "messages,comments" }).toString();
 
   console.log("subscribeIgWebhook: calling", { url, body });
 
@@ -3152,33 +3154,7 @@ async function subscribeIgWebhook(accessToken, igUserId) {
   return { ok: resp.ok && data?.success === true, httpStatus, data };
 }
 
-// ------------------------------------------------------------------
-// subscribeFbPageWebhook — subscribe a Facebook Page to comment/feed
-// webhook events. Called after Facebook OAuth completes and page_id
-// is stored. Uses graph.facebook.com (not graph.instagram.com).
-// Requires a page access token with pages_read_engagement permission.
-// ------------------------------------------------------------------
-async function subscribeFbPageWebhook(pageToken, pageId) {
-  const url = `https://graph.facebook.com/v23.0/${encodeURIComponent(pageId)}/subscribed_apps`;
-  // `feed` covers post comments, comment replies, and post events.
-  // `messages` covers Messenger DMs to the Page.
-  const body = new URLSearchParams({ subscribed_fields: "feed,messages" }).toString();
 
-  console.log("subscribeFbPageWebhook: calling", { url, pageId });
-
-  const resp = await fetch(`${url}?access_token=${encodeURIComponent(pageToken)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
-
-  const httpStatus = resp.status;
-  const data = await resp.json().catch(() => ({}));
-
-  console.log("subscribeFbPageWebhook: response", { pageId, httpStatus, data });
-
-  return { ok: resp.ok && data?.success === true, httpStatus, data };
-}
 
 // Re-subscribe webhook for the current Instagram Login account (no OAuth round-trip needed).
 // Also self-heals a corrupted ig_user_id (float64 precision bug) using the /me API.
@@ -9067,27 +9043,24 @@ app.get("/auth/facebook/callback", async (req, res) => {
         console.log("fb_callback: stored fb_page_id:", page.id, "for ig_account:", igRow.id);
       }
 
-      // Subscribe the Facebook Page to feed/messages webhook events (non-blocking).
-      // This is what enables comment events to arrive — distinct from the Instagram
-      // per-account subscription (which only delivers DM messages).
-      void subscribeFbPageWebhook(page.access_token, page.id).then(result => {
-        console.log("fb_callback: subscribeFbPageWebhook result", { pageId: page.id, ok: result.ok, status: result.httpStatus });
-      }).catch((e) =>
-        console.error("fb_callback: subscribeFbPageWebhook threw", e?.message || e)
-      );
+      // Resubscribe the Instagram per-account webhook now that we have the comments
+      // permission. This opts the account into both messages AND comments events on
+      // the instagram object. We use the IG access token (not the FB page token) because
+      // the subscription endpoint is on graph.instagram.com, not graph.facebook.com.
+      // pages_manage_metadata is NOT needed for this — instagram_manage_comments is sufficient.
+      if (igRow?.page_access_token && igRow?.ig_user_id) {
+        void subscribeIgWebhook(igRow.page_access_token, igRow.ig_user_id).then(result => {
+          console.log("fb_callback: subscribeIgWebhook (messages+comments) result", { igUserId: igRow.ig_user_id, ok: result.ok, status: result.httpStatus, data: result.data });
+        }).catch((e) =>
+          console.error("fb_callback: subscribeIgWebhook threw", e?.message || e)
+        );
+      }
     } else {
       console.warn("fb_callback: skipping fb_page_id store — missing igRow.id, page.access_token, or page.id", {
         igRowId: igRow?.id,
         hasPageToken: !!page?.access_token,
         pageId: page?.id,
       });
-    }
-
-    // Resubscribe Instagram webhook now that both tokens are stored (non-blocking)
-    if (igRow?.page_access_token && igRow?.ig_user_id) {
-      void subscribeIgWebhook(igRow.page_access_token, igRow.ig_user_id).catch((e) =>
-        console.error("fb_callback: webhook resubscribe threw", e?.message || e)
-      );
     }
 
     return finishRedirect();
