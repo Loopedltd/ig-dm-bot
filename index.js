@@ -2540,19 +2540,13 @@ const examplesToUse = hasStrongCustomExamples(cfg?.example_messages)
   ? parseExampleMessages(cfg?.example_messages)
   : getDefaultFallbackExamples(niche);
 
-// Build structured voice few-shot pairs from the question-based voice fields
+// Build structured voice few-shot pairs from the 4 question-based fields
 const structuredVoicePairs = [];
 const voiceFieldMap = [
   { userLine: "how much is it?", key: "voice_price_reply" },
-  { userLine: "what do you actually help with?", key: "voice_what_you_do" },
-  { userLine: "i'm not sure if it's for me", key: "voice_not_sure_fit" },
-  { userLine: "i've never done this before", key: "voice_never_done" },
-  { userLine: "it's a bit much for me", key: "voice_too_expensive" },
   { userLine: "i need to think about it", key: "voice_objection_reply" },
-  { userLine: "i'm not sure it will work", key: "voice_wont_work" },
-  { userLine: "i don't have time", key: "voice_no_time" },
   { userLine: "that sounds good, how do i get started?", key: "voice_booking_push" },
-  { userLine: "can you send me the link?", key: "voice_send_link" },
+  { userLine: "just checking in", key: "voice_quiet_lead" },
 ];
 for (const { userLine, key } of voiceFieldMap) {
   const ans = String(cfg?.[key] || "").trim();
@@ -3713,7 +3707,7 @@ app.get("/admin/api/clients", requireAdmin, async (req, res) => {
 
 app.post("/admin/api/clients/create", requireAdmin, async (req, res) => {
   try {
-    const { name, email, timezone, setup_fee, monthly_retainer } = req.body || {};
+    const { name, email, timezone } = req.body || {};
 
     const clientName = String(name || "").trim();
     const coachEmail = String(email || "").trim().toLowerCase();
@@ -3732,8 +3726,6 @@ app.post("/admin/api/clients/create", requireAdmin, async (req, res) => {
       .insert({
         name: clientName,
         timezone: clientTimezone,
-        setup_fee: Math.max(0, Math.round(Number(setup_fee) || 0)),
-        monthly_retainer: Math.max(0, Math.round(Number(monthly_retainer) || 0)),
       })
       .select()
       .single();
@@ -4017,14 +4009,6 @@ if (
 
     if (error) return safeJson(res, 500, error);
 
-    // Also update pricing fields on clients table if provided
-    const clientPatch = {};
-    if (patch.setup_fee != null) clientPatch.setup_fee = Math.max(0, Math.round(Number(patch.setup_fee) || 0));
-    if (patch.monthly_retainer != null) clientPatch.monthly_retainer = Math.max(0, Math.round(Number(patch.monthly_retainer) || 0));
-    if (Object.keys(clientPatch).length > 0) {
-      await supabase.from("clients").update(clientPatch).eq("id", clientId);
-    }
-
     return safeJson(res, 200, { ok: true, config: updated });
   } catch (e) {
     return safeJson(res, 500, { error: String(e?.message || e) });
@@ -4236,63 +4220,6 @@ app.post("/admin/api/clients/:clientId/reset-password", requireAdmin, async (req
     return safeJson(res, 200, { ok: true, email: user.email, new_password: newPassword });
   } catch (e) {
     return safeJson(res, 500, { error: String(e?.message || e) });
-  }
-});
-
-// ── Generate Stripe payment link ──────────────────────────────────────────────
-app.post("/admin/api/clients/:clientId/payment-link", requireAdmin, async (req, res) => {
-  const { clientId } = req.params;
-  const { setup_fee, monthly_retainer } = req.body || {};
-
-  const setupFeePence = Math.max(0, Math.round(Number(setup_fee) || 0));
-  const monthlyPence = Math.round(Number(monthly_retainer) || 0);
-
-  if (monthlyPence <= 0) {
-    return safeJson(res, 400, { error: "Monthly retainer must be greater than £0" });
-  }
-  if (!stripe) {
-    return safeJson(res, 500, { error: "Stripe not configured" });
-  }
-
-  try {
-    // Save prices to clients table
-    const { data: client, error: updateErr } = await supabase
-      .from("clients")
-      .update({ setup_fee: setupFeePence, monthly_retainer: monthlyPence })
-      .eq("id", clientId)
-      .select("id, name")
-      .single();
-
-    if (updateErr) return safeJson(res, 500, { error: updateErr.message });
-
-    const lineItems = [];
-
-    // Monthly recurring price
-    const monthlyPrice = await stripe.prices.create({
-      unit_amount: monthlyPence,
-      currency: "gbp",
-      recurring: { interval: "month" },
-      product_data: { name: `Monthly retainer — ${client.name}` },
-    });
-    lineItems.push({ price: monthlyPrice.id, quantity: 1 });
-
-    // One-time setup fee (skip if £0)
-    if (setupFeePence > 0) {
-      const setupPrice = await stripe.prices.create({
-        unit_amount: setupFeePence,
-        currency: "gbp",
-        product_data: { name: `Setup fee — ${client.name}` },
-      });
-      lineItems.push({ price: setupPrice.id, quantity: 1 });
-    }
-
-    const paymentLink = await stripe.paymentLinks.create({ line_items: lineItems });
-
-    log("payment_link_created", { clientId, setupFeePence, monthlyPence, url: paymentLink.url });
-    return safeJson(res, 200, { ok: true, url: paymentLink.url, setup_fee: setupFeePence, monthly_retainer: monthlyPence });
-  } catch (e) {
-    console.error("payment_link: stripe error", e?.message || e);
-    return safeJson(res, 500, { error: e?.message || "Failed to create payment link" });
   }
 });
 
@@ -5079,11 +5006,7 @@ if (typeof patch.followup_message === "string" || patch.followup_message === nul
   allowed.followup_message = patch.followup_message || null;
 }
 // Structured voice training fields
-for (const key of [
-  "voice_price_reply", "voice_what_you_do", "voice_not_sure_fit", "voice_never_done",
-  "voice_too_expensive", "voice_objection_reply", "voice_wont_work", "voice_no_time",
-  "voice_booking_push", "voice_send_link", "voice_quiet_lead",
-]) {
+for (const key of ["voice_price_reply", "voice_objection_reply", "voice_booking_push", "voice_quiet_lead"]) {
   if (typeof patch[key] === "string" || patch[key] === null) {
     allowed[key] = patch[key] || null;
   }

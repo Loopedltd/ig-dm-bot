@@ -129,19 +129,8 @@ const AdminDashboard = {
     qs("offboardCancelBtn")?.addEventListener("click", () => this.closeModal("offboardModal"));
     qs("offboardConfirmBtn")?.addEventListener("click", () => this.offboardClient());
 
-    // Payment link modal
-    qs("paymentLinkCancelBtn")?.addEventListener("click", () => this.closeModal("paymentLinkModal"));
-    qs("paymentLinkGenerateBtn")?.addEventListener("click", () => this.generatePaymentLink());
-    qs("copyPayLinkBtn")?.addEventListener("click", () => {
-      const url = qs("payLinkUrl")?.textContent || "";
-      navigator.clipboard.writeText(url).then(() => {
-        const btn = qs("copyPayLinkBtn");
-        if (btn) { btn.textContent = "Copied!"; setTimeout(() => { btn.textContent = "Copy link"; }, 2000); }
-      });
-    });
-
     // Close modals on backdrop click
-    ["configModal", "credsModal", "resetPwModal", "offboardModal", "paymentLinkModal"].forEach((id) => {
+    ["configModal", "credsModal", "resetPwModal", "offboardModal"].forEach((id) => {
       const el = qs(id);
       if (el) {
         el.addEventListener("click", (e) => {
@@ -203,9 +192,6 @@ const AdminDashboard = {
       const niche = cfg.niche || "generic";
       const muted = !!c.alerts_muted;
       const offboarded = !!c.offboarded_at || c.is_active === false;
-      const setupFeeGbp = c.setup_fee ? `£${(c.setup_fee / 100).toFixed(0)}` : null;
-      const monthlyGbp = c.monthly_retainer ? `£${(c.monthly_retainer / 100).toFixed(0)}/mo` : null;
-      const pricingLabel = [setupFeeGbp, monthlyGbp].filter(Boolean).join(" + ");
       return `<tr>
         <td style="font-weight:700;">
           ${escHtml(c.name || "Unnamed")}
@@ -214,10 +200,7 @@ const AdminDashboard = {
         </td>
         <td class="tdMuted" style="font-family:monospace;font-size:11px;">${escHtml(c.id)}</td>
         <td class="tdMuted">${escHtml(niche)}</td>
-        <td>
-          <span class="badge ${badgeCls}">${escHtml(status)}</span>
-          ${pricingLabel ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">${escHtml(pricingLabel)}</div>` : ""}
-        </td>
+        <td><span class="badge ${badgeCls}">${escHtml(status)}</span></td>
         <td class="tdMuted">${escHtml(fmtDate(c.created_at))}</td>
         <td>
           <div class="actionBtns">
@@ -229,7 +212,6 @@ const AdminDashboard = {
             <button class="btn sm" onclick="AdminDashboard.openCredsModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Show credentials</button>
             <button class="btn sm danger" onclick="AdminDashboard.openResetPwModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Reset password</button>
             <button class="btn sm${muted ? " muted-on" : ""}" onclick="AdminDashboard.toggleMute('${escHtml(c.id)}', ${muted})">${muted ? "Unmute alerts" : "Mute alerts"}</button>
-            <button class="btn sm" onclick="AdminDashboard.openPaymentLinkModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Payment link</button>
             <button class="btn sm danger" onclick="AdminDashboard.openOffboardModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Offboard</button>
             `}
           </div>
@@ -310,73 +292,6 @@ const AdminDashboard = {
     }
   },
 
-  // ── Payment link ───────────────────────────────────────────────────────────
-
-  openPaymentLinkModal(clientId, clientName) {
-    this._activeClientId = clientId;
-    const qs = (id) => document.getElementById(id);
-    if (qs("paymentLinkModalSub")) qs("paymentLinkModalSub").textContent = `Generate a Stripe payment link for "${clientName || clientId}".`;
-
-    // Pre-fill from stored prices
-    const client = this._clients.find((c) => c.id === clientId);
-    if (qs("plSetupFee")) qs("plSetupFee").value = client?.setup_fee ? (client.setup_fee / 100).toFixed(0) : "";
-    if (qs("plMonthlyRetainer")) qs("plMonthlyRetainer").value = client?.monthly_retainer ? (client.monthly_retainer / 100).toFixed(0) : "";
-
-    // Reset result area
-    if (qs("payLinkResult")) qs("payLinkResult").style.display = "none";
-    if (qs("payLinkUrl")) qs("payLinkUrl").textContent = "";
-    if (qs("paymentLinkErr")) { qs("paymentLinkErr").textContent = ""; qs("paymentLinkErr").style.display = "none"; }
-    const genBtn = qs("paymentLinkGenerateBtn");
-    if (genBtn) { genBtn.disabled = false; genBtn.textContent = "Generate link"; }
-
-    this.openModal("paymentLinkModal");
-  },
-
-  async generatePaymentLink() {
-    const clientId = this._activeClientId;
-    if (!clientId) return;
-    const qs = (id) => document.getElementById(id);
-    const errEl = qs("paymentLinkErr");
-    const genBtn = qs("paymentLinkGenerateBtn");
-
-    if (errEl) { errEl.style.display = "none"; }
-
-    const setupFeeGbp = Number(qs("plSetupFee")?.value || 0);
-    const monthlyGbp = Number(qs("plMonthlyRetainer")?.value || 0);
-
-    if (monthlyGbp <= 0) {
-      if (errEl) { errEl.textContent = "Monthly retainer must be greater than £0."; errEl.style.display = "block"; }
-      return;
-    }
-
-    if (genBtn) { genBtn.disabled = true; genBtn.textContent = "Generating…"; }
-
-    try {
-      const data = await apiFetch(`/admin/api/clients/${clientId}/payment-link`, {
-        method: "POST",
-        body: JSON.stringify({
-          setup_fee: Math.round(setupFeeGbp * 100),
-          monthly_retainer: Math.round(monthlyGbp * 100),
-        }),
-      });
-
-      // Update local cache
-      const client = this._clients.find((c) => c.id === clientId);
-      if (client) {
-        client.setup_fee = data.setup_fee;
-        client.monthly_retainer = data.monthly_retainer;
-        this.renderClientTable();
-      }
-
-      if (qs("payLinkUrl")) qs("payLinkUrl").textContent = data.url;
-      if (qs("payLinkResult")) qs("payLinkResult").style.display = "block";
-      if (genBtn) { genBtn.disabled = false; genBtn.textContent = "Regenerate"; }
-    } catch (e) {
-      if (errEl) { errEl.textContent = e.message || "Failed to generate payment link."; errEl.style.display = "block"; }
-      if (genBtn) { genBtn.disabled = false; genBtn.textContent = "Generate link"; }
-    }
-  },
-
   // ── Create client ──────────────────────────────────────────────────────────
 
   async createClient() {
@@ -396,22 +311,13 @@ const AdminDashboard = {
     if (btn) { btn.disabled = true; btn.textContent = "Creating..."; }
 
     try {
-      const setupFeeVal = qs("newSetupFee")?.value;
-      const monthlyVal = qs("newMonthlyRetainer")?.value;
       const data = await apiFetch("/admin/api/clients/create", {
         method: "POST",
-        body: JSON.stringify({
-          name,
-          email,
-          setup_fee: setupFeeVal !== "" && setupFeeVal != null ? Math.round(Number(setupFeeVal) * 100) : 0,
-          monthly_retainer: monthlyVal !== "" && monthlyVal != null ? Math.round(Number(monthlyVal) * 100) : 0,
-        }),
+        body: JSON.stringify({ name, email }),
       });
       if (okEl) { okEl.textContent = `Created: ${data.client?.id || "ok"}. Send password setup link to the coach.`; okEl.style.display = "inline"; }
       if (qs("newName")) qs("newName").value = "";
       if (qs("newEmail")) qs("newEmail").value = "";
-      if (qs("newSetupFee")) qs("newSetupFee").value = "";
-      if (qs("newMonthlyRetainer")) qs("newMonthlyRetainer").value = "";
       await this.loadClients();
     } catch (e) {
       if (errEl) { errEl.textContent = e.message || "Create failed."; errEl.style.display = "inline"; }
@@ -436,8 +342,6 @@ const AdminDashboard = {
     if (qs("cfgStyle")) qs("cfgStyle").value = cfg.style || "";
     if (qs("cfgBookingUrl")) qs("cfgBookingUrl").value = cfg.booking_url || "";
     if (qs("cfgOfferPrice")) qs("cfgOfferPrice").value = cfg.offer_price || "";
-    if (qs("cfgSetupFee")) qs("cfgSetupFee").value = client.setup_fee ? (client.setup_fee / 100).toFixed(0) : "";
-    if (qs("cfgMonthlyRetainer")) qs("cfgMonthlyRetainer").value = client.monthly_retainer ? (client.monthly_retainer / 100).toFixed(0) : "";
     if (qs("cfgStripeStatus")) qs("cfgStripeStatus").value = cfg.stripe_subscription_status || "";
     if (qs("configErr")) { qs("configErr").textContent = ""; qs("configErr").style.display = "none"; }
     if (qs("configOk")) { qs("configOk").textContent = ""; qs("configOk").style.display = "none"; }
@@ -469,8 +373,6 @@ const AdminDashboard = {
           booking_url: qs("cfgBookingUrl")?.value || null,
           offer_price: qs("cfgOfferPrice")?.value || null,
           stripe_subscription_status: qs("cfgStripeStatus")?.value || null,
-          setup_fee: qs("cfgSetupFee")?.value !== "" ? Math.round(Number(qs("cfgSetupFee")?.value || 0) * 100) : null,
-          monthly_retainer: qs("cfgMonthlyRetainer")?.value !== "" ? Math.round(Number(qs("cfgMonthlyRetainer")?.value || 0) * 100) : null,
         }),
       });
       if (okEl) { okEl.textContent = "Saved."; okEl.style.display = "block"; }
@@ -484,8 +386,6 @@ const AdminDashboard = {
         client.config.booking_url = qs("cfgBookingUrl")?.value || null;
         client.config.offer_price = qs("cfgOfferPrice")?.value || null;
         client.config.stripe_subscription_status = qs("cfgStripeStatus")?.value || null;
-        if (qs("cfgSetupFee")?.value !== "") client.setup_fee = Math.round(Number(qs("cfgSetupFee")?.value || 0) * 100);
-        if (qs("cfgMonthlyRetainer")?.value !== "") client.monthly_retainer = Math.round(Number(qs("cfgMonthlyRetainer")?.value || 0) * 100);
         this.renderClientTable();
       }
     } catch (e) {

@@ -306,15 +306,9 @@
       val(qs("#system_prompt"), c.system_prompt);
       if (c.example_messages) val(qs("#example_messages"), c.example_messages);
       val(qs("#voice_price_reply"), c.voice_price_reply);
-      val(qs("#voice_what_you_do"), c.voice_what_you_do);
-      val(qs("#voice_not_sure_fit"), c.voice_not_sure_fit);
-      val(qs("#voice_never_done"), c.voice_never_done);
-      val(qs("#voice_too_expensive"), c.voice_too_expensive);
       val(qs("#voice_objection_reply"), c.voice_objection_reply);
-      val(qs("#voice_wont_work"), c.voice_wont_work);
-      val(qs("#voice_no_time"), c.voice_no_time);
       val(qs("#voice_booking_push"), c.voice_booking_push);
-      val(qs("#voice_send_link"), c.voice_send_link);
+      val(qs("#voice_quiet_lead"), c.voice_quiet_lead);
       // Feature 4: custom follow-up message
       val(qs("#followup_message"), c.followup_message);
 
@@ -558,7 +552,7 @@
     // Update header name from instagram handle field
     const handle = String(qs("#instagram_handle")?.value || "").trim().replace(/^@/, "");
     const nameEl = qs("#previewBotName");
-    if (nameEl) nameEl.textContent = handle ? `@${handle}` : "Your assistant";
+    if (nameEl) nameEl.textContent = handle ? `@${handle}` : "Your bot";
     const avatarEl = qs("#previewAvatarEl");
     if (avatarEl) avatarEl.textContent = handle ? handle[0].toUpperCase() : "B";
   }
@@ -776,15 +770,9 @@
             system_prompt: String(qs("#system_prompt")?.value || "").trim() || null,
             example_messages: exParsed.value || null,
             voice_price_reply: String(qs("#voice_price_reply")?.value || "").trim() || null,
-            voice_what_you_do: String(qs("#voice_what_you_do")?.value || "").trim() || null,
-            voice_not_sure_fit: String(qs("#voice_not_sure_fit")?.value || "").trim() || null,
-            voice_never_done: String(qs("#voice_never_done")?.value || "").trim() || null,
-            voice_too_expensive: String(qs("#voice_too_expensive")?.value || "").trim() || null,
             voice_objection_reply: String(qs("#voice_objection_reply")?.value || "").trim() || null,
-            voice_wont_work: String(qs("#voice_wont_work")?.value || "").trim() || null,
-            voice_no_time: String(qs("#voice_no_time")?.value || "").trim() || null,
             voice_booking_push: String(qs("#voice_booking_push")?.value || "").trim() || null,
-            voice_send_link: String(qs("#voice_send_link")?.value || "").trim() || null,
+            voice_quiet_lead: String(qs("#voice_quiet_lead")?.value || "").trim() || null,
             followup_message: String(qs("#followup_message")?.value || "").trim() || null,
             response_delay_ms: Number(qs("#response_delay_ms")?.value || 90) * 1000,
             products,

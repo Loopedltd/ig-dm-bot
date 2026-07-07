@@ -818,7 +818,7 @@ async function loadGlobalPauseStatus() {
   const paused = !!status.bot_paused;
 
 badge.className = paused ? "badge globalPaused" : "badge connected";
-  badge.textContent = paused ? "Assistant paused" : "Assistant running";
+  badge.textContent = paused ? "Bot paused" : "Bot running";
 
   meta.textContent = status.bot_paused_at
     ? `Updated ${fmtTime(status.bot_paused_at)}`
@@ -951,11 +951,11 @@ function renderLeadRow(lead) {
     </div>
     <span class="badge stageBadge stage-${escHtml(stage)}">${escHtml(stageLabel)}</span>
     ${isPaused ? `<span class="badge leadPausedBadge">Action required</span>` : `<span class="badge leadPausedBadge leadPausedBadge--hidden"></span>`}
-    <button class="leadResetBtn${botOn ? " leadResetBtn--hidden" : ""}" data-id="${lead.id}" title="Clear the pause and resume the assistant for this lead immediately">Reset assistant</button>
+    <button class="leadResetBtn${botOn ? " leadResetBtn--hidden" : ""}" data-id="${lead.id}" title="Clear the pause and resume the bot for this lead immediately">Reset bot</button>
     <div class="leadToggleWrap">
       <div class="leadToggleRow">
         <span class="leadToggleLabel">${botOn ? "On" : "Off"}</span>
-        <label class="leadToggle" title="${botOn ? "Assistant active - click to pause" : "Assistant paused - click to resume"}">
+        <label class="leadToggle" title="${botOn ? "Bot active - click to pause" : "Bot paused - click to resume"}">
           <input type="checkbox" class="leadBotToggle" data-id="${lead.id}" ${botOn ? "checked" : ""}>
           <span class="leadToggleSlider"></span>
         </label>
@@ -1153,7 +1153,7 @@ function wireLeadToggles() {
         renderLeadsList();
       } catch (e) {
         btn.disabled = false;
-        btn.textContent = "Reset assistant";
+        btn.textContent = "Reset bot";
         setErr(String(e.message || e));
       }
     });
@@ -1369,7 +1369,7 @@ function wireQueueRefreshButton() {
     ai_reply_ready:{ icon: "✓",  iconCls: "activityIcon--sky",    cardCls: "activityEvent--ready",      label: "Reply ready" },
     reply_queued:  { icon: "→",  iconCls: "activityIcon--purple", cardCls: "activityEvent--queued",     label: "Reply queued" },
     reply_sent:    { icon: "✓",  iconCls: "activityIcon--green",  cardCls: "activityEvent--sent",       label: "Delivered to Instagram" },
-    confidence_pause: { icon: "⚠", iconCls: "activityIcon--purple", cardCls: "activityEvent--paused", label: "Needs review - assistant paused" },
+    confidence_pause: { icon: "⚠", iconCls: "activityIcon--purple", cardCls: "activityEvent--paused", label: "Needs review - bot paused" },
   };
 
   function fmtActivityTime(isoStr) {
