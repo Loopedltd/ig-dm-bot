@@ -8510,25 +8510,56 @@ app.get("/auth/instagram/callback", async (req, res) => {
     const igUserId = String(igInfo.id);
     console.log("ig_connect: igUserId from /me", { igUserId, fromToken: String(shortTokenData.user_id), clientId });
 
-    // UPDATE existing row by client_id — never INSERT, avoids duplicate key errors
-    // regardless of whether ig_user_id changed between connections.
-    console.log("ig_connect: update ig_accounts", { clientId, igUserId });
-    const { error: upsertErr } = await supabase
-      .from("ig_accounts")
-      .update({
-        ig_user_id: igUserId,
-        ig_username: igUsername,
-        page_id: null,
-        page_access_token: longToken,
-        is_active: true,
-        token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
-      })
-      .eq("client_id", clientId);
+    const igAccountPayload = {
+      ig_user_id: igUserId,
+      ig_username: igUsername,
+      page_id: null,
+      page_access_token: longToken,
+      is_active: true,
+      token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+    };
 
-    if (upsertErr) {
-      return res
-        .status(500)
-        .send(`Failed to save Instagram account: ${upsertErr.message}`);
+    // Try UPDATE first — returns the updated rows so we can detect 0-row match
+    console.log("ig_connect: attempting update ig_accounts", { clientId, igUserId });
+    const { data: updatedRows, error: updateErr } = await supabase
+      .from("ig_accounts")
+      .update(igAccountPayload)
+      .eq("client_id", clientId)
+      .select();
+
+    console.log("ig_connect: update result", {
+      clientId,
+      igUserId,
+      rowsUpdated: Array.isArray(updatedRows) ? updatedRows.length : null,
+      updateErr: updateErr?.message || null,
+    });
+
+    if (updateErr) {
+      console.error("ig_connect: update failed", { clientId, igUserId, error: updateErr.message });
+      return res.status(500).send(`Failed to save Instagram account: ${updateErr.message}`);
+    }
+
+    // If no row existed for this client_id (admin-created account, first connect),
+    // the update matched 0 rows — fall back to insert.
+    if (!Array.isArray(updatedRows) || updatedRows.length === 0) {
+      console.log("ig_connect: no existing ig_accounts row — inserting new row", { clientId, igUserId });
+      const { data: insertedRow, error: insertErr } = await supabase
+        .from("ig_accounts")
+        .insert({ client_id: clientId, ...igAccountPayload })
+        .select()
+        .single();
+
+      console.log("ig_connect: insert result", {
+        clientId,
+        igUserId,
+        inserted: !!insertedRow,
+        insertErr: insertErr?.message || null,
+      });
+
+      if (insertErr) {
+        console.error("ig_connect: insert failed", { clientId, igUserId, error: insertErr.message });
+        return res.status(500).send(`Failed to create Instagram account: ${insertErr.message}`);
+      }
     }
 
     // Subscribe webhook (non-blocking)
