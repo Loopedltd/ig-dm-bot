@@ -10186,6 +10186,145 @@ async function runClientDeletionJob() {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// COMMENT POLL JOB
+// Temporary solution while pages_manage_metadata is pending App Review.
+// Polls Instagram Graph API every 60 seconds for new comments on recent media,
+// then routes matching comments through the existing keyword/auto-DM handlers.
+//
+// Uses instagram_manage_comments (already approved).
+// Only runs for accounts where comment features are enabled.
+// Tracks last_comment_polled_at per ig_account to avoid re-processing comments.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function runCommentPollJob() {
+  // Load all active IG accounts that have a token and ig_user_id
+  const { data: accounts, error: accErr } = await supabase
+    .from("ig_accounts")
+    .select("id, client_id, ig_user_id, ig_username, page_access_token, last_comment_polled_at")
+    .eq("is_active", true)
+    .not("page_access_token", "is", null)
+    .not("ig_user_id", "is", null);
+
+  if (accErr) {
+    console.error("[comment_poll] failed to load ig_accounts:", accErr.message);
+    return;
+  }
+  if (!accounts?.length) return;
+
+  for (const acc of accounts) {
+    try {
+      // Only poll if at least one comment feature is enabled for this client
+      const { data: cfg } = await supabase
+        .from("client_configs")
+        .select("comment_keyword_dm_enabled, comment_reply_auto_dm_enabled")
+        .eq("client_id", acc.client_id)
+        .maybeSingle();
+
+      if (!cfg?.comment_keyword_dm_enabled && !cfg?.comment_reply_auto_dm_enabled) continue;
+
+      await pollAccountComments(acc);
+    } catch (e) {
+      console.error(`[comment_poll] error for account ${acc.ig_username || acc.ig_user_id}:`, e?.message || e);
+    }
+  }
+}
+
+async function pollAccountComments(acc) {
+  const token = acc.page_access_token;
+  const igUserId = acc.ig_user_id;
+
+  // Determine the cutoff time for "new" comments.
+  // First poll: look back 24 hours. Subsequent polls: use last_comment_polled_at.
+  const cutoff = acc.last_comment_polled_at
+    ? new Date(acc.last_comment_polled_at)
+    : new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const cutoffUnix = Math.floor(cutoff.getTime() / 1000);
+
+  // Update last_comment_polled_at immediately so concurrent runs don't overlap.
+  // Use the start of this poll as the new watermark.
+  const pollStartIso = new Date().toISOString();
+  await supabase
+    .from("ig_accounts")
+    .update({ last_comment_polled_at: pollStartIso })
+    .eq("id", acc.id);
+
+  // Fetch up to 10 most recent media items
+  const mediaResp = await fetch(
+    `https://graph.instagram.com/v21.0/${encodeURIComponent(igUserId)}/media` +
+    `?fields=id,timestamp&limit=10&access_token=${encodeURIComponent(token)}`
+  );
+  const mediaData = await mediaResp.json().catch(() => ({}));
+
+  if (!mediaResp.ok || !Array.isArray(mediaData?.data)) {
+    console.warn(`[comment_poll] media fetch failed for ${igUserId}:`, mediaData?.error?.message || mediaResp.status);
+    return;
+  }
+
+  // Only check posts from the last 7 days to avoid hammering old posts
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const recentMedia = mediaData.data.filter(
+    (m) => m.timestamp && new Date(m.timestamp) >= sevenDaysAgo
+  );
+
+  if (!recentMedia.length) return;
+
+  console.log(`[comment_poll] ${acc.ig_username || igUserId}: checking ${recentMedia.length} posts since ${cutoff.toISOString()}`);
+
+  let newCommentsFound = 0;
+
+  for (const media of recentMedia) {
+    // Fetch comments on this post newer than the cutoff
+    const commentsResp = await fetch(
+      `https://graph.instagram.com/v21.0/${encodeURIComponent(media.id)}/comments` +
+      `?fields=id,text,timestamp,username,from%7Bid,username%7D` +
+      `&since=${cutoffUnix}` +
+      `&access_token=${encodeURIComponent(token)}`
+    );
+    const commentsData = await commentsResp.json().catch(() => ({}));
+
+    if (!commentsResp.ok) {
+      console.warn(`[comment_poll] comments fetch failed for media ${media.id}:`, commentsData?.error?.message || commentsResp.status);
+      continue;
+    }
+
+    const comments = Array.isArray(commentsData?.data) ? commentsData.data : [];
+
+    for (const comment of comments) {
+      // Double-check timestamp client-side (since param may not be perfectly honoured)
+      if (comment.timestamp && new Date(comment.timestamp) <= cutoff) continue;
+
+      const commentId = String(comment.id || "");
+      const commenterId = String(comment.from?.id || "");
+      const commenterUsername = comment.from?.username || comment.username || null;
+      const commentText = String(comment.text || "").trim();
+
+      if (!commentId || !commenterId || !commentText) continue;
+
+      // Skip own comments (account owner commenting on their own post)
+      if (commenterId === igUserId) continue;
+
+      newCommentsFound++;
+      console.log(`[comment_poll] new comment on ${media.id}:`, {
+        commentId,
+        commenterId,
+        commenterUsername,
+        text: commentText.slice(0, 80),
+      });
+
+      // Route through existing handlers using ig_user_id as the account identifier.
+      // Both handlers perform their own dedup via sentCommentDmKeys so concurrent
+      // calls or rapid re-polls won't double-send.
+      void handlePostCommentKeyword(igUserId, commentId, commenterId, commenterUsername, commentText);
+      void handlePostCommentAutoDm(igUserId, commentId, commenterId, commenterUsername, commentText);
+    }
+  }
+
+  if (newCommentsFound > 0) {
+    console.log(`[comment_poll] ${acc.ig_username || igUserId}: dispatched ${newCommentsFound} new comment(s)`);
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 
@@ -10275,5 +10414,16 @@ app.listen(PORT, () => {
   setInterval(() => {
     runClientDeletionJob().catch((e) => console.error("client_deletion_job: error", e?.message || e));
   }, 24 * 60 * 60 * 1000);
+
+  // Comment poll job — temporary fallback while pages_manage_metadata is pending
+  // App Review. Polls Instagram Graph API every 60s for new comments on recent
+  // posts for any client with comment_keyword_dm_enabled or comment_reply_auto_dm_enabled.
+  // First run after 30s (let server settle); then every 60s.
+  setTimeout(() => {
+    runCommentPollJob().catch((e) => console.error("[comment_poll] startup run failed:", e?.message || e));
+    setInterval(() => {
+      runCommentPollJob().catch((e) => console.error("[comment_poll] error:", e?.message || e));
+    }, 60 * 1000);
+  }, 30 * 1000);
 });
 
