@@ -315,6 +315,12 @@
       val(qs("#voice_objection_reply"), c.voice_objection_reply);
       val(qs("#voice_booking_push"), c.voice_booking_push);
       val(qs("#voice_quiet_lead"), c.voice_quiet_lead);
+      val(qs("#voice_price_too_much"), c.voice_price_too_much);
+      val(qs("#voice_need_to_think"), c.voice_need_to_think);
+      val(qs("#voice_not_sure_works"), c.voice_not_sure_works);
+      val(qs("#voice_no_time"), c.voice_no_time);
+      val(qs("#voice_ready_to_book"), c.voice_ready_to_book);
+      val(qs("#voice_wants_link"), c.voice_wants_link);
       // Feature 4: custom follow-up message
       val(qs("#followup_message"), c.followup_message);
 
@@ -780,6 +786,12 @@
             voice_objection_reply: String(qs("#voice_objection_reply")?.value || "").trim() || null,
             voice_booking_push: String(qs("#voice_booking_push")?.value || "").trim() || null,
             voice_quiet_lead: String(qs("#voice_quiet_lead")?.value || "").trim() || null,
+            voice_price_too_much: String(qs("#voice_price_too_much")?.value || "").trim() || null,
+            voice_need_to_think: String(qs("#voice_need_to_think")?.value || "").trim() || null,
+            voice_not_sure_works: String(qs("#voice_not_sure_works")?.value || "").trim() || null,
+            voice_no_time: String(qs("#voice_no_time")?.value || "").trim() || null,
+            voice_ready_to_book: String(qs("#voice_ready_to_book")?.value || "").trim() || null,
+            voice_wants_link: String(qs("#voice_wants_link")?.value || "").trim() || null,
             followup_message: String(qs("#followup_message")?.value || "").trim() || null,
             response_delay_ms: Number(qs("#response_delay_ms")?.value || 90) * 1000,
             products,

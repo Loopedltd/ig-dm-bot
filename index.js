@@ -2441,6 +2441,12 @@ const voiceFieldMap = [
   { userLine: "i need to think about it", key: "voice_objection_reply" },
   { userLine: "that sounds good, how do i get started?", key: "voice_booking_push" },
   { userLine: "just checking in", key: "voice_quiet_lead" },
+  { userLine: "that's too expensive for me", key: "voice_price_too_much" },
+  { userLine: "i need to think about it a bit more", key: "voice_need_to_think" },
+  { userLine: "i'm not sure if this will work for me", key: "voice_not_sure_works" },
+  { userLine: "i just don't have the time right now", key: "voice_no_time" },
+  { userLine: "yeah i'm keen, what's next?", key: "voice_ready_to_book" },
+  { userLine: "can you send me the booking link?", key: "voice_wants_link" },
 ];
 for (const { userLine, key } of voiceFieldMap) {
   const ans = String(cfg?.[key] || "").trim();
@@ -5065,7 +5071,7 @@ if (typeof patch.followup_message === "string" || patch.followup_message === nul
   allowed.followup_message = patch.followup_message || null;
 }
 // Structured voice training fields
-for (const key of ["voice_price_reply", "voice_objection_reply", "voice_booking_push", "voice_quiet_lead"]) {
+for (const key of ["voice_price_reply", "voice_objection_reply", "voice_booking_push", "voice_quiet_lead", "voice_price_too_much", "voice_need_to_think", "voice_not_sure_works", "voice_no_time", "voice_ready_to_book", "voice_wants_link"]) {
   if (typeof patch[key] === "string" || patch[key] === null) {
     allowed[key] = patch[key] || null;
   }
