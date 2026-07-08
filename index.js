@@ -6871,13 +6871,19 @@ async function handlePostCommentKeyword(igAccountId, commentId, commenterId, com
     if (sentCommentDmKeys.size >= 5000) sentCommentDmKeys.clear();
     sentCommentDmKeys.add(dedupKey);
 
-    // Send DM to commenter
-    const { sendResp, sendData } = await sendInstagramTextMessage({
-      accessToken: igAccount.page_access_token,
-      recipientId: commenterId,
-      text: dmText,
-      useInstagramApi: !igAccount.page_id,
-    });
+    // Send DM to commenter — only if we have a commenter ID (from.id may be absent
+    // when polled via Graph API without the from field being returned)
+    if (!commenterId) {
+      console.log("comment_keyword: skipping DM — no commenterId (from.id missing)", { commentId });
+    }
+    const { sendResp, sendData } = commenterId
+      ? await sendInstagramTextMessage({
+          accessToken: igAccount.page_access_token,
+          recipientId: commenterId,
+          text: dmText,
+          useInstagramApi: !igAccount.page_id,
+        })
+      : { sendResp: { ok: false }, sendData: { skipped: "no_commenter_id" } };
 
     log("ig_comment_keyword_dm_sent", {
       igAccountId,
@@ -6967,6 +6973,11 @@ async function handlePostCommentAutoDm(igAccountId, commentId, commenterId, comm
     }
     if (sentCommentDmKeys.size >= 5000) sentCommentDmKeys.clear();
     sentCommentDmKeys.add(dedupKey);
+
+    if (!commenterId) {
+      console.log("comment_auto_dm: skipping DM — no commenterId (from.id missing)", { commentId });
+      return;
+    }
 
     const { sendResp, sendData } = await sendInstagramTextMessage({
       accessToken: igAccount.page_access_token,
@@ -10281,9 +10292,12 @@ async function pollAccountComments(acc) {
     // Fetch comments WITHOUT the since param first so we can see all comments,
     // then filter client-side. This lets us log what the API actually returns
     // vs what gets filtered out by the cutoff check.
+    // Explicitly request `from` as a top-level field — Meta does not return commenter
+    // details by default. Using a plain URL (not URL-encoded braces) so the nested
+    // field selector `from{id,username}` is sent as-is to the Graph API.
     const commentsUrl =
       `https://graph.instagram.com/v21.0/${encodeURIComponent(media.id)}/comments` +
-      `?fields=id,text,timestamp,username,from%7Bid,username%7D&limit=50` +
+      `?fields=id,text,timestamp,from&limit=50` +
       `&access_token=${encodeURIComponent(token)}`;
 
     const commentsResp = await fetch(commentsUrl);
@@ -10322,16 +10336,17 @@ async function pollAccountComments(acc) {
 
       const commentId = String(comment.id || "");
       const commenterId = String(comment.from?.id || "");
-      const commenterUsername = comment.from?.username || comment.username || null;
+      const commenterUsername = comment.from?.username || null;
       const commentText = String(comment.text || "").trim();
 
-      if (!commentId || !commenterId || !commentText) {
-        console.log(`[comment_poll] comment ${comment.id}: SKIPPED — missing id/from.id/text`, { commentId: !!commentId, commenterId: !!commenterId, hasText: !!commentText });
+      // Must have a comment ID and text to do anything useful
+      if (!commentId || !commentText) {
+        console.log(`[comment_poll] comment ${comment.id}: SKIPPED — missing id or text`, { hasId: !!commentId, hasText: !!commentText });
         continue;
       }
 
       // Skip own comments (account owner commenting on their own post)
-      if (commenterId === igUserId) {
+      if (commenterId && commenterId === igUserId) {
         console.log(`[comment_poll] comment ${comment.id}: SKIPPED — own comment`);
         continue;
       }
@@ -10339,16 +10354,26 @@ async function pollAccountComments(acc) {
       newCommentsFound++;
       console.log(`[comment_poll] DISPATCHING comment ${commentId}:`, {
         mediaId: media.id,
-        commenterId,
+        commenterId: commenterId || "(no from.id)",
         commenterUsername,
         text: commentText.slice(0, 80),
       });
 
-      // Route through existing handlers using ig_user_id as the account identifier.
-      // Both handlers perform their own dedup via sentCommentDmKeys so concurrent
-      // calls or rapid re-polls won't double-send.
-      void handlePostCommentKeyword(igUserId, commentId, commenterId, commenterUsername, commentText);
-      void handlePostCommentAutoDm(igUserId, commentId, commenterId, commenterUsername, commentText);
+      // handlePostCommentKeyword sends a DM — requires commenterId (from.id).
+      // handlePostCommentAutoDm also sends a DM — same requirement.
+      // Public comment replies inside both handlers only need commentId, so
+      // both handlers are always called; each skips the DM step internally
+      // if commenterId is empty (the DM send will simply fail gracefully).
+      if (commenterId) {
+        void handlePostCommentKeyword(igUserId, commentId, commenterId, commenterUsername, commentText);
+        void handlePostCommentAutoDm(igUserId, commentId, commenterId, commenterUsername, commentText);
+      } else {
+        // No from.id — can't send a DM, but public reply doesn't need it.
+        // Call handlers with a placeholder; they will skip the DM and attempt the reply.
+        console.log(`[comment_poll] comment ${commentId}: no from.id — skipping DM, attempting public reply only`);
+        void handlePostCommentKeyword(igUserId, commentId, "", commenterUsername, commentText);
+        void handlePostCommentAutoDm(igUserId, commentId, "", commenterUsername, commentText);
+      }
     }
   }
 
