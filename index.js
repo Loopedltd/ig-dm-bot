@@ -10267,46 +10267,78 @@ async function pollAccountComments(acc) {
     (m) => m.timestamp && new Date(m.timestamp) >= sevenDaysAgo
   );
 
-  if (!recentMedia.length) return;
+  console.log(`[comment_poll] ${acc.ig_username || igUserId}: ${mediaData.data.length} total posts, ${recentMedia.length} within 7 days`);
+  console.log(`[comment_poll] cutoff=${cutoff.toISOString()} cutoffUnix=${cutoffUnix} (since param sent to API)`);
 
-  console.log(`[comment_poll] ${acc.ig_username || igUserId}: checking ${recentMedia.length} posts since ${cutoff.toISOString()}`);
+  if (!recentMedia.length) {
+    console.log(`[comment_poll] ${acc.ig_username || igUserId}: no posts within 7 days — skipping`);
+    return;
+  }
 
   let newCommentsFound = 0;
 
   for (const media of recentMedia) {
-    // Fetch comments on this post newer than the cutoff
-    const commentsResp = await fetch(
+    // Fetch comments WITHOUT the since param first so we can see all comments,
+    // then filter client-side. This lets us log what the API actually returns
+    // vs what gets filtered out by the cutoff check.
+    const commentsUrl =
       `https://graph.instagram.com/v21.0/${encodeURIComponent(media.id)}/comments` +
-      `?fields=id,text,timestamp,username,from%7Bid,username%7D` +
-      `&since=${cutoffUnix}` +
-      `&access_token=${encodeURIComponent(token)}`
-    );
+      `?fields=id,text,timestamp,username,from%7Bid,username%7D&limit=50` +
+      `&access_token=${encodeURIComponent(token)}`;
+
+    const commentsResp = await fetch(commentsUrl);
     const commentsData = await commentsResp.json().catch(() => ({}));
 
     if (!commentsResp.ok) {
-      console.warn(`[comment_poll] comments fetch failed for media ${media.id}:`, commentsData?.error?.message || commentsResp.status);
+      console.warn(`[comment_poll] comments fetch failed for media ${media.id}:`, JSON.stringify(commentsData?.error || commentsResp.status));
       continue;
     }
 
-    const comments = Array.isArray(commentsData?.data) ? commentsData.data : [];
+    const allComments = Array.isArray(commentsData?.data) ? commentsData.data : [];
 
-    for (const comment of comments) {
-      // Double-check timestamp client-side (since param may not be perfectly honoured)
-      if (comment.timestamp && new Date(comment.timestamp) <= cutoff) continue;
+    // Log raw API result so we can see if comments exist at all and what fields come back
+    console.log(`[comment_poll] media ${media.id} (${media.timestamp}): ${allComments.length} total comment(s) from API`);
+    if (allComments.length > 0) {
+      console.log(`[comment_poll] raw comments:`, JSON.stringify(allComments.map(c => ({
+        id: c.id,
+        timestamp: c.timestamp,
+        text: String(c.text || "").slice(0, 60),
+        fromId: c.from?.id || null,
+        fromUsername: c.from?.username || c.username || null,
+      }))));
+    }
+
+    for (const comment of allComments) {
+      const commentTimestamp = comment.timestamp ? new Date(comment.timestamp) : null;
+
+      // Log cutoff comparison for each comment so we can see which are filtered
+      const afterCutoff = commentTimestamp ? commentTimestamp > cutoff : null;
+      console.log(`[comment_poll] comment ${comment.id}: ts=${comment.timestamp} afterCutoff=${afterCutoff} (cutoff=${cutoff.toISOString()})`);
+
+      if (commentTimestamp && commentTimestamp <= cutoff) {
+        console.log(`[comment_poll] comment ${comment.id}: SKIPPED — older than cutoff`);
+        continue;
+      }
 
       const commentId = String(comment.id || "");
       const commenterId = String(comment.from?.id || "");
       const commenterUsername = comment.from?.username || comment.username || null;
       const commentText = String(comment.text || "").trim();
 
-      if (!commentId || !commenterId || !commentText) continue;
+      if (!commentId || !commenterId || !commentText) {
+        console.log(`[comment_poll] comment ${comment.id}: SKIPPED — missing id/from.id/text`, { commentId: !!commentId, commenterId: !!commenterId, hasText: !!commentText });
+        continue;
+      }
 
       // Skip own comments (account owner commenting on their own post)
-      if (commenterId === igUserId) continue;
+      if (commenterId === igUserId) {
+        console.log(`[comment_poll] comment ${comment.id}: SKIPPED — own comment`);
+        continue;
+      }
 
       newCommentsFound++;
-      console.log(`[comment_poll] new comment on ${media.id}:`, {
-        commentId,
+      console.log(`[comment_poll] DISPATCHING comment ${commentId}:`, {
+        mediaId: media.id,
         commenterId,
         commenterUsername,
         text: commentText.slice(0, 80),
@@ -10320,9 +10352,7 @@ async function pollAccountComments(acc) {
     }
   }
 
-  if (newCommentsFound > 0) {
-    console.log(`[comment_poll] ${acc.ig_username || igUserId}: dispatched ${newCommentsFound} new comment(s)`);
-  }
+  console.log(`[comment_poll] ${acc.ig_username || igUserId}: poll complete — ${newCommentsFound} new comment(s) dispatched`);
 }
 
 app.listen(PORT, () => {
