@@ -275,8 +275,8 @@
       val(qs("#keyword_trigger_text"), c.keyword_trigger_text);
       val(qs("#keyword_auto_dm_text"), c.keyword_auto_dm_text);
 
-      // Comment keyword
-      val(qs("#comment_keyword_dm_enabled"), c.comment_keyword_dm_enabled);
+      // Comment keyword — auto-DM toggle locked off (coming soon)
+      val(qs("#comment_keyword_dm_enabled"), "false");
       val(qs("#comment_keyword_trigger"), c.comment_keyword_trigger);
       val(qs("#comment_keyword_dm_text"), c.comment_keyword_dm_text);
       val(qs("#comment_keyword_reply_enabled"), c.comment_keyword_reply_enabled);

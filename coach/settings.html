@@ -262,11 +262,13 @@
 
         <div class="row" style="margin-top:14px;">
           <div>
-            <label style="margin-top:0;">Comment keyword auto-DM</label>
-            <select id="comment_keyword_dm_enabled">
+            <div style="opacity:0.45; pointer-events:none; cursor:not-allowed;">
+            <label style="margin-top:0;">Comment keyword auto-DM <span style="font-size:11px; font-weight:500; color:#888;">(coming soon)</span></label>
+            <select id="comment_keyword_dm_enabled" disabled>
               <option value="false">Off</option>
               <option value="true">On</option>
             </select>
+            </div>
             <label>Trigger keyword</label>
             <input id="comment_keyword_trigger" placeholder="Example: FREE" />
             <label>DM to send</label>
