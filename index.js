@@ -10292,12 +10292,11 @@ async function pollAccountComments(acc) {
     // Fetch comments WITHOUT the since param first so we can see all comments,
     // then filter client-side. This lets us log what the API actually returns
     // vs what gets filtered out by the cutoff check.
-    // Explicitly request `from` as a top-level field — Meta does not return commenter
-    // details by default. Using a plain URL (not URL-encoded braces) so the nested
-    // field selector `from{id,username}` is sent as-is to the Graph API.
+    // Request nested from{id,username} explicitly — the plain `from` field returns
+    // the object but Meta may omit id/username without the nested selector.
     const commentsUrl =
       `https://graph.instagram.com/v21.0/${encodeURIComponent(media.id)}/comments` +
-      `?fields=id,text,timestamp,from&limit=50` +
+      `?fields=id,text,timestamp,from{id,username}&limit=50` +
       `&access_token=${encodeURIComponent(token)}`;
 
     const commentsResp = await fetch(commentsUrl);
