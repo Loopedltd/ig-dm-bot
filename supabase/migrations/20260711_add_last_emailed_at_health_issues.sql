@@ -1,0 +1,1 @@
+ALTER TABLE health_issues ADD COLUMN IF NOT EXISTS last_emailed_at TIMESTAMPTZ;

@@ -9904,7 +9904,8 @@ async function refreshExpiringTokens() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HEALTH MONITOR — runs every 5 minutes, alerts james@looped.ltd via Resend
+// HEALTH MONITOR — runs every 6 hours, alerts james@looped.ltd via Resend
+// Re-alert suppression: same client+issue only re-emails after 3 days unresolved.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -9912,16 +9913,58 @@ const ALERT_EMAIL = "james@looped.ltd";
 const ALERT_FROM = "Looped Alerts <alerts@looped.ltd>";
 const ADMIN_BASE_URL = process.env.APP_URL || "https://app.looped.ltd";
 
-// Track which alert types have already been sent per client to avoid spam
-// Key: `${clientId}:${alertType}` → timestamp of last alert sent
-const alertSentAt = new Map();
+// Re-alert suppression: for a given client+issueType, only email again if the
+// issue has been unresolved for 3+ days since the last email was sent.
+// Tracked via last_emailed_at on the health_issues table (DB-persisted, survives restarts).
+const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
-function shouldSendAlert(clientId, type, cooldownMs = 30 * 60 * 1000) {
-  const key = `${clientId}:${type}`;
-  const last = alertSentAt.get(key) || 0;
-  if (Date.now() - last < cooldownMs) return false;
-  alertSentAt.set(key, Date.now());
-  return true;
+async function checkAndEmailHealthIssue({ clientId, clientName, issueType, description, emailIssues }) {
+  try {
+    // Look for an existing unresolved issue of the same type for this client
+    const { data: existing } = await supabase
+      .from("health_issues")
+      .select("id, detected_at, last_emailed_at")
+      .eq("client_id", clientId)
+      .eq("issue_type", issueType)
+      .eq("resolved", false)
+      .order("detected_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const now = new Date().toISOString();
+
+    if (!existing) {
+      // New issue — insert and email immediately
+      await supabase.from("health_issues").insert({
+        client_id: clientId,
+        client_name: clientName || clientId,
+        issue_type: issueType,
+        issue_description: description,
+        detected_at: now,
+        last_emailed_at: now,
+        resolved: false,
+      });
+      emailIssues.push(description);
+      console.log(`[health_monitor] new issue ${issueType} for ${clientId} — emailing immediately`);
+    } else {
+      // Existing unresolved issue — apply re-alert suppression
+      const lastEmailed = existing.last_emailed_at || existing.detected_at;
+      const msSinceLastEmail = Date.now() - new Date(lastEmailed).getTime();
+
+      if (msSinceLastEmail >= THREE_DAYS_MS) {
+        // 3+ days unresolved — re-alert and update timestamp
+        await supabase.from("health_issues")
+          .update({ last_emailed_at: now, issue_description: description })
+          .eq("id", existing.id);
+        emailIssues.push(description);
+        console.log(`[health_monitor] re-alert ${issueType} for ${clientId} — ${Math.floor(msSinceLastEmail / 86400000)}d since last email`);
+      } else {
+        console.log(`[health_monitor] suppressed ${issueType} for ${clientId} — ${Math.floor(msSinceLastEmail / 3600000)}h since last email (threshold: 72h)`);
+      }
+    }
+  } catch (e) {
+    console.warn("[health_monitor] checkAndEmailHealthIssue failed", clientId, issueType, e?.message);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -10020,7 +10063,7 @@ async function sendHealthAlert({ clientName, clientId, issues }) {
       <p style="margin-top:20px;">
         <a href="${adminUrl}" style="background:#2d6bff;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Open admin dashboard</a>
       </p>
-      <p style="color:#999;font-size:12px;margin-top:16px;">Looped health monitor · every 5 minutes</p>
+      <p style="color:#999;font-size:12px;margin-top:16px;">Looped health monitor · every 6 hours · re-alerts suppressed for 3 days after first detection</p>
     </div>
   `;
 
@@ -10043,20 +10086,7 @@ async function sendHealthAlert({ clientName, clientId, issues }) {
   }
 }
 
-async function recordHealthIssue({ clientId, clientName, issueType, description }) {
-  try {
-    await supabase.from("health_issues").insert({
-      client_id: clientId,
-      client_name: clientName || clientId,
-      issue_type: issueType,
-      issue_description: description,
-      detected_at: new Date().toISOString(),
-      resolved: false,
-    });
-  } catch (e) {
-    console.warn("health_monitor: failed to insert health_issue", e?.message);
-  }
-}
+// recordHealthIssue replaced by checkAndEmailHealthIssue (handles insert + email suppression)
 
 async function runHealthMonitor() {
   try {
@@ -10079,17 +10109,14 @@ async function runHealthMonitor() {
         continue;
       }
 
-      const issues = []; // { type, description } — used for email
+      const emailIssues = []; // descriptions to include in this run's alert email
 
       // ── Check 1: Instagram token validity ─────────────────────────────────
       try {
         const igAcc = await getIgAccountByClientId(clientId);
         if (!igAcc?.page_access_token) {
-          if (shouldSendAlert(clientId, "no_token")) {
-            const desc = "No active Instagram token found. The account may not be connected.";
-            issues.push(desc);
-            await recordHealthIssue({ clientId, clientName, issueType: "no_token", description: desc });
-          }
+          const desc = "No active Instagram token found. The account may not be connected.";
+          await checkAndEmailHealthIssue({ clientId, clientName, issueType: "no_token", description: desc, emailIssues });
         } else {
           const probeUrl = igAcc.page_id
             ? `https://graph.facebook.com/v21.0/${encodeURIComponent(igAcc.ig_user_id || igAcc.page_id)}?fields=id&access_token=${encodeURIComponent(igAcc.page_access_token)}`
@@ -10100,11 +10127,8 @@ async function runHealthMonitor() {
             const body = await probe.json().catch(() => ({}));
             const code = body?.error?.code;
             if (code === 190 || code === 102 || probe.status === 401) {
-              if (shouldSendAlert(clientId, "invalid_token")) {
-                const desc = `Instagram token is invalid or expired (error code ${code ?? probe.status}). Re-connect Instagram in the coach dashboard.`;
-                issues.push(desc);
-                await recordHealthIssue({ clientId, clientName, issueType: "invalid_token", description: desc });
-              }
+              const desc = `Instagram token is invalid or expired (error code ${code ?? probe.status}). Re-connect Instagram in the coach dashboard.`;
+              await checkAndEmailHealthIssue({ clientId, clientName, issueType: "invalid_token", description: desc, emailIssues });
             }
           }
         }
@@ -10123,14 +10147,11 @@ async function runHealthMonitor() {
           .lt("manual_override_at", cutoff);
 
         if (!stuckErr && stuckLeads?.length > 0) {
-          if (shouldSendAlert(clientId, "stuck_leads")) {
-            const names = stuckLeads.map((l) =>
-              l.ig_name || `···${String(l.ig_psid || "").slice(-6)}`
-            ).join(", ");
-            const desc = `${stuckLeads.length} lead${stuckLeads.length !== 1 ? "s" : ""} stuck with bot paused for over 2 hours: ${names}`;
-            issues.push(desc);
-            await recordHealthIssue({ clientId, clientName, issueType: "stuck_leads", description: desc });
-          }
+          const names = stuckLeads.map((l) =>
+            l.ig_name || `···${String(l.ig_psid || "").slice(-6)}`
+          ).join(", ");
+          const desc = `${stuckLeads.length} lead${stuckLeads.length !== 1 ? "s" : ""} stuck with bot paused for over 2 hours: ${names}`;
+          await checkAndEmailHealthIssue({ clientId, clientName, issueType: "stuck_leads", description: desc, emailIssues });
         }
       } catch (e) {
         console.warn("health_monitor: stuck leads check failed for", clientId, e?.message);
@@ -10141,19 +10162,16 @@ async function runHealthMonitor() {
         const errors = recentWebhookErrors.get(clientId) || [];
         const recent = errors.filter((e) => now - e.ts.getTime() < THIRTY_MINS);
         if (recent.length >= 3) {
-          if (shouldSendAlert(clientId, "webhook_errors")) {
-            const desc = `${recent.length} webhook errors in the last 30 minutes. Latest: "${recent[recent.length - 1].error.slice(0, 120)}"`;
-            issues.push(desc);
-            await recordHealthIssue({ clientId, clientName, issueType: "webhook_errors", description: desc });
-          }
+          const desc = `${recent.length} webhook errors in the last 30 minutes. Latest: "${recent[recent.length - 1].error.slice(0, 120)}"`;
+          await checkAndEmailHealthIssue({ clientId, clientName, issueType: "webhook_errors", description: desc, emailIssues });
         }
       } catch (e) {
         console.warn("health_monitor: webhook error check failed for", clientId, e?.message);
       }
 
-      // ── Send alert email if any issues found ──────────────────────────────
-      if (issues.length > 0) {
-        await sendHealthAlert({ clientName: clientName || clientId, clientId, issues });
+      // ── Send alert email if any issues need emailing this run ─────────────
+      if (emailIssues.length > 0) {
+        await sendHealthAlert({ clientName: clientName || clientId, clientId, issues: emailIssues });
       }
     }
   } catch (e) {
@@ -10459,12 +10477,12 @@ app.listen(PORT, () => {
     );
   }, 12 * 60 * 60 * 1000);
 
-  // Health monitor — first run 2 min after startup, then every 5 minutes
+  // Health monitor — first run 2 min after startup, then every 6 hours
   setTimeout(() => {
     runHealthMonitor().catch((e) => console.error("health_monitor: startup run failed", e?.message || e));
     setInterval(() => {
       runHealthMonitor().catch((e) => console.error("health_monitor: error", e?.message || e));
-    }, 5 * 60 * 1000);
+    }, 6 * 60 * 60 * 1000);
   }, 2 * 60 * 1000);
 
   // Client deletion job — runs once daily at startup check, then every 24 hours
