@@ -9918,7 +9918,12 @@ const ADMIN_BASE_URL = process.env.APP_URL || "https://app.looped.ltd";
 // Tracked via last_emailed_at on the health_issues table (DB-persisted, survives restarts).
 const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
-async function checkAndEmailHealthIssue({ clientId, clientName, issueType, description, emailIssues }) {
+async function checkAndEmailHealthIssue({ clientId, clientName, issueType, description, emailIssues, alerts_muted }) {
+  // Defense-in-depth: never email for muted clients even if the outer loop check is bypassed
+  if (alerts_muted) {
+    console.log(`[health_monitor] MUTED guard hit inside checkAndEmailHealthIssue for ${clientName} (${clientId}) type=${issueType} — skipping email`);
+    return;
+  }
   try {
     // Look for an existing unresolved issue of the same type for this client
     const { data: existing } = await supabase
@@ -10103,6 +10108,9 @@ async function runHealthMonitor() {
     for (const client of clients) {
       const { id: clientId, name: clientName, alerts_muted } = client;
 
+      // Log the raw mute flag value for every client so we can verify it's being read correctly
+      console.log(`[health_monitor] client=${clientName} (${clientId}) alerts_muted=${JSON.stringify(alerts_muted)}`);
+
       // Skip muted clients entirely
       if (alerts_muted) {
         log("health_monitor_skipped_muted", { clientId, clientName });
@@ -10116,7 +10124,7 @@ async function runHealthMonitor() {
         const igAcc = await getIgAccountByClientId(clientId);
         if (!igAcc?.page_access_token) {
           const desc = "No active Instagram token found. The account may not be connected.";
-          await checkAndEmailHealthIssue({ clientId, clientName, issueType: "no_token", description: desc, emailIssues });
+          await checkAndEmailHealthIssue({ clientId, clientName, issueType: "no_token", description: desc, emailIssues, alerts_muted });
         } else {
           const probeUrl = igAcc.page_id
             ? `https://graph.facebook.com/v21.0/${encodeURIComponent(igAcc.ig_user_id || igAcc.page_id)}?fields=id&access_token=${encodeURIComponent(igAcc.page_access_token)}`
@@ -10128,7 +10136,7 @@ async function runHealthMonitor() {
             const code = body?.error?.code;
             if (code === 190 || code === 102 || probe.status === 401) {
               const desc = `Instagram token is invalid or expired (error code ${code ?? probe.status}). Re-connect Instagram in the coach dashboard.`;
-              await checkAndEmailHealthIssue({ clientId, clientName, issueType: "invalid_token", description: desc, emailIssues });
+              await checkAndEmailHealthIssue({ clientId, clientName, issueType: "invalid_token", description: desc, emailIssues, alerts_muted });
             }
           }
         }
@@ -10151,7 +10159,7 @@ async function runHealthMonitor() {
             l.ig_name || `···${String(l.ig_psid || "").slice(-6)}`
           ).join(", ");
           const desc = `${stuckLeads.length} lead${stuckLeads.length !== 1 ? "s" : ""} stuck with bot paused for over 2 hours: ${names}`;
-          await checkAndEmailHealthIssue({ clientId, clientName, issueType: "stuck_leads", description: desc, emailIssues });
+          await checkAndEmailHealthIssue({ clientId, clientName, issueType: "stuck_leads", description: desc, emailIssues, alerts_muted });
         }
       } catch (e) {
         console.warn("health_monitor: stuck leads check failed for", clientId, e?.message);
@@ -10163,7 +10171,7 @@ async function runHealthMonitor() {
         const recent = errors.filter((e) => now - e.ts.getTime() < THIRTY_MINS);
         if (recent.length >= 3) {
           const desc = `${recent.length} webhook errors in the last 30 minutes. Latest: "${recent[recent.length - 1].error.slice(0, 120)}"`;
-          await checkAndEmailHealthIssue({ clientId, clientName, issueType: "webhook_errors", description: desc, emailIssues });
+          await checkAndEmailHealthIssue({ clientId, clientName, issueType: "webhook_errors", description: desc, emailIssues, alerts_muted });
         }
       } catch (e) {
         console.warn("health_monitor: webhook error check failed for", clientId, e?.message);
@@ -10171,6 +10179,7 @@ async function runHealthMonitor() {
 
       // ── Send alert email if any issues need emailing this run ─────────────
       if (emailIssues.length > 0) {
+        console.log(`[health_monitor] sending email for ${clientName} (${clientId}) alerts_muted=${JSON.stringify(alerts_muted)} issues=${emailIssues.length}`);
         await sendHealthAlert({ clientName: clientName || clientId, clientId, issues: emailIssues });
       }
     }
