@@ -10514,3 +10514,15 @@ app.listen(PORT, () => {
   }, 30 * 1000);
 });
 
+// ── ADDITIVE: Self-serve trial flow ──────────────────────────────────────────
+// All logic lives in trial/routes.js — this is the only change to this file.
+// Routes added: GET /trial/admin, GET /start/:token, POST /api/trial/checkout/:token,
+//               GET /trial/success, GET+POST /admin/api/trial/*
+// Remove this block to disable the trial flow entirely.
+import("./trial/routes.js")
+  .then(({ default: trialRouter }) => {
+    app.use(trialRouter);
+    console.log("[trial] routes mounted");
+  })
+  .catch((e) => console.error("[trial] failed to mount routes:", e?.message || e));
+

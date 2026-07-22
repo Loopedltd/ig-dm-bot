@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trial Links — Looped Admin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #2d6bff;
+      --text: #0f172a;
+      --muted: rgba(15,23,42,.55);
+      --border: rgba(15,23,42,.1);
+      --border2: rgba(15,23,42,.14);
+      --bg: #f1f5f9;
+      --panel: #ffffff;
+      --shadow: 0 2px 12px rgba(15,23,42,.07);
+      --ok: #027a48;
+      --ok-bg: #ecfdf3;
+      --ok-border: #a7f3d0;
+      --danger: #b42318;
+    }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    .topbar { background: var(--panel); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 16px; }
+    .brand { font-weight: 900; font-size: 18px; color: var(--primary); }
+    .topbar-title { font-size: 14px; font-weight: 700; color: var(--muted); }
+    .wrap { max-width: 820px; margin: 0 auto; padding: 32px 20px 80px; }
+    h1 { font-size: 24px; font-weight: 900; margin-bottom: 4px; }
+    .sub { font-size: 14px; color: var(--muted); margin-bottom: 28px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 24px; box-shadow: var(--shadow); margin-bottom: 24px; }
+    .card h2 { font-size: 15px; font-weight: 800; margin-bottom: 16px; }
+    label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin: 14px 0 5px; }
+    label:first-of-type { margin-top: 0; }
+    input, select { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border2); font-family: inherit; font-size: 13px; color: var(--text); background: #fff; outline: none; }
+    input:focus, select:focus { border-color: rgba(45,107,255,.5); box-shadow: 0 0 0 3px rgba(45,107,255,.1); }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; padding: 10px 18px; border-radius: 10px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid var(--border2); background: #fff; color: var(--text); }
+    .btn.primary { background: var(--primary); border-color: rgba(45,107,255,.3); color: #fff; }
+    .btn.primary:hover { filter: brightness(1.08); }
+    .btn:disabled { opacity: .6; pointer-events: none; }
+    .ok-box { display: none; background: var(--ok-bg); border: 1px solid var(--ok-border); color: var(--ok); border-radius: 10px; padding: 12px 14px; font-size: 14px; margin-top: 14px; word-break: break-all; line-height: 1.6; }
+    .err-box { display: none; background: #fff5f5; border: 1px solid #fecaca; color: var(--danger); border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-top: 12px; }
+    .helper { font-size: 12px; color: var(--muted); margin-top: 5px; }
+    /* Auth gate */
+    #authGate { max-width: 420px; margin: 80px auto; }
+    #authGate .card { padding: 32px; }
+    #authGate h2 { font-size: 18px; margin-bottom: 6px; }
+    #authGate p { font-size: 14px; color: var(--muted); margin-bottom: 20px; }
+    /* Links table */
+    table { width: 100%; border-collapse: collapse; }
+    thead th { padding: 9px 12px; text-align: left; font-size: 11px; font-weight: 800; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+    tbody td { padding: 11px 12px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tbody tr:last-child td { border-bottom: none; }
+    .badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 750; }
+    .badge.unused { background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; }
+    .badge.completed { background: var(--ok-bg); border: 1px solid var(--ok-border); color: var(--ok); }
+    .url-cell { font-family: monospace; font-size: 12px; color: var(--primary); word-break: break-all; }
+    .copy-btn { font-size: 11px; padding: 4px 8px; border-radius: 6px; margin-left: 6px; cursor: pointer; border: 1px solid var(--border2); background: #fff; }
+    .empty { padding: 32px; text-align: center; color: var(--muted); font-size: 14px; }
+    #mainContent { display: none; }
+  </style>
+</head>
+<body>
+
+<!-- Auth gate: shown until localStorage admin_token is verified -->
+<div id="authGate">
+  <div class="card">
+    <h2>Admin — Trial Links</h2>
+    <p>Paste your admin token to continue. This is the same JWT you get from the admin login page.</p>
+    <label>Admin token</label>
+    <input type="password" id="tokenInput" placeholder="Paste JWT here" />
+    <div class="err-box" id="authErr"></div>
+    <div style="margin-top:14px;">
+      <button class="btn primary" onclick="verifyToken()">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main content (hidden until auth passes) -->
+<div id="mainContent">
+  <div class="topbar">
+    <div class="brand">Looped</div>
+    <div class="topbar-title">Trial Links Admin</div>
+    <div style="margin-left:auto;">
+      <a href="/admin/dashboard.html" class="btn" style="font-size:12px;">← Admin dashboard</a>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <h1>Trial Links</h1>
+    <p class="sub">Generate shareable <code>/start/{token}</code> URLs for 7-day free trials. Each link is single-use.</p>
+
+    <!-- Generate form -->
+    <div class="card">
+      <h2>Generate a new trial link</h2>
+      <div class="row2">
+        <div>
+          <label>Label (optional)</label>
+          <input type="text" id="genLabel" placeholder="e.g. John Smith — Instagram outreach" />
+          <div class="helper">For your reference only. Not shown to the prospect.</div>
+        </div>
+        <div>
+          <label>Monthly price (£)</label>
+          <input type="number" id="genPrice" placeholder="30" min="1" step="1" value="30" />
+          <div class="helper">Defaults to £30/month. Enter whole pounds — e.g. 30 for £30.</div>
+        </div>
+      </div>
+      <div style="margin-top:16px;">
+        <button class="btn primary" id="genBtn" onclick="generateLink()">Generate link</button>
+      </div>
+      <div class="ok-box" id="genOk"></div>
+      <div class="err-box" id="genErr"></div>
+    </div>
+
+    <!-- Existing links -->
+    <div class="card">
+      <h2>All trial links</h2>
+      <div id="linksTable"><div class="empty">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const TOKEN_KEY = 'admin_token';
+  let adminToken = localStorage.getItem(TOKEN_KEY) || '';
+
+  // Auto-fill token input if already in localStorage
+  if (adminToken) {
+    document.getElementById('tokenInput').value = adminToken;
+  }
+
+  async function apiFetch(path, opts = {}) {
+    const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+    if (adminToken) headers.Authorization = 'Bearer ' + adminToken;
+    const res = await fetch(path, Object.assign({}, opts, { headers }));
+    if (res.status === 401 || res.status === 403) {
+      showAuthGate('Token expired or invalid. Paste a fresh one.');
+      throw new Error('unauthorized');
+    }
+    return res;
+  }
+
+  function showAuthGate(msg) {
+    document.getElementById('mainContent').style.display = 'none';
+    document.getElementById('authGate').style.display = 'block';
+    if (msg) {
+      const el = document.getElementById('authErr');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+  }
+
+  async function verifyToken() {
+    const input = document.getElementById('tokenInput').value.trim();
+    const errEl = document.getElementById('authErr');
+    errEl.style.display = 'none';
+    if (!input) { errEl.textContent = 'Paste your admin token first.'; errEl.style.display = 'block'; return; }
+
+    adminToken = input;
+    try {
+      const res = await apiFetch('/admin/api/trial/links');
+      if (!res.ok) throw new Error('Invalid token');
+      const data = await res.json();
+      localStorage.setItem(TOKEN_KEY, adminToken);
+      document.getElementById('authGate').style.display = 'none';
+      document.getElementById('mainContent').style.display = 'block';
+      renderLinks(data.links || []);
+    } catch (e) {
+      errEl.textContent = 'Token is invalid or expired. Check and try again.';
+      errEl.style.display = 'block';
+      adminToken = '';
+    }
+  }
+
+  async function generateLink() {
+    const label      = document.getElementById('genLabel').value.trim();
+    const pricePounds = parseFloat(document.getElementById('genPrice').value) || 30;
+    const priceAmount = Math.round(pricePounds * 100);
+    const btn = document.getElementById('genBtn');
+    const okEl = document.getElementById('genOk');
+    const errEl = document.getElementById('genErr');
+    okEl.style.display = 'none';
+    errEl.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Generating…';
+
+    try {
+      const res = await apiFetch('/admin/api/trial/generate', {
+        method: 'POST',
+        body: JSON.stringify({ label: label || null, price_amount: priceAmount }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate');
+
+      okEl.innerHTML = '<strong>Link generated:</strong><br>' +
+        '<a href="' + escHtml(data.url) + '" target="_blank">' + escHtml(data.url) + '</a>' +
+        '<button class="copy-btn" onclick="copyUrl(\'' + escHtml(data.url) + '\', this)">Copy</button>' +
+        '<br><span style="font-size:12px;color:var(--muted);">Label: ' + escHtml(label || '(none)') + ' · £' + pricePounds.toFixed(0) + '/mo</span>';
+      okEl.style.display = 'block';
+
+      document.getElementById('genLabel').value = '';
+      document.getElementById('genPrice').value = '30';
+      await loadLinks();
+    } catch (e) {
+      errEl.textContent = e.message || 'Failed to generate link';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Generate link';
+    }
+  }
+
+  async function loadLinks() {
+    try {
+      const res = await apiFetch('/admin/api/trial/links');
+      const data = await res.json();
+      renderLinks(data.links || []);
+    } catch {}
+  }
+
+  function renderLinks(links) {
+    const el = document.getElementById('linksTable');
+    if (!links.length) {
+      el.innerHTML = '<div class="empty">No trial links yet. Generate one above.</div>';
+      return;
+    }
+    const rows = links.map(l => {
+      const url = location.origin + '/start/' + escHtml(l.token);
+      const date = new Date(l.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+      const price = '£' + (l.price_amount / 100).toFixed(0) + '/mo';
+      const badgeCls = l.status === 'completed' ? 'completed' : 'unused';
+      return '<tr>' +
+        '<td>' + escHtml(l.label || '—') + '</td>' +
+        '<td class="url-cell"><a href="' + url + '" target="_blank">/start/' + escHtml(l.token) + '</a>' +
+          '<button class="copy-btn" onclick="copyUrl(\'' + url + '\', this)">Copy</button></td>' +
+        '<td>' + price + '</td>' +
+        '<td><span class="badge ' + badgeCls + '">' + escHtml(l.status) + '</span></td>' +
+        '<td style="color:var(--muted);font-size:12px;">' + date + '</td>' +
+        '</tr>';
+    }).join('');
+    el.innerHTML = '<table><thead><tr><th>Label</th><th>URL</th><th>Price</th><th>Status</th><th>Created</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  function copyUrl(url, btn) {
+    navigator.clipboard.writeText(url).then(() => {
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 1800);
+    });
+  }
+
+  function escHtml(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // Auto-verify if token already in localStorage
+  if (adminToken) verifyToken();
+</script>
+</body>
+</html>
