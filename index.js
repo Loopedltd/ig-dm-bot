@@ -4156,8 +4156,8 @@ app.post("/admin/api/trial/generate-for-client/:clientId", requireAdmin, async (
 
     const { label, price_amount } = req.body || {};
     const amount = price_amount != null ? Number(price_amount) : 3000;
-    if (!Number.isInteger(amount) || amount < 100) {
-      return safeJson(res, 400, { error: "price_amount must be an integer ≥ 100 pence" });
+    if (!Number.isInteger(amount) || amount < 0) {
+      return safeJson(res, 400, { error: "price_amount must be a non-negative integer (pence)" });
     }
 
     const token = crypto.randomBytes(12).toString("hex"); // 24-char hex

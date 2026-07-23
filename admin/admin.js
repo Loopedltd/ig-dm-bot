@@ -368,7 +368,8 @@ const AdminDashboard = {
     const copyBtn = qs("copyTrialLinkBtn");
     const generateBtn = qs("trialLinkGenerateBtn");
 
-    const pricePounds = parseFloat(qs("trialLinkPricePounds")?.value || "30") || 30;
+    const rawPrice = qs("trialLinkPricePounds")?.value;
+    const pricePounds = rawPrice !== "" && rawPrice != null ? parseFloat(rawPrice) : 30;
     const priceAmount = Math.round(pricePounds * 100);
 
     if (errEl) { errEl.textContent = ""; errEl.style.display = "none"; }
