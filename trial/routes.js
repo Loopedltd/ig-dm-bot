@@ -31,10 +31,13 @@ const router = express.Router();
 // ── Config (all read from existing env vars where possible) ─────────────────
 const STRIPE_SECRET_KEY    = process.env.STRIPE_SECRET_KEY;
 const DASHBOARD_JWT_SECRET = process.env.DASHBOARD_JWT_SECRET;
-// Use APP_BASE_URL — this is the only URL env var configured on Render.
-// index.js defines APP_BASE_URL as a fallback alias for APP_BASE_URL;
-// here we read the source directly so no duplicate env var is needed.
-const APP_BASE_URL         = process.env.APP_BASE_URL || "http://localhost:3000";
+// APP_PUBLIC_URL should be set to https://app.looped.ltd on Render.
+// Falls back to APP_PUBLIC_URL (https://pay.looped.ltd) so nothing breaks if
+// APP_PUBLIC_URL is absent, but generated trial link URLs will show app.looped.ltd
+// once the env var is added.
+const APP_PUBLIC_URL       = process.env.APP_PUBLIC_URL
+                           || process.env.APP_PUBLIC_URL
+                           || "http://localhost:3000";
 
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
@@ -110,7 +113,7 @@ router.post("/admin/api/trial/generate", requireAdmin, async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
 
-    const url = `${APP_BASE_URL}/start/${token}`;
+    const url = `${APP_PUBLIC_URL}/start/${token}`;
     return res.json({ ok: true, url, token, link: data });
   } catch (e) {
     return res.status(500).json({ error: String(e?.message || e) });
@@ -296,16 +299,19 @@ router.post("/api/trial/checkout/:token", async (req, res) => {
       // {CHECKOUT_SESSION_ID} is a Stripe placeholder — it's substituted with the real
       // session ID before the redirect, so /trial/success can verify the session via API.
       // payment_token is NOT in the URL — we read it from verified session metadata instead.
-      success_url: `${APP_BASE_URL}/trial/success?session_id={CHECKOUT_SESSION_ID}&trial_token=${encodeURIComponent(token)}`,
-      cancel_url: `${APP_BASE_URL}/start/${token}`,
+      success_url: `${APP_PUBLIC_URL}/trial/success?session_id={CHECKOUT_SESSION_ID}&trial_token=${encodeURIComponent(token)}`,
+      cancel_url: `${APP_PUBLIC_URL}/start/${token}`,
       billing_address_collection: "required",
       automatic_tax: { enabled: true },
     });
 
     console.log("[trial] Stripe session created", { clientId, sessionId: session.id, token });
 
-    // 5. Redirect to Stripe Checkout
-    return res.redirect(303, session.url);
+    // 5. Return the Stripe Checkout URL as JSON.
+    // The client does window.location.href = data.url — we don't use a server-side
+    // redirect because fetch() follows cross-origin redirects and hits a CORS block
+    // when it tries to load stripe.com, which prevents the navigation from happening.
+    return res.json({ url: session.url });
   } catch (e) {
     console.error("[trial] checkout error:", e?.message || e);
     return res.status(500).json({ error: "Checkout failed — please try again" });
@@ -682,31 +688,28 @@ function landingPage(token, monthlyAmount) {
     const btn = document.getElementById('startBtn');
     const errEl = document.getElementById('errMsg');
     if (errEl) errEl.style.display = 'none';
-    if (btn) { btn.textContent = 'Redirecting to checkout…'; btn.classList.add('loading'); }
+    if (btn) { btn.textContent = 'Redirecting to checkout\u2026'; btn.classList.add('loading'); }
 
     try {
-      // POST to the checkout endpoint — server creates Stripe session and
-      // responds with a 303 redirect to Stripe Checkout
+      // Server creates the Stripe session and returns { url } as JSON.
+      // We then navigate directly — fetch() must not follow the Stripe URL
+      // itself because cross-origin fetch to stripe.com is blocked by CORS.
       const res = await fetch('/api/trial/checkout/${token}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
 
-      if (res.redirected) {
-        window.location.href = res.url;
-        return;
-      }
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Something went wrong. Please try again.');
       }
 
-      // In case redirect didn't auto-follow
-      const data = await res.json().catch(() => ({}));
-      if (data.url) { window.location.href = data.url; return; }
+      if (!data.url) {
+        throw new Error('No checkout URL returned. Please try again.');
+      }
 
-      throw new Error('Unexpected response from server.');
+      window.location.href = data.url;
     } catch (err) {
       if (btn) { btn.textContent = 'Start your 7-day free trial'; btn.classList.remove('loading'); }
       if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; }
