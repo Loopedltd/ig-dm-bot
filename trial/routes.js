@@ -364,20 +364,28 @@ function landingPage(token, monthlyAmount) {
     .dm-avatar { width: 32px; height: 32px; border-radius: 50%; background: rgba(45,107,255,0.12); border: 1px solid rgba(45,107,255,0.20); flex-shrink: 0; }
     .dm-contact-name { font-size: 13px; font-weight: 800; color: var(--text); line-height: 1.2; }
     .dm-contact-status { font-size: 11px; color: var(--ok); font-weight: 600; }
-    .dm-messages { padding: 14px 14px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 130px; }
+    .dm-messages { padding: 14px 14px 10px; display: flex; flex-direction: column; gap: 8px; min-height: 100px; max-height: 200px; overflow-y: auto; }
     .dm-bubble { max-width: 88%; padding: 9px 13px; border-radius: 16px; font-size: 13px; line-height: 1.5; }
-    .dm-bubble.incoming { align-self: flex-start; background: rgba(15,23,42,0.06); color: var(--text); border-bottom-left-radius: 4px; transition: opacity 0.4s ease; }
-    .dm-bubble.outgoing { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; text-align: left; opacity: 0; transition: opacity 0.3s ease; word-break: break-word; }
+    .dm-bubble.incoming { align-self: flex-start; background: rgba(15,23,42,0.06); color: var(--text); border-bottom-left-radius: 4px; }
+    .dm-bubble.outgoing { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; text-align: left; word-break: break-word; }
     .dm-typing { display: none; align-self: flex-start; gap: 5px; padding: 11px 14px; background: rgba(15,23,42,0.06); border-radius: 16px; border-bottom-left-radius: 4px; align-items: center; }
     .dm-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(15,23,42,0.30); animation: dmPulse 1.3s ease-in-out infinite; }
     .dm-dot:nth-child(2) { animation-delay: 0.22s; }
     .dm-dot:nth-child(3) { animation-delay: 0.44s; }
     @keyframes dmPulse { 0%,100% { opacity: 0.3; transform: scale(0.75); } 50% { opacity: 1; transform: scale(1); } }
-    .dm-cursor { display: inline-block; width: 1.5px; height: 0.85em; background: #fff; margin-left: 1px; vertical-align: middle; animation: cursorBlink 0.65s step-end infinite; }
     .dm-booked { display: flex; align-items: center; justify-content: flex-end; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ok); opacity: 0; transition: opacity 0.45s ease; padding-right: 2px; }
     .dm-booked-check { width: 16px; height: 16px; border-radius: 50%; background: var(--ok-bg); border: 1px solid var(--ok-border); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .dm-booked-check::after { content: ''; display: block; width: 4px; height: 7px; border-right: 1.5px solid var(--ok); border-bottom: 1.5px solid var(--ok); transform: rotate(45deg) translate(-0.5px, -1px); }
-    @keyframes cursorBlink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+    .dm-input-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--border); }
+    .dm-input { flex: 1; border: 1px solid var(--border); border-radius: 20px; padding: 8px 14px; font-size: 13px; font-family: inherit; color: var(--text); background: rgba(15,23,42,0.03); outline: none; transition: border-color 0.15s; }
+    .dm-input:focus { border-color: var(--primary); }
+    .dm-input:disabled { opacity: 0.5; }
+    .dm-send-btn { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background 0.15s, transform 0.1s; }
+    .dm-send-btn:hover:not(:disabled) { background: var(--primary-dark); transform: scale(1.05); }
+    .dm-send-btn:disabled { opacity: 0.4; cursor: default; }
+    .dm-try-again { display: none; padding: 8px 14px 12px; text-align: center; }
+    .dm-try-again-btn { background: none; border: none; color: var(--primary); font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; text-decoration: underline; text-underline-offset: 2px; }
+    .dm-try-again-btn:hover { color: var(--primary-dark); }
 
     /* STATS */
     .stats-section { padding: 0 24px 72px; }
@@ -479,28 +487,30 @@ function landingPage(token, monthlyAmount) {
       </div>
     </form>
 
-    <!-- LIVE DM DEMO -->
+    <!-- INTERACTIVE DM DEMO -->
     <div class="dm-demo">
       <div class="dm-phone">
         <div class="dm-header">
           <div class="dm-avatar"></div>
           <div>
-            <div class="dm-contact-name">New message</div>
+            <div class="dm-contact-name">Looped</div>
             <div class="dm-contact-status">Active now</div>
           </div>
         </div>
-        <div class="dm-messages">
-          <div class="dm-bubble incoming" id="dm-incoming">Hey! saw your post, how much is coaching?</div>
-          <div class="dm-typing" id="dm-typing">
-            <div class="dm-dot"></div>
-            <div class="dm-dot"></div>
-            <div class="dm-dot"></div>
-          </div>
-          <div class="dm-bubble outgoing" id="dm-outgoing"><span id="dm-reply-text"></span><span class="dm-cursor" id="dm-cursor"></span></div>
+        <div class="dm-messages" id="dm-messages">
           <div class="dm-booked" id="dm-booked">
             <span class="dm-booked-check"></span>
             Call booked
           </div>
+        </div>
+        <div class="dm-input-row" id="dm-input-row">
+          <input class="dm-input" id="dm-input" type="text" placeholder="Type a message..." maxlength="120" autocomplete="off" />
+          <button class="dm-send-btn" id="dm-send-btn" aria-label="Send">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7h12M7 1l6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <div class="dm-try-again" id="dm-try-again">
+          <button class="dm-try-again-btn" id="dm-try-again-btn">Try again</button>
         </div>
       </div>
     </div>
@@ -667,67 +677,99 @@ function landingPage(token, monthlyAmount) {
     }, { passive: true });
   })();
 
-  // ── 2. LIVE DM DEMO ─────────────────────────────────────────────────────────
-  // Edit these two strings to change the demo conversation.
-  var DM_INCOMING = 'Hey! saw your post, how much is coaching?';
-  var DM_REPLY    = 'Hey! Thanks for reaching out. Quick one first, what is your main goal right now?';
+  // ── 2. INTERACTIVE DM DEMO ──────────────────────────────────────────────────
+  // Fixed reply sequence — visitor types anything, advances through these replies.
+  var DEMO_REPLIES = [
+    'Hey! Thanks for reaching out. Quick one first, what is your main goal right now?',
+    'Got it. I help coaches in exactly that position book 3 to 5 calls a week on autopilot. Want me to send you the details?',
+  ];
 
   (function initDmDemo() {
-    var incomingEl  = document.getElementById('dm-incoming');
-    var typingEl    = document.getElementById('dm-typing');
-    var outgoingEl  = document.getElementById('dm-outgoing');
-    var replyTextEl = document.getElementById('dm-reply-text');
-    var cursorEl    = document.getElementById('dm-cursor');
+    var messagesEl  = document.getElementById('dm-messages');
+    var inputEl     = document.getElementById('dm-input');
+    var sendBtn     = document.getElementById('dm-send-btn');
+    var inputRow    = document.getElementById('dm-input-row');
+    var tryAgainEl  = document.getElementById('dm-try-again');
+    var tryAgainBtn = document.getElementById('dm-try-again-btn');
     var bookedEl    = document.getElementById('dm-booked');
-    if (!incomingEl || !typingEl || !outgoingEl || !replyTextEl || !bookedEl) return;
+    if (!messagesEl || !inputEl || !sendBtn || !bookedEl) return;
 
-    var typeTimer = null;
+    var exchange = 0; // how many user messages sent so far
+
+    function scrollBottom() {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function addBubble(text, cls) {
+      var div = document.createElement('div');
+      div.className = 'dm-bubble ' + cls;
+      div.textContent = text;
+      messagesEl.insertBefore(div, bookedEl);
+      scrollBottom();
+    }
+
+    function setInputEnabled(on) {
+      inputEl.disabled = !on;
+      sendBtn.disabled = !on;
+    }
+
+    function sendMessage() {
+      var text = inputEl.value.trim();
+      if (!text || exchange >= DEMO_REPLIES.length) return;
+
+      var idx = exchange;
+      exchange++;
+
+      addBubble(text, 'outgoing');
+      inputEl.value = '';
+      setInputEnabled(false);
+
+      // Typing indicator
+      var typingDiv = document.createElement('div');
+      typingDiv.className = 'dm-typing';
+      typingDiv.innerHTML = '<div class="dm-dot"></div><div class="dm-dot"></div><div class="dm-dot"></div>';
+      typingDiv.style.display = 'flex';
+      messagesEl.insertBefore(typingDiv, bookedEl);
+      scrollBottom();
+
+      setTimeout(function () {
+        typingDiv.remove();
+        addBubble(DEMO_REPLIES[idx], 'incoming');
+
+        if (exchange >= DEMO_REPLIES.length) {
+          // Last exchange: show booked state, hide input, show try-again
+          setTimeout(function () {
+            bookedEl.style.opacity = '1';
+            scrollBottom();
+            inputRow.style.display = 'none';
+            tryAgainEl.style.display = 'block';
+          }, 500);
+        } else {
+          setInputEnabled(true);
+          inputEl.focus();
+        }
+      }, 1400);
+    }
 
     function reset() {
-      if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
-      incomingEl.style.opacity  = '0';
-      typingEl.style.display    = 'none';
-      outgoingEl.style.opacity  = '0';
-      if (replyTextEl) replyTextEl.textContent = '';
-      if (cursorEl)    cursorEl.style.display   = 'inline-block';
-      bookedEl.style.opacity    = '0';
+      exchange = 0;
+      // Remove all dynamically added bubbles (everything except bookedEl)
+      Array.from(messagesEl.children).forEach(function (el) {
+        if (el !== bookedEl) el.remove();
+      });
+      bookedEl.style.opacity = '0';
+      inputRow.style.display = 'flex';
+      tryAgainEl.style.display = 'none';
+      inputEl.value = '';
+      setInputEnabled(true);
+      inputEl.focus();
     }
 
-    function runSequence() {
-      reset();
-
-      // Phase 1 (300ms): fade in incoming message
-      setTimeout(function () { incomingEl.style.opacity = '1'; }, 300);
-
-      // Phase 2 (1400ms): show typing indicator
-      setTimeout(function () { typingEl.style.display = 'flex'; }, 1400);
-
-      // Phase 3 (2700ms): hide typing, start typing reply character by character
-      setTimeout(function () {
-        typingEl.style.display   = 'none';
-        outgoingEl.style.opacity = '1';
-        var i = 0;
-        typeTimer = setInterval(function () {
-          i++;
-          if (replyTextEl) replyTextEl.textContent = DM_REPLY.slice(0, i);
-          if (i >= DM_REPLY.length) {
-            clearInterval(typeTimer);
-            typeTimer = null;
-            if (cursorEl) cursorEl.style.display = 'none';
-
-            // Phase 4 (700ms after typing): show call booked
-            setTimeout(function () {
-              bookedEl.style.opacity = '1';
-
-              // Phase 5 (2600ms after booked): loop
-              setTimeout(runSequence, 2600);
-            }, 700);
-          }
-        }, 40);
-      }, 2700);
-    }
-
-    runSequence();
+    sendBtn.addEventListener('click', sendMessage);
+    inputEl.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') sendMessage();
+    });
+    tryAgainBtn.addEventListener('click', reset);
   })();
 
   // ── 3. STAT COUNTERS ────────────────────────────────────────────────────────
