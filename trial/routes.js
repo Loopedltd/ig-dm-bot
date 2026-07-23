@@ -471,8 +471,8 @@ function landingPage(token, monthlyAmount) {
   <div class="hero-gradient"></div>
   <div class="hero">
     <div class="hero-badge">Instagram Automation for Coaches</div>
-    <h1>DMs answered.<br><em>Calls booked.</em></h1>
-    <p class="hero-lead">Looped replies to your Instagram DMs in your voice, qualifies every lead, handles objections, and books them into calls. Around the clock, without you lifting a finger.</p>
+    <h1>Keep people <em>in the loop.</em></h1>
+    <p class="hero-lead">Replies to every DM, qualifies the lead, and books the call. Automatically.</p>
     <form id="startForm" onsubmit="startTrial(event)" style="display:contents;">
       <div class="cta-wrap">
         <button type="submit" class="cta-btn" id="startBtn">Start your 7-day free trial</button>
