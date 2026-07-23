@@ -4131,6 +4131,60 @@ app.post("/admin/api/create-payment-link/:clientId", requireAdmin, async (req, r
 
 /**
  * ===========================
+ * TRIAL LINKS (admin)
+ * ===========================
+ */
+
+app.get("/admin/api/trial/links", requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("trial_links")
+      .select("id, token, price_amount, label, status, client_id, created_at")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) return safeJson(res, 500, { error: error.message });
+    return safeJson(res, 200, { links: data || [] });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+app.post("/admin/api/trial/generate-for-client/:clientId", requireAdmin, async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    if (!clientId) return safeJson(res, 400, { error: "clientId required" });
+
+    const { label, price_amount } = req.body || {};
+    const amount = price_amount != null ? Number(price_amount) : 3000;
+    if (!Number.isInteger(amount) || amount < 100) {
+      return safeJson(res, 400, { error: "price_amount must be an integer ≥ 100 pence" });
+    }
+
+    const token = crypto.randomBytes(12).toString("hex"); // 24-char hex
+
+    const { data, error } = await supabase
+      .from("trial_links")
+      .insert({
+        token,
+        price_amount: amount,
+        label: label ? String(label).trim() : null,
+        status: "unused",
+        client_id: clientId,
+      })
+      .select()
+      .single();
+
+    if (error) return safeJson(res, 500, { error: error.message });
+
+    const url = `${APP_BASE_URL}/start/${token}`;
+    return safeJson(res, 200, { ok: true, url, token, link: data });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+/**
+ * ===========================
  * MARK CALL COMPLETE
  * ===========================
  */

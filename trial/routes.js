@@ -1,26 +1,18 @@
 /**
  * trial/routes.js — Self-serve trial flow (additive, separate from existing signup)
  *
- * Routes added:
- *   GET  /trial/admin                  — Admin UI for generating trial links
- *   GET  /admin/api/trial/links        — List trial links (admin protected)
- *   POST /admin/api/trial/generate     — Generate a new trial link (admin protected)
+ * Routes:
  *   GET  /start/:token                 — Public landing page
- *   POST /api/trial/checkout/:token    — Create Stripe checkout session + redirect
- *   GET  /trial/success                — Mark trial complete, redirect to set-password
+ *   POST /api/trial/checkout/:token    — Create Stripe checkout session
+ *   GET  /trial/success                — Verify payment, redirect to set-password
  *
- * Wiring: index.js imports this router via `import trialRouter from './trial/routes.js'`
- * and mounts it with `app.use(trialRouter)`.
- *
- * New env vars needed (in addition to existing ones):
- *   STRIPE_TRIAL_WEBHOOK_SECRET  — only needed if you later wire up /webhook/stripe-trial
- *                                   in Stripe dashboard (optional for initial testing)
+ * Admin routes (list links, generate links) live in index.js using the
+ * existing requireAdmin middleware.
  */
 
 import express from "express";
 import { supabase } from "../supabaseClient.js";
 import Stripe from "stripe";
-import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
@@ -28,97 +20,21 @@ import path from "path";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const router = express.Router();
 
-// ── Config (all read from existing env vars where possible) ─────────────────
-const STRIPE_SECRET_KEY    = process.env.STRIPE_SECRET_KEY;
-const DASHBOARD_JWT_SECRET = process.env.DASHBOARD_JWT_SECRET;
-// APP_PUBLIC_URL should be set to https://app.looped.ltd on Render.
-// Falls back to APP_PUBLIC_URL (https://pay.looped.ltd) so nothing breaks if
-// APP_PUBLIC_URL is absent, but generated trial link URLs will show app.looped.ltd
-// once the env var is added.
-const APP_PUBLIC_URL       = process.env.APP_PUBLIC_URL
-                           || process.env.APP_PUBLIC_URL
-                           || "http://localhost:3000";
+// ── Config ──────────────────────────────────────────────────────────────────
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+// APP_BASE_URL = pay.looped.ltd — used for landing page URLs and cancel URL
+const APP_BASE_URL      = process.env.APP_BASE_URL   || "http://localhost:3000";
+// APP_PUBLIC_URL = app.looped.ltd — used for success_url (same as existing payment link flow)
+const APP_PUBLIC_URL    = process.env.APP_PUBLIC_URL || APP_BASE_URL;
 
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
   : null;
 
-// ── Admin middleware (mirrors requireAdmin in index.js) ─────────────────────
-function requireAdmin(req, res, next) {
-  const hdr   = req.headers.authorization || "";
-  const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
-  if (!token) return res.status(401).json({ error: "missing admin token" });
-  if (!DASHBOARD_JWT_SECRET) return res.status(500).json({ error: "dashboard not configured" });
-  try {
-    const decoded = jwt.verify(token, DASHBOARD_JWT_SECRET);
-    if (!decoded || decoded.role !== "admin") return res.status(403).json({ error: "forbidden" });
-    next();
-  } catch {
-    return res.status(401).json({ error: "invalid token" });
-  }
-}
-
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function randomToken(bytes = 16) {
   return crypto.randomBytes(bytes).toString("hex");
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ADMIN ROUTES
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Serve the trial admin page (unprotected at route level — JS handles auth
-// via localStorage.getItem('admin_token'), same as existing admin dashboard)
-router.get("/trial/admin", (req, res) => {
-  res.sendFile(path.join(__dirname, "admin.html"));
-});
-
-// List all trial links
-router.get("/admin/api/trial/links", requireAdmin, async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from("trial_links")
-      .select("id, token, price_amount, label, status, client_id, created_at")
-      .order("created_at", { ascending: false })
-      .limit(100);
-    if (error) return res.status(500).json({ error: error.message });
-    return res.json({ links: data || [] });
-  } catch (e) {
-    return res.status(500).json({ error: String(e?.message || e) });
-  }
-});
-
-// Generate a new trial link
-router.post("/admin/api/trial/generate", requireAdmin, async (req, res) => {
-  try {
-    const { label, price_amount } = req.body || {};
-    const token = randomToken(12); // 24-char hex
-
-    // Validate price_amount if provided — must be a positive integer (pence)
-    const amount = price_amount != null ? Number(price_amount) : 3000;
-    if (!Number.isInteger(amount) || amount < 100) {
-      return res.status(400).json({ error: "price_amount must be an integer ≥ 100 pence" });
-    }
-
-    const { data, error } = await supabase
-      .from("trial_links")
-      .insert({
-        token,
-        price_amount: amount,
-        label: label ? String(label).trim() : null,
-        status: "unused",
-      })
-      .select()
-      .single();
-
-    if (error) return res.status(500).json({ error: error.message });
-
-    const url = `${APP_PUBLIC_URL}/start/${token}`;
-    return res.json({ ok: true, url, token, link: data });
-  } catch (e) {
-    return res.status(500).json({ error: String(e?.message || e) });
-  }
-});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUBLIC LANDING PAGE — GET /start/:token
@@ -158,7 +74,7 @@ router.get("/start/:token", async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CHECKOUT — POST /api/trial/checkout/:token
-// Creates clients + payment_links rows then redirects to Stripe checkout
+// Creates a payment_links row then redirects to Stripe checkout
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/api/trial/checkout/:token", async (req, res) => {
   const { token } = req.params;
@@ -181,75 +97,12 @@ router.post("/api/trial/checkout/:token", async (req, res) => {
       return res.status(409).json({ error: "This trial link has already been used" });
     }
 
-    // 2. Get or create the client record
-    // trial_links.client_id is set on first checkout attempt so a back-button
-    // retry doesn't create a second clients row.
-    let clientId = trialLink.client_id;
-
+    // 2. Resolve client_id — must be set on the trial_links row (admin sets it
+    //    when generating the link via the dashboard).
+    const clientId = trialLink.client_id;
     if (!clientId) {
-      const clientName = trialLink.label || "Trial Signup";
-
-      // Create clients row
-      const { data: newClient, error: clientErr } = await supabase
-        .from("clients")
-        .insert({ name: clientName, timezone: "Europe/London" })
-        .select()
-        .single();
-
-      if (clientErr || !newClient) {
-        console.error("[trial] failed to create client:", clientErr?.message);
-        return res.status(500).json({ error: "Failed to create account" });
-      }
-
-      clientId = newClient.id;
-
-      // Create client_configs row with the same defaults as the admin create endpoint
-      const { error: cfgErr } = await supabase.from("client_configs").insert({
-        client_id: clientId,
-        stripe_subscription_status: null,
-        system_prompt:
-          "You are a helpful assistant that qualifies leads and books sales calls on behalf of this coach. " +
-          "Keep replies short, casual and conversational. Ask one question at a time to understand the lead's " +
-          "goals and situation before moving towards booking a call.",
-        tone: "direct",
-        style: "short, punchy",
-        vocabulary: "casual UK coach",
-        niche: "generic",
-        offer_description: null,
-        offer_price: null,
-        what_you_do: null,
-        what_they_get: null,
-        how_it_works: null,
-        who_its_for: null,
-        main_result: null,
-        best_fit_leads: null,
-        not_a_fit: null,
-        common_objections: null,
-        closing_triggers: null,
-        urgency_reason: null,
-        trust_builders: null,
-        faq: null,
-        story_reply_auto_dm_enabled: false,
-        story_reply_auto_dm_text: null,
-        comment_reply_auto_dm_enabled: false,
-        comment_reply_auto_dm_text: null,
-        keyword_auto_dm_enabled: false,
-        keyword_trigger_text: null,
-        keyword_auto_dm_text: null,
-      });
-
-      if (cfgErr) {
-        console.error("[trial] failed to create client_configs:", cfgErr?.message);
-        // Roll back the clients row and abort
-        await supabase.from("clients").delete().eq("id", clientId);
-        return res.status(500).json({ error: "Failed to configure account" });
-      }
-
-      // Persist client_id on the trial_links row so retries reuse it
-      await supabase
-        .from("trial_links")
-        .update({ client_id: clientId })
-        .eq("token", token);
+      console.error("[trial] trial_links row has no client_id:", token);
+      return res.status(400).json({ error: "This trial link is not yet assigned to an account. Please contact james@looped.ltd." });
     }
 
     // 3. Create a setup token in payment_links so the existing /set-password
@@ -300,7 +153,7 @@ router.post("/api/trial/checkout/:token", async (req, res) => {
       // session ID before the redirect, so /trial/success can verify the session via API.
       // payment_token is NOT in the URL — we read it from verified session metadata instead.
       success_url: `${APP_PUBLIC_URL}/trial/success?session_id={CHECKOUT_SESSION_ID}&trial_token=${encodeURIComponent(token)}`,
-      cancel_url: `${APP_PUBLIC_URL}/start/${token}`,
+      cancel_url: `${APP_BASE_URL}/start/${token}`,
       billing_address_collection: "required",
       automatic_tax: { enabled: true },
     });

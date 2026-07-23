@@ -133,8 +133,12 @@ const AdminDashboard = {
     qs("paymentLinkCancelBtn")?.addEventListener("click", () => this.closeModal("paymentLinkModal"));
     qs("paymentLinkGenerateBtn")?.addEventListener("click", () => this.generatePaymentLink());
 
+    // Trial link modal
+    qs("trialLinkCancelBtn")?.addEventListener("click", () => this.closeModal("trialLinkModal"));
+    qs("trialLinkGenerateBtn")?.addEventListener("click", () => this.generateTrialLink());
+
     // Close modals on backdrop click
-    ["configModal", "credsModal", "resetPwModal", "offboardModal", "paymentLinkModal"].forEach((id) => {
+    ["configModal", "credsModal", "resetPwModal", "offboardModal", "paymentLinkModal", "trialLinkModal"].forEach((id) => {
       const el = qs(id);
       if (el) {
         el.addEventListener("click", (e) => {
@@ -213,6 +217,7 @@ const AdminDashboard = {
             ` : `
             <button class="btn sm" onclick="AdminDashboard.openConfigModal('${escHtml(c.id)}')">Edit config</button>
             <button class="btn sm primary" onclick="AdminDashboard.openPaymentLinkModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Payment link</button>
+            <button class="btn sm primary" onclick="AdminDashboard.openTrialLinkModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Trial link</button>
             <button class="btn sm primary" onclick="AdminDashboard.loginAsCoach('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Access dashboard</button>
             <button class="btn sm" onclick="AdminDashboard.openCredsModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Show credentials</button>
             <button class="btn sm danger" onclick="AdminDashboard.openResetPwModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Reset password</button>
@@ -338,6 +343,57 @@ const AdminDashboard = {
       if (errEl) { errEl.textContent = e.message || "Failed to generate payment link."; errEl.style.display = "block"; }
     } finally {
       if (generateBtn) { generateBtn.disabled = false; generateBtn.textContent = "Generate link"; }
+    }
+  },
+
+  // ── Trial link ─────────────────────────────────────────────────────────────
+
+  openTrialLinkModal(clientId, clientName) {
+    this._activeClientId = clientId;
+    const qs = (id) => document.getElementById(id);
+    if (qs("trialLinkModalSub")) qs("trialLinkModalSub").textContent = `Generate a 7-day free trial link for ${clientName || clientId}. The prospect will enter card details upfront and be charged after the trial.`;
+    if (qs("trialLinkErr")) { qs("trialLinkErr").textContent = ""; qs("trialLinkErr").style.display = "none"; }
+    if (qs("trialLinkReveal")) qs("trialLinkReveal").style.display = "none";
+    if (qs("trialLinkPricePounds")) qs("trialLinkPricePounds").value = "30";
+    if (qs("trialLinkGenerateBtn")) { qs("trialLinkGenerateBtn").disabled = false; qs("trialLinkGenerateBtn").textContent = "Generate trial link"; }
+    this.openModal("trialLinkModal");
+  },
+
+  async generateTrialLink() {
+    const clientId = this._activeClientId;
+    const qs = (id) => document.getElementById(id);
+    const errEl = qs("trialLinkErr");
+    const reveal = qs("trialLinkReveal");
+    const urlEl = qs("trialLinkUrl");
+    const copyBtn = qs("copyTrialLinkBtn");
+    const generateBtn = qs("trialLinkGenerateBtn");
+
+    const pricePounds = parseFloat(qs("trialLinkPricePounds")?.value || "30") || 30;
+    const priceAmount = Math.round(pricePounds * 100);
+
+    if (errEl) { errEl.textContent = ""; errEl.style.display = "none"; }
+    if (reveal) reveal.style.display = "none";
+    if (generateBtn) { generateBtn.disabled = true; generateBtn.textContent = "Generating…"; }
+
+    try {
+      const data = await apiFetch(`/admin/api/trial/generate-for-client/${clientId}`, {
+        method: "POST",
+        body: JSON.stringify({ price_amount: priceAmount }),
+      });
+      if (urlEl) urlEl.textContent = data.url;
+      if (reveal) reveal.style.display = "block";
+      if (copyBtn) {
+        copyBtn.onclick = () => {
+          navigator.clipboard.writeText(data.url).then(() => {
+            copyBtn.textContent = "Copied!";
+            setTimeout(() => { copyBtn.textContent = "Copy link"; }, 2000);
+          });
+        };
+      }
+    } catch (e) {
+      if (errEl) { errEl.textContent = e.message || "Failed to generate trial link."; errEl.style.display = "block"; }
+    } finally {
+      if (generateBtn) { generateBtn.disabled = false; generateBtn.textContent = "Generate trial link"; }
     }
   },
 

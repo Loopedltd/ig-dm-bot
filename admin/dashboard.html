@@ -329,6 +329,33 @@
     </div>
   </div>
 
+  <!-- Trial link modal -->
+  <div class="modal" id="trialLinkModal">
+    <div class="modalBox" style="max-width:480px;">
+      <h2>Generate trial link</h2>
+      <div class="sub" id="trialLinkModalSub">Creates a 7-day free trial link for this client.</div>
+
+      <label>Monthly price after trial (£)</label>
+      <div class="inputPrefix">
+        <span>£</span>
+        <input id="trialLinkPricePounds" type="number" min="1" step="1" value="30" style="border:none;border-radius:0;box-shadow:none;padding-left:2px;" />
+      </div>
+
+      <div class="errMsg" id="trialLinkErr"></div>
+
+      <div class="credReveal" id="trialLinkReveal" style="word-break:break-all;">
+        <div style="margin-bottom:8px;font-weight:700;color:var(--ok);">Trial link ready. Send this to the prospect:</div>
+        <div id="trialLinkUrl" style="font-size:12px;margin-bottom:10px;"></div>
+        <button class="btn sm" id="copyTrialLinkBtn">Copy link</button>
+      </div>
+
+      <div class="modalFooter">
+        <button class="btn" id="trialLinkCancelBtn">Close</button>
+        <button class="btn primary" id="trialLinkGenerateBtn">Generate trial link</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Credentials modal -->
   <div class="modal" id="credsModal">
     <div class="modalBox" style="max-width:440px;">
