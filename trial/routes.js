@@ -299,7 +299,7 @@ function landingPage(token, monthlyAmount) {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Looped — Instagram DM Automation for Coaches</title>
-  <meta name="description" content="Looped replies to your Instagram DMs in your voice, qualifies leads, and books them into calls — 24/7, hands-free." />
+  <meta name="description" content="Looped replies to your Instagram DMs in your voice, qualifies leads, and books them into calls. 24/7, hands-free." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -307,86 +307,96 @@ function landingPage(token, monthlyAmount) {
       --primary: #2d6bff;
       --primary-dark: #1a52d4;
       --text: #0f172a;
-      --muted: #64748b;
-      --border: rgba(15,23,42,.1);
-      --bg: #f8fafc;
-      --card: #ffffff;
-      --green: #027a48;
-      --green-bg: #ecfdf3;
-      --green-border: #a7f3d0;
+      --muted: rgba(15,23,42,0.55);
+      --border: rgba(15,23,42,0.10);
+      --border2: rgba(15,23,42,0.14);
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --shadow: 0 10px 30px rgba(15,23,42,0.06);
+      --shadow-lg: 0 24px 60px rgba(15,23,42,0.10);
+      --ok: #027a48;
+      --ok-bg: rgba(2,122,72,0.08);
+      --ok-border: rgba(2,122,72,0.18);
     }
 
     html { scroll-behavior: smooth; }
-    body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased; }
 
-    /* ── NAV ── */
-    nav { padding: 18px 24px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--border); background: #fff; }
-    .logo { font-weight: 900; font-size: 22px; color: var(--primary); letter-spacing: -0.3px; }
+    /* NAV */
+    nav { height: 60px; padding: 0 28px; display: flex; align-items: center; background: rgba(255,255,255,0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+    .logo { font-weight: 900; font-size: 17px; color: var(--primary); letter-spacing: -0.3px; }
 
-    /* ── HERO ── */
-    .hero { padding: 80px 24px 64px; text-align: center; max-width: 680px; margin: 0 auto; }
-    .hero-tag { display: inline-block; background: #eff6ff; color: var(--primary); font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; padding: 5px 12px; border-radius: 999px; border: 1px solid #bfdbfe; margin-bottom: 20px; }
-    .hero h1 { font-size: clamp(28px, 5vw, 48px); font-weight: 900; line-height: 1.15; letter-spacing: -0.5px; margin-bottom: 18px; }
-    .hero h1 span { color: var(--primary); }
-    .hero p { font-size: 17px; color: var(--muted); max-width: 540px; margin: 0 auto 32px; }
-    .cta-btn { display: inline-block; background: var(--primary); color: #fff; font-size: 17px; font-weight: 800; padding: 16px 36px; border-radius: 12px; border: none; cursor: pointer; text-decoration: none; transition: background .15s, transform .1s; }
-    .cta-btn:hover { background: var(--primary-dark); transform: translateY(-1px); }
-    .cta-btn:active { transform: translateY(0); }
+    /* HERO */
+    .hero { padding: 96px 24px 80px; text-align: center; max-width: 740px; margin: 0 auto; }
+    .hero-badge { display: inline-flex; align-items: center; background: rgba(45,107,255,0.07); border: 1px solid rgba(45,107,255,0.18); color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; padding: 6px 14px; border-radius: 999px; margin-bottom: 28px; }
+    .hero h1 { font-size: clamp(38px, 6vw, 62px); font-weight: 900; line-height: 1.08; letter-spacing: -2px; margin-bottom: 24px; color: var(--text); }
+    .hero h1 em { font-style: normal; color: var(--primary); }
+    .hero-lead { font-size: 18px; color: var(--muted); max-width: 520px; margin: 0 auto 36px; line-height: 1.65; }
+    .cta-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .cta-btn { display: inline-flex; align-items: center; justify-content: center; background: var(--primary); color: #fff; font-size: 16px; font-weight: 800; padding: 17px 42px; border-radius: 12px; border: none; cursor: pointer; letter-spacing: -0.2px; box-shadow: 0 4px 20px rgba(45,107,255,0.30); transition: box-shadow .15s, transform .1s, background .15s; font-family: inherit; }
+    .cta-btn:hover { background: var(--primary-dark); box-shadow: 0 8px 32px rgba(45,107,255,0.38); transform: translateY(-1px); }
+    .cta-btn:active { transform: translateY(0); box-shadow: 0 3px 12px rgba(45,107,255,0.22); }
     .cta-btn.loading { opacity: .7; pointer-events: none; }
-    .hero-sub { font-size: 13px; color: var(--muted); margin-top: 12px; }
-    .err-msg { display: none; color: #b42318; font-size: 14px; margin-top: 14px; background: #fff5f5; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 14px; }
+    .hero-meta { font-size: 13px; color: var(--muted); }
+    .err-msg { display: none; color: #b42318; font-size: 13px; background: #fff5f5; border: 1px solid rgba(180,35,24,0.18); border-radius: 10px; padding: 11px 16px; max-width: 420px; }
 
-    /* ── SECTION ── */
-    section { padding: 64px 24px; }
+    /* SECTIONS */
+    .section { padding: 80px 24px; }
     .section-inner { max-width: 900px; margin: 0 auto; }
-    .section-label { font-size: 12px; font-weight: 800; color: var(--primary); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
-    .section-heading { font-size: clamp(22px, 3.5vw, 32px); font-weight: 900; letter-spacing: -0.3px; margin-bottom: 14px; }
-    .section-sub { font-size: 16px; color: var(--muted); max-width: 560px; }
+    .section-label { font-size: 11px; font-weight: 800; color: var(--primary); text-transform: uppercase; letter-spacing: .7px; margin-bottom: 12px; }
+    .section-heading { font-size: clamp(24px, 3.5vw, 36px); font-weight: 900; letter-spacing: -0.6px; margin-bottom: 16px; line-height: 1.15; }
+    .section-sub { font-size: 16px; color: var(--muted); max-width: 540px; line-height: 1.65; }
 
-    /* ── HOW IT WORKS ── */
-    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-top: 40px; }
-    .step { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
-    .step-num { width: 36px; height: 36px; border-radius: 10px; background: #eff6ff; color: var(--primary); font-weight: 900; font-size: 16px; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
-    .step h3 { font-size: 15px; font-weight: 800; margin-bottom: 6px; }
-    .step p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+    /* HOW IT WORKS */
+    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 44px; }
+    .step { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 28px 24px; box-shadow: var(--shadow); }
+    .step-num { width: 32px; height: 32px; border-radius: 10px; background: rgba(45,107,255,0.08); border: 1px solid rgba(45,107,255,0.15); color: var(--primary); font-weight: 900; font-size: 13px; display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
+    .step h3 { font-size: 15px; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.2px; }
+    .step p { font-size: 14px; color: var(--muted); line-height: 1.65; }
 
-    /* ── FEATURES ── */
-    .features-bg { background: #fff; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 40px; }
-    .feature { display: flex; gap: 14px; align-items: flex-start; }
-    .feature-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
-    .feature h4 { font-size: 14px; font-weight: 800; margin-bottom: 4px; }
-    .feature p { font-size: 14px; color: var(--muted); line-height: 1.5; }
+    /* FEATURES */
+    .features-wrap { background: var(--panel); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 32px; margin-top: 44px; }
+    .feature { display: flex; flex-direction: column; gap: 8px; }
+    .feature-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); opacity: 0.6; margin-bottom: 2px; }
+    .feature h4 { font-size: 14px; font-weight: 800; letter-spacing: -0.15px; }
+    .feature p { font-size: 14px; color: var(--muted); line-height: 1.65; }
 
-    /* ── PRICING ── */
-    .pricing-card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 36px; max-width: 480px; box-shadow: 0 4px 24px rgba(15,23,42,.06); margin-top: 40px; }
-    .price-amount { font-size: 52px; font-weight: 900; letter-spacing: -1px; color: var(--text); line-height: 1; }
-    .price-amount sup { font-size: 22px; font-weight: 700; vertical-align: top; margin-top: 10px; display: inline-block; }
-    .price-period { font-size: 16px; color: var(--muted); margin-top: 4px; margin-bottom: 20px; }
-    .price-list { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
-    .price-list li { font-size: 14px; color: var(--muted); display: flex; align-items: center; gap: 10px; }
-    .price-list li::before { content: "✓"; color: var(--primary); font-weight: 900; font-size: 15px; flex-shrink: 0; }
-    .vs-note { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 14px 16px; font-size: 13px; color: #166534; line-height: 1.5; }
+    /* PRICING */
+    .pricing-card { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; padding: 40px; max-width: 480px; box-shadow: var(--shadow-lg); margin-top: 44px; }
+    .price-row { display: flex; align-items: flex-start; line-height: 1; margin-bottom: 8px; }
+    .price-sym { font-size: 26px; font-weight: 800; color: var(--text); padding-top: 10px; margin-right: 2px; }
+    .price-num { font-size: 72px; font-weight: 900; letter-spacing: -3px; color: var(--text); }
+    .price-period { font-size: 15px; color: var(--muted); margin-bottom: 28px; }
+    .price-list { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; }
+    .price-list li { font-size: 14px; color: var(--text); display: flex; align-items: center; gap: 10px; }
+    .price-list li::before { content: ""; display: inline-block; width: 18px; height: 18px; flex-shrink: 0; border-radius: 50%; background: rgba(45,107,255,0.09); border: 1px solid rgba(45,107,255,0.20); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6l2.2 2.2L9.5 3.8' stroke='%232d6bff' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: center; }
+    .vs-note { background: rgba(45,107,255,0.05); border: 1px solid rgba(45,107,255,0.12); border-radius: 12px; padding: 16px 18px; font-size: 13px; color: var(--muted); line-height: 1.65; }
+    .vs-note strong { color: var(--text); font-weight: 700; }
 
-    /* ── GUARANTEE ── */
-    .guarantee-bg { background: var(--green-bg); border-top: 1px solid var(--green-border); border-bottom: 1px solid var(--green-border); }
-    .guarantee-card { background: var(--card); border: 2px solid var(--green-border); border-radius: 20px; padding: 36px; max-width: 600px; margin-top: 0; }
-    .guarantee-icon { font-size: 36px; margin-bottom: 14px; }
-    .guarantee-card h3 { font-size: 22px; font-weight: 900; color: var(--green); margin-bottom: 10px; }
-    .guarantee-card p { font-size: 15px; color: var(--muted); line-height: 1.6; }
+    /* GUARANTEE */
+    .guarantee-wrap { background: var(--ok-bg); border-top: 1px solid var(--ok-border); border-bottom: 1px solid var(--ok-border); }
+    .guarantee-card { background: var(--panel); border: 1px solid var(--ok-border); border-radius: 20px; padding: 40px; max-width: 600px; box-shadow: var(--shadow); }
+    .guarantee-eyebrow { font-size: 11px; font-weight: 800; color: var(--ok); text-transform: uppercase; letter-spacing: .7px; margin-bottom: 12px; }
+    .guarantee-card h3 { font-size: 22px; font-weight: 900; color: var(--ok); margin-bottom: 12px; letter-spacing: -0.4px; }
+    .guarantee-card p { font-size: 15px; color: var(--muted); line-height: 1.7; }
 
-    /* ── FINAL CTA ── */
-    .final-cta { text-align: center; padding: 80px 24px; }
-    .final-cta h2 { font-size: clamp(22px, 3.5vw, 34px); font-weight: 900; letter-spacing: -0.3px; margin-bottom: 12px; }
-    .final-cta p { color: var(--muted); font-size: 16px; margin-bottom: 32px; }
+    /* FINAL CTA */
+    .final-cta { text-align: center; padding: 100px 24px 90px; }
+    .final-cta h2 { font-size: clamp(26px, 3.5vw, 38px); font-weight: 900; letter-spacing: -0.8px; margin-bottom: 14px; line-height: 1.1; }
+    .final-cta .final-sub { color: var(--muted); font-size: 16px; margin-bottom: 36px; }
 
-    /* ── FOOTER ── */
-    footer { padding: 24px; text-align: center; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); }
+    /* FOOTER */
+    footer { padding: 28px 24px; text-align: center; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--text); }
 
     @media (max-width: 600px) {
-      .hero { padding: 56px 20px 48px; }
-      .pricing-card { padding: 24px 20px; }
-      .guarantee-card { padding: 24px 20px; }
+      .hero { padding: 68px 20px 60px; }
+      .hero h1 { letter-spacing: -1.2px; }
+      .pricing-card { padding: 28px 22px; }
+      .guarantee-card { padding: 28px 22px; }
+      .final-cta { padding: 72px 20px 64px; }
     }
   </style>
 </head>
@@ -398,18 +408,20 @@ function landingPage(token, monthlyAmount) {
 
 <!-- HERO -->
 <div class="hero">
-  <div class="hero-tag">Instagram Automation for Coaches</div>
-  <h1>Your DMs, <span>automated</span>.<br>Your leads, booked.</h1>
-  <p>Looped replies to your Instagram DMs in your voice, qualifies every lead, handles objections, and pushes them to book a call — around the clock, without you lifting a finger.</p>
-  <form id="startForm" onsubmit="startTrial(event)">
-    <button type="submit" class="cta-btn" id="startBtn">Start your 7-day free trial</button>
-    <div class="hero-sub">No charge today &mdash; card required &mdash; ${monthlyAmount}/month after trial</div>
-    <div class="err-msg" id="errMsg"></div>
+  <div class="hero-badge">Instagram Automation for Coaches</div>
+  <h1>Your DMs, <em>automated</em>.<br>Your leads, booked.</h1>
+  <p class="hero-lead">Looped replies to your Instagram DMs in your voice, qualifies every lead, handles objections, and books them into calls. Around the clock, without you lifting a finger.</p>
+  <form id="startForm" onsubmit="startTrial(event)" style="display:contents;">
+    <div class="cta-wrap">
+      <button type="submit" class="cta-btn" id="startBtn">Start your 7-day free trial</button>
+      <p class="hero-meta">No charge today. Card required. ${monthlyAmount}/month after trial.</p>
+      <div class="err-msg" id="errMsg"></div>
+    </div>
   </form>
 </div>
 
 <!-- HOW IT WORKS -->
-<section>
+<div class="section">
   <div class="section-inner">
     <div class="section-label">How it works</div>
     <div class="section-heading">Set up in minutes. Works while you sleep.</div>
@@ -428,73 +440,64 @@ function landingPage(token, monthlyAmount) {
       <div class="step">
         <div class="step-num">3</div>
         <h3>Watch it qualify and book</h3>
-        <p>Looped replies to every DM, story reply, and comment keyword — qualifying leads and driving them to book your discovery call.</p>
+        <p>Looped replies to every DM, story reply, and comment keyword, qualifying leads and booking them into your discovery call.</p>
       </div>
     </div>
   </div>
-</section>
+</div>
 
 <!-- FEATURES -->
-<section class="features-bg">
+<div class="section features-wrap">
   <div class="section-inner">
     <div class="section-label">What you get</div>
-    <div class="section-heading">Everything your DMs need</div>
-    <div class="features-grid" style="margin-top:40px;">
+    <div class="section-heading">Everything your DMs need.</div>
+    <div class="features-grid">
       <div class="feature">
-        <div class="feature-icon">💬</div>
-        <div>
-          <h4>DM replies in your voice</h4>
-          <p>GPT-4o-mini trained on your real messages. Sounds like you, not like a bot.</p>
-        </div>
+        <div class="feature-dot"></div>
+        <h4>DM replies in your voice</h4>
+        <p>GPT-4o-mini trained on your real messages. Sounds like you, not like a bot.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">📖</div>
-        <div>
-          <h4>Story reply automation</h4>
-          <p>Someone reacts to your story? Looped starts a qualifying conversation automatically.</p>
-        </div>
+        <div class="feature-dot"></div>
+        <h4>Story reply automation</h4>
+        <p>Someone reacts to your story? Looped starts a qualifying conversation automatically.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">💡</div>
-        <div>
-          <h4>Comment keyword DMs</h4>
-          <p>Comment a keyword on your post and get an instant DM — great for lead magnets and offers.</p>
-        </div>
+        <div class="feature-dot"></div>
+        <h4>Comment keyword DMs</h4>
+        <p>Comment a keyword on your post and get an instant DM. Perfect for lead magnets and offers.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">📅</div>
-        <div>
-          <h4>Books calls for you</h4>
-          <p>Looped handles objections, builds trust, and drives every warm lead to your booking link.</p>
-        </div>
+        <div class="feature-dot"></div>
+        <h4>Books calls for you</h4>
+        <p>Looped handles objections, builds trust, and drives every warm lead to your booking link.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">⏰</div>
-        <div>
-          <h4>24/7 response time</h4>
-          <p>Replies in seconds at any hour. No more leads going cold because you were busy.</p>
-        </div>
+        <div class="feature-dot"></div>
+        <h4>24/7 response time</h4>
+        <p>Replies in seconds at any hour. No more leads going cold because you were busy.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">🎯</div>
-        <div>
-          <h4>Lead qualification built in</h4>
-          <p>Asks the right questions to filter out tyre-kickers and only push serious leads to a call.</p>
-        </div>
+        <div class="feature-dot"></div>
+        <h4>Lead qualification built in</h4>
+        <p>Asks the right questions to filter out tyre-kickers and only push serious leads to a call.</p>
       </div>
     </div>
   </div>
-</section>
+</div>
 
 <!-- PRICING -->
-<section>
+<div class="section">
   <div class="section-inner">
     <div class="section-label">Pricing</div>
     <div class="section-heading">One flat rate. No surprises.</div>
     <p class="section-sub">No per-call fees. No percentage of your revenue. Just a simple monthly subscription.</p>
     <div class="pricing-card">
-      <div class="price-amount"><sup>£</sup>${monthlyAmount.replace("£", "")}</div>
-      <div class="price-period">per month &mdash; cancel any time</div>
+      <div class="price-row">
+        <span class="price-sym">£</span>
+        <span class="price-num">${monthlyAmount.replace("£", "")}</span>
+      </div>
+      <div class="price-period">per month, cancel any time</div>
       <ul class="price-list">
         <li>Unlimited DM replies</li>
         <li>Story reply automation</li>
@@ -504,34 +507,36 @@ function landingPage(token, monthlyAmount) {
         <li>7-day free trial included</li>
       </ul>
       <div class="vs-note">
-        Most competitors charge <strong>£20–100 per booked call</strong> or take a percentage of every sale.
-        Looped charges a flat rate — so the more calls you book, the better value it gets.
+        Most competitors charge <strong>£20 to £100 per booked call</strong> or take a percentage of every sale.
+        Looped charges a flat rate, so the more calls you book, the better the value.
       </div>
     </div>
   </div>
-</section>
+</div>
 
 <!-- GUARANTEE -->
-<section class="guarantee-bg">
+<div class="section guarantee-wrap">
   <div class="section-inner">
     <div class="guarantee-card">
-      <div class="guarantee-icon">🛡️</div>
+      <div class="guarantee-eyebrow">Our guarantee</div>
       <h3>The 3-call guarantee</h3>
       <p>Don't get 3 qualified calls booked in your first paid month? That month is on us. No questions, no hoops to jump through.</p>
     </div>
   </div>
-</section>
+</div>
 
 <!-- FINAL CTA -->
 <div class="final-cta">
   <h2>Ready to stop leaving DMs on read?</h2>
-  <p>Start your 7-day free trial — your card won't be charged until day 8.</p>
-  <button class="cta-btn" onclick="startTrial(event)">Start your free trial now</button>
-  <div class="hero-sub" style="margin-top:12px;">Card required upfront &mdash; cancel any time &mdash; ${monthlyAmount}/month after trial</div>
+  <p class="final-sub">Start your 7-day free trial. Your card won't be charged until day 8.</p>
+  <div class="cta-wrap">
+    <button class="cta-btn" onclick="startTrial(event)">Start your free trial now</button>
+    <p class="hero-meta">Card required upfront. Cancel any time. ${monthlyAmount}/month after trial.</p>
+  </div>
 </div>
 
 <footer>
-  &copy; ${new Date().getFullYear()} Looped &middot; <a href="mailto:james@looped.ltd" style="color:var(--muted);">james@looped.ltd</a>
+  &copy; ${new Date().getFullYear()} Looped &middot; <a href="mailto:james@looped.ltd">james@looped.ltd</a>
 </footer>
 
 <script>
