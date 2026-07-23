@@ -329,22 +329,11 @@ function landingPage(token, monthlyAmount) {
 
     /* HERO SECTION wrapper for gradient */
     .hero-section { position: relative; overflow: hidden; }
-    @keyframes heroGlow {
-      0%   { transform: scale(1)    translate(0%,  0%); }
-      50%  { transform: scale(1.10) translate(-3%, 3%); }
-      100% { transform: scale(1)    translate(0%,  0%); }
-    }
-    .hero-gradient {
-      position: absolute; inset: -30%; pointer-events: none;
-      background:
-        radial-gradient(ellipse 65% 55% at 20% 30%, rgba(45,107,255,0.10) 0%, transparent 65%),
-        radial-gradient(ellipse 50% 65% at 80% 65%, rgba(45,107,255,0.07) 0%, transparent 65%),
-        radial-gradient(ellipse 40% 40% at 55%  5%, rgba(45,107,255,0.05) 0%, transparent 60%);
-      animation: heroGlow 20s ease-in-out infinite;
-    }
+    /* .hero-gradient background is set entirely by JS (cursor-tracking + ambient drift) */
+    .hero-gradient { position: absolute; inset: -30%; pointer-events: none; z-index: 0; }
 
     /* HERO */
-    .hero { padding: 96px 24px 80px; text-align: center; max-width: 740px; margin: 0 auto; position: relative; }
+    .hero { padding: 96px 24px 80px; text-align: center; max-width: 740px; margin: 0 auto; position: relative; z-index: 1; }
     .hero-badge { display: inline-flex; align-items: center; background: rgba(45,107,255,0.07); border: 1px solid rgba(45,107,255,0.18); color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; padding: 6px 14px; border-radius: 999px; margin-bottom: 28px; }
     .hero h1 { font-size: clamp(38px, 6vw, 62px); font-weight: 900; line-height: 1.08; letter-spacing: -2px; margin-bottom: 24px; color: var(--text); }
     .hero h1 em { font-style: normal; color: var(--primary); }
@@ -405,7 +394,7 @@ function landingPage(token, monthlyAmount) {
     /* HOW IT WORKS */
     .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 44px; }
     .step { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 28px 24px; box-shadow: var(--shadow); transition: transform 0.22s ease, box-shadow 0.22s ease; }
-    .step:hover { transform: translateY(-5px); box-shadow: 0 20px 44px rgba(15,23,42,0.10); }
+    .step:hover { transform: translateY(-8px); box-shadow: 0 24px 52px rgba(15,23,42,0.14); }
     .step-num { width: 32px; height: 32px; border-radius: 10px; background: rgba(45,107,255,0.08); border: 1px solid rgba(45,107,255,0.15); color: var(--primary); font-weight: 900; font-size: 13px; display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
     .step h3 { font-size: 15px; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.2px; }
     .step p { font-size: 14px; color: var(--muted); line-height: 1.65; }
@@ -414,14 +403,14 @@ function landingPage(token, monthlyAmount) {
     .features-wrap { background: var(--panel); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
     .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 32px; margin-top: 44px; }
     .feature { display: flex; flex-direction: column; gap: 8px; transition: transform 0.22s ease; }
-    .feature:hover { transform: translateY(-3px); }
+    .feature:hover { transform: translateY(-5px); }
     .feature-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); opacity: 0.6; margin-bottom: 2px; }
     .feature h4 { font-size: 14px; font-weight: 800; letter-spacing: -0.15px; }
     .feature p { font-size: 14px; color: var(--muted); line-height: 1.65; }
 
     /* PRICING */
     .pricing-card { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; padding: 40px; max-width: 480px; box-shadow: var(--shadow-lg); margin-top: 44px; transition: transform 0.22s ease, box-shadow 0.22s ease; }
-    .pricing-card:hover { transform: translateY(-5px); box-shadow: 0 32px 72px rgba(15,23,42,0.14); }
+    .pricing-card:hover { transform: translateY(-8px); box-shadow: 0 36px 80px rgba(15,23,42,0.18); }
     .price-row { display: flex; align-items: flex-start; line-height: 1; margin-bottom: 8px; }
     .price-sym { font-size: 26px; font-weight: 800; color: var(--text); padding-top: 10px; margin-right: 2px; }
     .price-num { font-size: 72px; font-weight: 900; letter-spacing: -3px; color: var(--text); }
@@ -435,7 +424,7 @@ function landingPage(token, monthlyAmount) {
     /* GUARANTEE */
     .guarantee-wrap { background: var(--ok-bg); border-top: 1px solid var(--ok-border); border-bottom: 1px solid var(--ok-border); }
     .guarantee-card { background: var(--panel); border: 1px solid var(--ok-border); border-radius: 20px; padding: 40px; max-width: 600px; box-shadow: var(--shadow); transition: transform 0.22s ease, box-shadow 0.22s ease; }
-    .guarantee-card:hover { transform: translateY(-5px); box-shadow: 0 20px 44px rgba(15,23,42,0.10); }
+    .guarantee-card:hover { transform: translateY(-8px); box-shadow: 0 24px 52px rgba(15,23,42,0.14); }
     .guarantee-eyebrow { font-size: 11px; font-weight: 800; color: var(--ok); text-transform: uppercase; letter-spacing: .7px; margin-bottom: 12px; }
     .guarantee-card h3 { font-size: 22px; font-weight: 900; color: var(--ok); margin-bottom: 12px; letter-spacing: -0.4px; }
     .guarantee-card p { font-size: 15px; color: var(--muted); line-height: 1.7; }
@@ -477,7 +466,7 @@ function landingPage(token, monthlyAmount) {
   <div class="hero-gradient"></div>
   <div class="hero">
     <div class="hero-badge">Instagram Automation for Coaches</div>
-    <h1>Your DMs, <em>automated</em>.<br>Your leads, booked.</h1>
+    <h1>DMs answered.<br><em>Calls booked.</em></h1>
     <p class="hero-lead">Looped replies to your Instagram DMs in your voice, qualifies every lead, handles objections, and books them into calls. Around the clock, without you lifting a finger.</p>
     <form id="startForm" onsubmit="startTrial(event)" style="display:contents;">
       <div class="cta-wrap">
@@ -663,182 +652,225 @@ function landingPage(token, monthlyAmount) {
 <!-- ═══════════════════════════════════════════════════════════════════
      ANIMATION SCRIPT — visual polish only, completely separate from
      the checkout / startTrial logic below.
+     Each sub-function is wrapped in try/catch so a bug in one cannot
+     prevent the others from running.
      ═══════════════════════════════════════════════════════════════════ -->
 <script>
 (function () {
   'use strict';
 
   // ── 1. NAV SCROLL BLUR ──────────────────────────────────────────────────────
-  (function initNavScroll() {
+  try {
     var nav = document.getElementById('mainNav');
-    if (!nav) return;
-    window.addEventListener('scroll', function () {
-      nav.classList.toggle('nav-scrolled', window.scrollY > 40);
-    }, { passive: true });
-  })();
-
-  // ── 2. INTERACTIVE DM DEMO ──────────────────────────────────────────────────
-  // Fixed reply sequence — visitor types anything, advances through these replies.
-  var DEMO_REPLIES = [
-    'Hey! Thanks for reaching out. Quick one first, what is your main goal right now?',
-    'Got it. I help coaches in exactly that position book 3 to 5 calls a week on autopilot. Want me to send you the details?',
-  ];
-
-  (function initDmDemo() {
-    var messagesEl  = document.getElementById('dm-messages');
-    var inputEl     = document.getElementById('dm-input');
-    var sendBtn     = document.getElementById('dm-send-btn');
-    var inputRow    = document.getElementById('dm-input-row');
-    var tryAgainEl  = document.getElementById('dm-try-again');
-    var tryAgainBtn = document.getElementById('dm-try-again-btn');
-    var bookedEl    = document.getElementById('dm-booked');
-    if (!messagesEl || !inputEl || !sendBtn || !bookedEl) return;
-
-    var exchange = 0; // how many user messages sent so far
-
-    function scrollBottom() {
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+    if (nav) {
+      window.addEventListener('scroll', function () {
+        nav.classList.toggle('nav-scrolled', window.scrollY > 40);
+      }, { passive: true });
     }
+  } catch (e) { console.warn('[looped] nav scroll error:', e); }
 
-    function addBubble(text, cls) {
-      var div = document.createElement('div');
-      div.className = 'dm-bubble ' + cls;
-      div.textContent = text;
-      messagesEl.insertBefore(div, bookedEl);
-      scrollBottom();
+  // ── 2. HERO GRADIENT — cursor-following with lerp + ambient drift ────────────
+  // Background is set 100% via JS so opacity values are visible and the glow
+  // actually moves. CSS has no animation or background on .hero-gradient.
+  try {
+    var gradEl   = document.querySelector('.hero-gradient');
+    var heroSect = document.querySelector('.hero-section');
+    if (gradEl) {
+      var cx = 35, cy = 42;   // current lerped position (%)
+      var tx = 35, ty = 42;   // target (mouse or ambient)
+      var driftT  = 0;
+      var hasMouse = false;
+
+      if (heroSect) {
+        heroSect.addEventListener('mousemove', function (e) {
+          var r = heroSect.getBoundingClientRect();
+          tx = ((e.clientX - r.left) / r.width)  * 100;
+          ty = ((e.clientY - r.top)  / r.height) * 100;
+          hasMouse = true;
+        }, { passive: true });
+        heroSect.addEventListener('mouseleave', function () { hasMouse = false; }, { passive: true });
+      }
+
+      function lerp(a, b, t) { return a + (b - a) * t; }
+
+      function tickGradient() {
+        driftT += 0.004;
+        // Ambient sine drift when no mouse; flat when mouse is present
+        var ambX = hasMouse ? 0 : Math.sin(driftT * 1.3) * 14;
+        var ambY = hasMouse ? 0 : Math.cos(driftT * 0.9) * 9;
+        var speed = hasMouse ? 0.07 : 0.025;
+
+        cx = lerp(cx, tx + ambX, speed);
+        cy = lerp(cy, ty + ambY, speed);
+
+        var x1 = cx.toFixed(1), y1 = cy.toFixed(1);
+        // Secondary glow drifts opposite corner
+        var x2 = (100 - cx * 0.55).toFixed(1);
+        var y2 = (cy  *  0.55 + 32).toFixed(1);
+
+        gradEl.style.background =
+          'radial-gradient(ellipse 72% 65% at ' + x1 + '% ' + y1 + '%, rgba(45,107,255,0.24) 0%, transparent 58%),' +
+          'radial-gradient(ellipse 52% 52% at ' + x2 + '% ' + y2 + '%, rgba(45,107,255,0.14) 0%, transparent 60%)';
+
+        requestAnimationFrame(tickGradient);
+      }
+
+      tickGradient();
     }
+  } catch (e) { console.warn('[looped] hero gradient error:', e); }
 
-    function setInputEnabled(on) {
-      inputEl.disabled = !on;
-      sendBtn.disabled = !on;
+  // ── 3. INTERACTIVE DM DEMO ──────────────────────────────────────────────────
+  try {
+    var DEMO_REPLIES = [
+      'Hey! Thanks for reaching out. Quick one first, what is your main goal right now?',
+      'Got it. I help coaches in exactly that position book 3 to 5 calls a week on autopilot. Want me to send you the details?',
+    ];
+
+    var dmMessages  = document.getElementById('dm-messages');
+    var dmInput     = document.getElementById('dm-input');
+    var dmSendBtn   = document.getElementById('dm-send-btn');
+    var dmInputRow  = document.getElementById('dm-input-row');
+    var dmTryAgain  = document.getElementById('dm-try-again');
+    var dmTryBtn    = document.getElementById('dm-try-again-btn');
+    var dmBooked    = document.getElementById('dm-booked');
+
+    if (dmMessages && dmInput && dmSendBtn && dmBooked) {
+      var dmExchange = 0;
+
+      function dmScrollBottom() { dmMessages.scrollTop = dmMessages.scrollHeight; }
+
+      function dmAddBubble(text, cls) {
+        var div = document.createElement('div');
+        div.className = 'dm-bubble ' + cls;
+        div.textContent = text;
+        dmMessages.insertBefore(div, dmBooked);
+        dmScrollBottom();
+      }
+
+      function dmSetEnabled(on) {
+        dmInput.disabled  = !on;
+        dmSendBtn.disabled = !on;
+      }
+
+      function dmSend() {
+        var text = dmInput.value.trim();
+        if (!text || dmExchange >= DEMO_REPLIES.length) return;
+        var idx = dmExchange++;
+        dmAddBubble(text, 'outgoing');
+        dmInput.value = '';
+        dmSetEnabled(false);
+
+        var typingDiv = document.createElement('div');
+        typingDiv.className = 'dm-typing';
+        typingDiv.innerHTML = '<div class="dm-dot"></div><div class="dm-dot"></div><div class="dm-dot"></div>';
+        typingDiv.style.display = 'flex';
+        dmMessages.insertBefore(typingDiv, dmBooked);
+        dmScrollBottom();
+
+        setTimeout(function () {
+          typingDiv.remove();
+          dmAddBubble(DEMO_REPLIES[idx], 'incoming');
+          if (dmExchange >= DEMO_REPLIES.length) {
+            setTimeout(function () {
+              dmBooked.style.opacity = '1';
+              dmScrollBottom();
+              if (dmInputRow)  dmInputRow.style.display  = 'none';
+              if (dmTryAgain)  dmTryAgain.style.display  = 'block';
+            }, 500);
+          } else {
+            dmSetEnabled(true);
+            dmInput.focus();
+          }
+        }, 1400);
+      }
+
+      function dmReset() {
+        dmExchange = 0;
+        Array.from(dmMessages.children).forEach(function (el) {
+          if (el !== dmBooked) el.remove();
+        });
+        dmBooked.style.opacity = '0';
+        if (dmInputRow) dmInputRow.style.display  = 'flex';
+        if (dmTryAgain) dmTryAgain.style.display  = 'none';
+        dmInput.value = '';
+        dmSetEnabled(true);
+        dmInput.focus();
+      }
+
+      dmSendBtn.addEventListener('click', dmSend);
+      dmInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') dmSend(); });
+      if (dmTryBtn) dmTryBtn.addEventListener('click', dmReset);
     }
+  } catch (e) { console.warn('[looped] dm demo error:', e); }
 
-    function sendMessage() {
-      var text = inputEl.value.trim();
-      if (!text || exchange >= DEMO_REPLIES.length) return;
-
-      var idx = exchange;
-      exchange++;
-
-      addBubble(text, 'outgoing');
-      inputEl.value = '';
-      setInputEnabled(false);
-
-      // Typing indicator
-      var typingDiv = document.createElement('div');
-      typingDiv.className = 'dm-typing';
-      typingDiv.innerHTML = '<div class="dm-dot"></div><div class="dm-dot"></div><div class="dm-dot"></div>';
-      typingDiv.style.display = 'flex';
-      messagesEl.insertBefore(typingDiv, bookedEl);
-      scrollBottom();
-
-      setTimeout(function () {
-        typingDiv.remove();
-        addBubble(DEMO_REPLIES[idx], 'incoming');
-
-        if (exchange >= DEMO_REPLIES.length) {
-          // Last exchange: show booked state, hide input, show try-again
-          setTimeout(function () {
-            bookedEl.style.opacity = '1';
-            scrollBottom();
-            inputRow.style.display = 'none';
-            tryAgainEl.style.display = 'block';
-          }, 500);
-        } else {
-          setInputEnabled(true);
-          inputEl.focus();
-        }
-      }, 1400);
-    }
-
-    function reset() {
-      exchange = 0;
-      // Remove all dynamically added bubbles (everything except bookedEl)
-      Array.from(messagesEl.children).forEach(function (el) {
-        if (el !== bookedEl) el.remove();
-      });
-      bookedEl.style.opacity = '0';
-      inputRow.style.display = 'flex';
-      tryAgainEl.style.display = 'none';
-      inputEl.value = '';
-      setInputEnabled(true);
-      inputEl.focus();
-    }
-
-    sendBtn.addEventListener('click', sendMessage);
-    inputEl.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') sendMessage();
-    });
-    tryAgainBtn.addEventListener('click', reset);
-  })();
-
-  // ── 3. STAT COUNTERS ────────────────────────────────────────────────────────
-  // Edit STAT_CONFIG to set real numbers. target = the final value displayed.
-  // suffix appended after the number. comma: true formats 12000 as 12,000.
+  // ── 4. STAT COUNTERS ────────────────────────────────────────────────────────
+  // STAT_CONFIG: target = final value, suffix appended, comma: true → 12,000 format
   var STAT_CONFIG = [
     { id: 'stat-dms',      target: 12000, suffix: '+', comma: true  },
     { id: 'stat-response', target: 47,    suffix: 's', comma: false },
     { id: 'stat-calls',    target: 820,   suffix: '+', comma: false },
   ];
 
-  (function initStats() {
-    var section = document.getElementById('statsSection');
-    if (!section || typeof IntersectionObserver === 'undefined') return;
+  try {
+    var statsSection = document.getElementById('statsSection');
+    console.log('[looped] statsSection found:', !!statsSection);
 
-    function fmt(n, comma) {
-      return comma ? n.toLocaleString('en-GB') : String(n);
-    }
+    if (statsSection && typeof IntersectionObserver !== 'undefined') {
+      function statFmt(n, comma) { return comma ? n.toLocaleString('en-GB') : String(n); }
 
-    function animateCounter(el, target, suffix, comma) {
-      var duration = 1700;
-      var startTime = null;
-      function step(ts) {
-        if (!startTime) startTime = ts;
-        var elapsed = ts - startTime;
-        var progress = Math.min(elapsed / duration, 1);
-        // ease-out cubic
-        var eased = 1 - Math.pow(1 - progress, 3);
-        var val = Math.round(eased * target);
-        el.textContent = fmt(val, comma) + suffix;
-        if (progress < 1) requestAnimationFrame(step);
+      function animateCounter(el, target, suffix, comma) {
+        console.log('[looped] animateCounter start:', el.id, '->', target);
+        var duration = 1700, startTime = null;
+        function step(ts) {
+          if (!startTime) startTime = ts;
+          var progress = Math.min((ts - startTime) / duration, 1);
+          var eased    = 1 - Math.pow(1 - progress, 3);
+          el.textContent = statFmt(Math.round(eased * target), comma) + suffix;
+          if (progress < 1) requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
       }
-      requestAnimationFrame(step);
+
+      var statsObs = new IntersectionObserver(function (entries) {
+        console.log('[looped] statsObs fired, isIntersecting:', entries[0].isIntersecting);
+        if (!entries[0].isIntersecting) return;
+        statsObs.disconnect();
+        STAT_CONFIG.forEach(function (cfg) {
+          var el = document.getElementById(cfg.id);
+          if (el) animateCounter(el, cfg.target, cfg.suffix, cfg.comma);
+          else console.warn('[looped] stat el not found:', cfg.id);
+        });
+      }, { threshold: 0.15 });
+
+      statsObs.observe(statsSection);
+      console.log('[looped] statsObs observing #statsSection');
+    } else if (!statsSection) {
+      console.warn('[looped] #statsSection not found in DOM');
     }
+  } catch (e) { console.warn('[looped] stats error:', e); }
 
-    var obs = new IntersectionObserver(function (entries) {
-      if (!entries[0].isIntersecting) return;
-      obs.disconnect();
-      STAT_CONFIG.forEach(function (cfg) {
-        var el = document.getElementById(cfg.id);
-        if (el) animateCounter(el, cfg.target, cfg.suffix, cfg.comma);
-      });
-    }, { threshold: 0.35 });
+  // ── 5. SCROLL REVEAL ────────────────────────────────────────────────────────
+  try {
+    var revealEls = document.querySelectorAll('.reveal');
+    console.log('[looped] .reveal elements found:', revealEls.length);
 
-    obs.observe(section);
-  })();
-
-  // ── 4. SCROLL REVEAL ────────────────────────────────────────────────────────
-  (function initReveal() {
     if (typeof IntersectionObserver === 'undefined') {
-      // Fallback: just show everything
-      document.querySelectorAll('.reveal').forEach(function (el) {
-        el.classList.add('revealed');
-      });
-      return;
+      revealEls.forEach(function (el) { el.classList.add('revealed'); });
+    } else {
+      var revealObs = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          var el    = entry.target;
+          var delay = parseInt(el.dataset.delay || '0', 10);
+          console.log('[looped] reveal firing:', el.className, 'delay:', delay);
+          setTimeout(function () { el.classList.add('revealed'); }, delay);
+          revealObs.unobserve(el);
+        });
+      }, { threshold: 0.08 });
+
+      revealEls.forEach(function (el) { revealObs.observe(el); });
     }
-
-    var obs = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (!entry.isIntersecting) return;
-        var el    = entry.target;
-        var delay = parseInt(el.dataset.delay || '0', 10);
-        setTimeout(function () { el.classList.add('revealed'); }, delay);
-        obs.unobserve(el);
-      });
-    }, { threshold: 0.08 });
-
-    document.querySelectorAll('.reveal').forEach(function (el) { obs.observe(el); });
-  })();
+  } catch (e) { console.warn('[looped] reveal error:', e); }
 
 })();
 </script>
