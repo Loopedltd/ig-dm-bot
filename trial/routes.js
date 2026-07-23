@@ -336,17 +336,17 @@ function landingPage(token, monthlyAmount) {
     .hero-gradient { position: absolute; inset: -30%; pointer-events: none; z-index: 0; }
 
     /* HERO */
-    .hero { padding: 64px 32px 52px; text-align: center; max-width: 1000px; margin: 0 auto; position: relative; z-index: 1; }
-    .hero-badge { display: inline-flex; align-items: center; background: rgba(45,107,255,0.07); border: 1px solid rgba(45,107,255,0.18); color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; padding: 6px 14px; border-radius: 999px; margin-bottom: 28px; }
-    .hero h1 { font-size: clamp(32px, 5vw, 52px); font-weight: 900; line-height: 1.1; letter-spacing: -1.5px; margin-bottom: 24px; color: var(--text); }
+    .hero { padding: 52px 32px 40px; text-align: center; max-width: 1000px; margin: 0 auto; position: relative; z-index: 1; }
+    .hero h1 { font-size: clamp(32px, 5vw, 52px); font-weight: 900; line-height: 1.1; letter-spacing: -1.5px; margin-bottom: 14px; color: var(--text); }
     .hero h1 em { font-style: normal; color: var(--primary); }
-    .hero-lead { font-size: 18px; color: var(--muted); max-width: 620px; margin: 0 auto 36px; line-height: 1.65; }
-    .cta-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .hero-lead { font-size: 18px; color: var(--muted); max-width: 620px; margin: 0 auto 24px; line-height: 1.65; }
+    .cta-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
     .cta-btn { display: inline-flex; align-items: center; justify-content: center; background: var(--primary); color: #fff; font-size: 16px; font-weight: 800; padding: 17px 42px; border-radius: 12px; border: none; cursor: pointer; letter-spacing: 0px; box-shadow: 0 4px 20px rgba(45,107,255,0.30); transition: box-shadow .15s, transform .1s, background .15s; font-family: inherit; }
     .cta-btn:hover { background: var(--primary-dark); box-shadow: 0 8px 32px rgba(45,107,255,0.38); transform: translateY(-1px); }
     .cta-btn:active { transform: translateY(0); box-shadow: 0 3px 12px rgba(45,107,255,0.22); }
     .cta-btn.loading { opacity: .7; pointer-events: none; }
     .hero-meta { font-size: 13px; color: var(--muted); }
+    .price-note { font-size: 12px; color: var(--muted); margin-top: 16px; line-height: 1.5; }
     .err-msg { display: none; color: #b42318; font-size: 13px; background: #fff5f5; border: 1px solid rgba(180,35,24,0.18); border-radius: 10px; padding: 11px 16px; max-width: 420px; }
 
     /* DM DEMO */
@@ -447,7 +447,7 @@ function landingPage(token, monthlyAmount) {
     .reveal.revealed { opacity: 1; transform: translateY(0); }
 
     @media (max-width: 600px) {
-      .hero { padding: 44px 20px 40px; }
+      .hero { padding: 36px 20px 32px; }
       .hero h1 { letter-spacing: -1px; }
       .section { padding: 40px 20px; }
       .stats-section { padding: 0 20px 36px; }
@@ -470,13 +470,11 @@ function landingPage(token, monthlyAmount) {
 <div class="hero-section">
   <div class="hero-gradient"></div>
   <div class="hero">
-    <div class="hero-badge">Instagram Automation for Coaches</div>
     <h1>Keep people <em>in the loop.</em></h1>
     <p class="hero-lead">Replies to every DM, qualifies the lead, and books the call. Automatically.</p>
     <form id="startForm" onsubmit="startTrial(event)" style="display:contents;">
       <div class="cta-wrap">
         <button type="submit" class="cta-btn" id="startBtn">Start your 7-day free trial</button>
-        <p class="hero-meta">No charge today. Card required. ${monthlyAmount}/month after trial.</p>
         <div class="err-msg" id="errMsg"></div>
       </div>
     </form>
@@ -625,6 +623,7 @@ function landingPage(token, monthlyAmount) {
         Most competitors charge <strong>£20 to £100 per booked call</strong> or take a percentage of every sale.
         Looped charges a flat rate, so the more calls you book, the better the value.
       </div>
+      <p class="price-note">No charge for 7 days. ${monthlyAmount}/month after the trial. Cancel any time.</p>
     </div>
   </div>
 </div>
