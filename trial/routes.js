@@ -29,11 +29,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const router = express.Router();
 
 // ── Config (all read from existing env vars where possible) ─────────────────
-const STRIPE_SECRET_KEY     = process.env.STRIPE_SECRET_KEY;
-const DASHBOARD_JWT_SECRET  = process.env.DASHBOARD_JWT_SECRET;
-const APP_PUBLIC_URL        = process.env.APP_PUBLIC_URL
-                              || process.env.APP_BASE_URL
-                              || "http://localhost:3000";
+const STRIPE_SECRET_KEY    = process.env.STRIPE_SECRET_KEY;
+const DASHBOARD_JWT_SECRET = process.env.DASHBOARD_JWT_SECRET;
+// Use APP_BASE_URL — this is the only URL env var configured on Render.
+// index.js defines APP_BASE_URL as a fallback alias for APP_BASE_URL;
+// here we read the source directly so no duplicate env var is needed.
+const APP_BASE_URL         = process.env.APP_BASE_URL || "http://localhost:3000";
 
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
@@ -109,7 +110,7 @@ router.post("/admin/api/trial/generate", requireAdmin, async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
 
-    const url = `${APP_PUBLIC_URL}/start/${token}`;
+    const url = `${APP_BASE_URL}/start/${token}`;
     return res.json({ ok: true, url, token, link: data });
   } catch (e) {
     return res.status(500).json({ error: String(e?.message || e) });
@@ -292,8 +293,11 @@ router.post("/api/trial/checkout/:token", async (req, res) => {
         payment_token: setupToken,
         trial_token: token,
       },
-      success_url: `${APP_PUBLIC_URL}/trial/success?trial_token=${encodeURIComponent(token)}&token=${encodeURIComponent(setupToken)}`,
-      cancel_url: `${APP_PUBLIC_URL}/start/${token}`,
+      // {CHECKOUT_SESSION_ID} is a Stripe placeholder — it's substituted with the real
+      // session ID before the redirect, so /trial/success can verify the session via API.
+      // payment_token is NOT in the URL — we read it from verified session metadata instead.
+      success_url: `${APP_BASE_URL}/trial/success?session_id={CHECKOUT_SESSION_ID}&trial_token=${encodeURIComponent(token)}`,
+      cancel_url: `${APP_BASE_URL}/start/${token}`,
       billing_address_collection: "required",
       automatic_tax: { enabled: true },
     });
@@ -311,35 +315,94 @@ router.post("/api/trial/checkout/:token", async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // SUCCESS REDIRECT — GET /trial/success
 // Stripe redirects here after a successful checkout.
-// Marks the trial_links row as completed then hands off to the existing
-// /set-password flow (which already handles creating coach credentials).
+//
+// Security model:
+//   - Retrieves the Stripe session by ID and confirms session.status === "complete"
+//     before doing anything — query params alone are not trusted.
+//   - Cross-checks session.metadata.trial_token against the trial_token param
+//     so a valid session ID can't be swapped in for a different trial link.
+//   - Reads the setup token (payment_token) from verified session metadata,
+//     never from the URL.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get("/trial/success", async (req, res) => {
-  const { trial_token, token } = req.query;
+  const { session_id, trial_token } = req.query;
 
-  if (trial_token) {
-    // Mark the trial link as completed (fire and forget — don't block the redirect)
-    supabase
-      .from("trial_links")
-      .update({ status: "completed" })
-      .eq("token", trial_token)
-      .then(({ error }) => {
-        if (error) console.warn("[trial] failed to mark trial_link completed:", error.message);
-        else console.log("[trial] trial_link marked completed:", trial_token);
-      });
-  }
-
-  if (!token) {
-    // Shouldn't happen in normal flow — show a helpful message
+  if (!session_id) {
     return res.send(errorPage(
-      "Your payment was received but something went wrong with your onboarding link. " +
-      "Please contact <a href=\"mailto:james@looped.ltd\" style=\"color:#2d6bff;\">james@looped.ltd</a> " +
-      "and we'll get you set up manually within a few minutes."
+      "Payment confirmation is missing. If you completed checkout, please contact " +
+      "<a href=\"mailto:james@looped.ltd\" style=\"color:#2d6bff;\">james@looped.ltd</a> " +
+      "and we'll get you set up manually."
     ));
   }
 
-  // Hand off to the existing set-password flow
-  return res.redirect(302, `/set-password?token=${encodeURIComponent(token)}`);
+  if (!stripe) {
+    console.error("[trial/success] Stripe not configured — cannot verify session");
+    return res.send(errorPage(
+      "Payment verification is unavailable right now. Please contact " +
+      "<a href=\"mailto:james@looped.ltd\" style=\"color:#2d6bff;\">james@looped.ltd</a>."
+    ));
+  }
+
+  // 1. Retrieve and verify the session from Stripe
+  let session;
+  try {
+    session = await stripe.checkout.sessions.retrieve(session_id);
+  } catch (e) {
+    console.error("[trial/success] failed to retrieve Stripe session:", session_id, e?.message);
+    return res.send(errorPage(
+      "We could not verify your payment. Please contact " +
+      "<a href=\"mailto:james@looped.ltd\" style=\"color:#2d6bff;\">james@looped.ltd</a>."
+    ));
+  }
+
+  // 2. Confirm the session is actually complete
+  if (session.status !== "complete") {
+    console.warn("[trial/success] session not complete:", session.status, session_id);
+    return res.send(errorPage(
+      "Your payment is still processing. Please wait a moment and check your email, or contact " +
+      "<a href=\"mailto:james@looped.ltd\" style=\"color:#2d6bff;\">james@looped.ltd</a>."
+    ));
+  }
+
+  // 3. Cross-check trial_token in URL against what's in session metadata
+  //    so a real completed session can't be reused to unlock a different trial link
+  const metaTrialToken = session.metadata?.trial_token;
+  if (!metaTrialToken || metaTrialToken !== trial_token) {
+    console.warn("[trial/success] trial_token mismatch", {
+      fromUrl: trial_token,
+      fromMeta: metaTrialToken,
+      sessionId: session_id,
+    });
+    return res.send(errorPage(
+      "Payment verification failed. Please contact " +
+      "<a href=\"mailto:james@looped.ltd\" style=\"color:#2d6bff;\">james@looped.ltd</a>."
+    ));
+  }
+
+  // 4. Read setup token from verified session metadata — never from the URL
+  const setupToken = session.metadata?.payment_token;
+  if (!setupToken) {
+    console.error("[trial/success] payment_token missing from session metadata", session_id);
+    return res.send(errorPage(
+      "Your payment was received but your onboarding link is missing. Please contact " +
+      "<a href=\"mailto:james@looped.ltd\" style=\"color:#2d6bff;\">james@looped.ltd</a>."
+    ));
+  }
+
+  // 5. Mark trial link as completed (async, doesn't block the redirect)
+  supabase
+    .from("trial_links")
+    .update({ status: "completed" })
+    .eq("token", trial_token)
+    .then(({ error }) => {
+      if (error) console.warn("[trial/success] failed to mark trial_link completed:", error.message);
+      else console.log("[trial/success] trial_link marked completed:", trial_token);
+    });
+
+  console.log("[trial/success] verified and redirecting to set-password", { session_id, trial_token });
+
+  // 6. Hand off to the existing set-password flow
+  return res.redirect(302, `/set-password?token=${encodeURIComponent(setupToken)}`);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
