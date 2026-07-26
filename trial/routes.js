@@ -539,7 +539,9 @@ function landingPage(token, monthlyAmount) {
     .hiw-voice-placeholder { color: rgba(15,23,42,0.22); }
     /* panel 3 — qualify and book (static DM preview) */
     .hiw-dm-body { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 16px 20px 20px; overflow: auto; }
-    .hiw-story-reply { align-self: flex-start; font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; }
+    .hiw-story-reply { align-self: flex-start; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+    .hiw-story-thumb { width: 42px; height: 74px; border-radius: 8px; background: linear-gradient(150deg, rgba(45,107,255,0.28) 0%, rgba(45,107,255,0.10) 55%, rgba(80,130,255,0.20) 100%); border: 1px solid rgba(45,107,255,0.18); }
+    .hiw-story-label { font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: 0.2px; }
     .hiw-dm-bubble { max-width: 82%; padding: 9px 13px; border-radius: 14px; font-size: 13px; line-height: 1.5; }
     .hiw-dm-bubble.in { align-self: flex-start; background: rgba(15,23,42,0.06); color: var(--text); border-bottom-left-radius: 4px; }
     .hiw-dm-bubble.out { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
@@ -734,7 +736,10 @@ function landingPage(token, monthlyAmount) {
         <div class="hiw-panel" id="hiw-panel-2">
           <div class="hiw-panel-header">Live DM conversation</div>
           <div class="hiw-dm-body" id="hiw-dm-body">
-            <div class="hiw-story-reply">Story reply</div>
+            <div class="hiw-story-reply">
+              <div class="hiw-story-thumb"></div>
+              <span class="hiw-story-label">Story reply</span>
+            </div>
             <div class="hiw-dm-bubble in">Hey, saw your story, what does it include?</div>
             <div class="hiw-dm-bubble out">Hey, thanks for reaching out. Quick one first, what is your main goal right now?</div>
             <div class="hiw-dm-bubble in">I want to grow my online business and sign more clients</div>
@@ -1282,10 +1287,16 @@ function landingPage(token, monthlyAmount) {
       booked.style.opacity = '0';
       booked.style.display = 'none';
 
-      // Inject story reply indicator above the first bubble
+      // Inject story reply thumbnail above the first bubble
       var storyTag = document.createElement('div');
       storyTag.className = 'hiw-story-reply';
-      storyTag.textContent = 'Story reply';
+      var storyThumb = document.createElement('div');
+      storyThumb.className = 'hiw-story-thumb';
+      var storyLabel = document.createElement('span');
+      storyLabel.className = 'hiw-story-label';
+      storyLabel.textContent = 'Story reply';
+      storyTag.appendChild(storyThumb);
+      storyTag.appendChild(storyLabel);
       body.insertBefore(storyTag, booked);
 
       var msgIdx = 0;
