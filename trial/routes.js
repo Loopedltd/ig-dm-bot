@@ -581,9 +581,9 @@ function landingPage(token, monthlyAmount) {
             </div>
             <div>
               <div class="hiw-connect-label">Connect your Instagram</div>
-              <div class="hiw-connect-sub">Link your account so Looped can read and reply to your DMs on your behalf.</div>
+              <div class="hiw-connect-sub">Link your account so Looped can read and reply to your DMs on your behalf</div>
             </div>
-            <button class="hiw-connect-btn">Connect account</button>
+            <button class="hiw-connect-btn" onclick="startTrial(event)">Connect account</button>
             <div class="hiw-connect-hint">You can disconnect at any time from settings</div>
           </div>
         </div>
@@ -628,7 +628,7 @@ function landingPage(token, monthlyAmount) {
       <div class="hiw-steps">
         <div class="hiw-step hiw-step-active" data-step="0">
           <div class="hiw-step-title">Connect your Instagram</div>
-          <div class="hiw-step-desc">One-click Instagram connection via the dashboard. No technical setup required.</div>
+          <div class="hiw-step-desc">One-click Instagram connection via the dashboard No technical setup required</div>
         </div>
         <div class="hiw-step" data-step="1">
           <div class="hiw-step-title">Train it on your voice</div>
