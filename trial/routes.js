@@ -380,7 +380,7 @@ function landingPage(token, monthlyAmount) {
     .dm-try-again-btn:hover { color: var(--primary-dark); }
 
     /* STATS */
-    .stats-section { padding: 180px 32px 64px; }
+    .stats-section { padding: 130px 32px 64px; }
     .stats-inner { max-width: 720px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); background: var(--panel); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
     .stat-item { padding: 28px 16px; text-align: center; border-right: 1px solid var(--border); }
     .stat-item:last-child { border-right: none; }
