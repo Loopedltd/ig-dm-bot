@@ -609,10 +609,6 @@ function landingPage(token, monthlyAmount) {
     .reel-desc { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.6; }
     .reel-rail { position: absolute; right: 0; top: 0; width: 44px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 32px; gap: 22px; z-index: 2; pointer-events: none; }
     .reel-rail-btn { background: none; border: none; padding: 0; color: rgba(255,255,255,0.65); font-size: 20px; line-height: 1; }
-    .reel-hint { position: absolute; top: 45%; left: 0; right: 44px; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 2; pointer-events: none; animation: reelHintBob 1.6s ease-in-out infinite; }
-    .reel-hint-label { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.4); letter-spacing: 0.9px; text-transform: uppercase; }
-    .reel-hint-chevron { color: rgba(255,255,255,0.3); font-size: 18px; line-height: 1; }
-    @keyframes reelHintBob { 0%,100% { opacity: 1; transform: translateY(-50%); } 50% { opacity: 0.5; transform: translateY(calc(-50% + 5px)); } }
 
     /* REEL SLIDE MOCKUPS */
     .reel-mock { position: absolute; top: 34px; left: 20px; right: 52px; bottom: 178px; display: flex; align-items: center; justify-content: center; pointer-events: none; overflow: hidden; }
@@ -1029,10 +1025,6 @@ function landingPage(token, monthlyAmount) {
                 <div class="rm1-notif-preview">Hey, saw your page, how does this work?</div>
               </div>
               <div class="rm1-notif-time">now</div>
-            </div>
-            <div class="reel-hint">
-              <div class="reel-hint-label">Scroll</div>
-              <div class="reel-hint-chevron">&#8964;</div>
             </div>
             <div class="reel-content">
               <div class="reel-icon-wrap">💬</div>
@@ -1786,7 +1778,34 @@ function landingPage(token, monthlyAmount) {
           chat.style.opacity = '0';
           rm1Delay(sess, 900, function () {
             msgs.innerHTML = '';
-            rm1Play();       // restart from phase 1
+            // Bounce-peek: only nudge if still on slide 1 (scrollTop near 0)
+            if (reelScroller && reelScroller.scrollTop < 50) {
+              var PEEK = 26;   // px to peek
+              var start = null;
+              // Temporarily disable scroll-snap so the nudge doesn't snap to slide 2
+              reelScroller.style.scrollSnapType = 'none';
+              function peekStep(ts) {
+                if (rm1Session !== sess) { reelScroller.style.scrollSnapType = ''; return; }
+                if (!start) start = ts;
+                var elapsed = ts - start;
+                var dur = 600;
+                var p = Math.min(elapsed / dur, 1);
+                // Spring curve: overshoot up then settle back to 0
+                // Uses a damped oscillation: peek * sin(p*π) * (1 - p)²
+                var offset = PEEK * Math.sin(p * Math.PI) * Math.pow(1 - p, 1.4);
+                reelScroller.scrollTop = Math.max(0, offset);
+                if (p < 1) {
+                  requestAnimationFrame(peekStep);
+                } else {
+                  reelScroller.scrollTop = 0;
+                  reelScroller.style.scrollSnapType = '';
+                  rm1Play();   // restart from phase 1
+                }
+              }
+              requestAnimationFrame(peekStep);
+            } else {
+              rm1Play();       // restarted from phase 1 without nudge
+            }
           });
         });
       }
