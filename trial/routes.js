@@ -397,8 +397,8 @@ function landingPage(token, monthlyAmount) {
     /* HOW IT WORKS — two-column interactive */
     .hiw-layout { display: grid; grid-template-columns: 480px 1fr; gap: 52px; margin-top: 48px; align-items: start; }
     .hiw-preview { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow-lg); overflow: hidden; position: relative; min-height: 360px; }
-    .hiw-panel { position: absolute; inset: 0; opacity: 0; transition: opacity 0.35s ease; display: flex; flex-direction: column; }
-    .hiw-panel.hiw-active { opacity: 1; }
+    .hiw-panel { position: absolute; inset: 0; opacity: 0; transition: opacity 0.35s ease; display: flex; flex-direction: column; pointer-events: none; }
+    .hiw-panel.hiw-active { opacity: 1; pointer-events: auto; }
     .hiw-steps { display: flex; flex-direction: column; padding: 8px 0; }
     .hiw-step { padding: 22px 28px; border-left: 3px solid transparent; cursor: pointer; transition: border-color 0.2s ease; }
     .hiw-step:hover { background: rgba(45,107,255,0.025); }
@@ -413,7 +413,7 @@ function landingPage(token, monthlyAmount) {
     .hiw-ig-icon { width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .hiw-connect-label { font-size: 15px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
     .hiw-connect-sub { font-size: 13px; color: var(--muted); max-width: 220px; line-height: 1.5; }
-    .hiw-connect-btn { background: var(--primary); color: #fff; border: none; border-radius: 10px; padding: 11px 26px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: default; box-shadow: 0 2px 10px rgba(45,107,255,0.25); }
+    .hiw-connect-btn { background: var(--primary); color: #fff; border: none; border-radius: 10px; padding: 11px 26px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; box-shadow: 0 2px 10px rgba(45,107,255,0.25); }
     .hiw-connect-hint { font-size: 12px; color: rgba(15,23,42,0.35); }
     /* panel 2 — voice training */
     .hiw-voice-body { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 16px 20px 20px; }
