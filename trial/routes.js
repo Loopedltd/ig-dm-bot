@@ -615,7 +615,7 @@ function landingPage(token, monthlyAmount) {
         <div class="hiw-panel" id="hiw-panel-2">
           <div class="hiw-panel-header">Live DM conversation</div>
           <div class="hiw-dm-body" id="hiw-dm-body">
-            <div class="hiw-dm-bubble in">Hey, saw your post, how much is coaching?</div>
+            <div class="hiw-dm-bubble in">Hey, saw your post, what does it include?</div>
             <div class="hiw-dm-bubble out">Hey, thanks for reaching out. Quick one first, what is your main goal right now?</div>
             <div class="hiw-dm-bubble in">I want to grow my online business and sign more clients</div>
             <div class="hiw-dm-bubble in">I've tried coaching before and it didn't really work</div>
@@ -1074,7 +1074,7 @@ function landingPage(token, monthlyAmount) {
     // Incoming bubbles appear directly; outgoing (blue) bubbles are preceded by
     // a 1-second typing indicator before revealing. 2-second gap after each bubble.
     var DM_SCRIPT = [
-      { cls: 'in',  text: 'Hey, saw your post, how much is coaching?' },
+      { cls: 'in',  text: 'Hey, saw your post, what does it include?' },
       { cls: 'out', text: 'Hey, thanks for reaching out. Quick one first, what is your main goal right now?' },
       { cls: 'in',  text: 'I want to grow my online business and sign more clients' },
       { cls: 'in',  text: "I've tried coaching before and it didn't really work" },
