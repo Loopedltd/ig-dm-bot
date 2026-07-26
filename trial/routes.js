@@ -591,12 +591,26 @@ function landingPage(token, monthlyAmount) {
 
     /* FEATURES */
     .features-wrap { background: var(--panel); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 32px; margin-top: 44px; }
-    .feature { display: flex; flex-direction: column; gap: 8px; transition: transform 0.22s ease; }
-    .feature:hover { transform: translateY(-5px); }
-    .feature-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); opacity: 0.6; margin-bottom: 2px; }
-    .feature h4 { font-size: 14px; font-weight: 800; letter-spacing: 0px; }
-    .feature p { font-size: 14px; color: var(--muted); line-height: 1.65; }
+    .reel-wrap { display: flex; justify-content: center; margin-top: 44px; }
+    .reel-card { position: relative; width: 300px; height: 534px; border-radius: 28px; background: #0b0d12; overflow: hidden; flex-shrink: 0; }
+    .reel-progress { position: absolute; top: 0; left: 0; right: 44px; display: flex; gap: 4px; padding: 14px 14px 0; z-index: 3; pointer-events: none; }
+    .reel-prog-seg { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.18); transition: background 0.25s; }
+    .reel-prog-seg.active { background: rgba(255,255,255,0.85); }
+    .reel-scroller { position: absolute; inset: 0; overflow-y: scroll; scroll-snap-type: y mandatory; overscroll-behavior: contain; scrollbar-width: none; }
+    .reel-scroller::-webkit-scrollbar { display: none; }
+    .reel-slide { height: 534px; scroll-snap-align: start; scroll-snap-stop: always; position: relative; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 52px 32px 20px; overflow: hidden; }
+    .reel-glow { position: absolute; width: 240px; height: 240px; border-radius: 50%; filter: blur(70px); pointer-events: none; animation: reelGlowDrift 6s ease-in-out infinite alternate; }
+    @keyframes reelGlowDrift { 0% { transform: translate(-15px, -15px) scale(1); } 100% { transform: translate(15px, 25px) scale(1.1); } }
+    .reel-content { position: relative; z-index: 1; }
+    .reel-icon-wrap { width: 46px; height: 46px; border-radius: 13px; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; font-size: 22px; }
+    .reel-title { font-size: 17px; font-weight: 800; color: #fff; margin-bottom: 7px; line-height: 1.25; }
+    .reel-desc { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.6; }
+    .reel-rail { position: absolute; right: 0; top: 0; width: 44px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 32px; gap: 22px; z-index: 2; pointer-events: none; }
+    .reel-rail-btn { background: none; border: none; padding: 0; color: rgba(255,255,255,0.65); font-size: 20px; line-height: 1; }
+    .reel-hint { position: absolute; top: 45%; left: 0; right: 44px; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 2; pointer-events: none; animation: reelHintBob 1.6s ease-in-out infinite; }
+    .reel-hint-label { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.4); letter-spacing: 0.9px; text-transform: uppercase; }
+    .reel-hint-chevron { color: rgba(255,255,255,0.3); font-size: 18px; line-height: 1; }
+    @keyframes reelHintBob { 0%,100% { opacity: 1; transform: translateY(-50%); } 50% { opacity: 0.5; transform: translateY(calc(-50% + 5px)); } }
 
     /* PRICING */
     .pricing-card { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; padding: 40px; max-width: 480px; box-shadow: var(--shadow-lg); margin-top: 44px; transition: transform 0.22s ease, box-shadow 0.22s ease; }
@@ -809,36 +823,76 @@ function landingPage(token, monthlyAmount) {
       <div class="section-label">What you get</div>
       <div class="section-heading">Everything your DMs need.</div>
     </div>
-    <div class="features-grid">
-      <div class="feature reveal" data-delay="0">
-        <div class="feature-dot"></div>
-        <h4>DM replies in your voice</h4>
-        <p>GPT-4o-mini trained on your real messages. Sounds like you, not like a bot.</p>
-      </div>
-      <div class="feature reveal" data-delay="80">
-        <div class="feature-dot"></div>
-        <h4>Story reply automation</h4>
-        <p>Someone reacts to your story? Looped starts a qualifying conversation automatically.</p>
-      </div>
-      <div class="feature reveal" data-delay="160">
-        <div class="feature-dot"></div>
-        <h4>Comment keyword DMs</h4>
-        <p>Comment a keyword on your post and get an instant DM. Perfect for lead magnets and offers.</p>
-      </div>
-      <div class="feature reveal" data-delay="0">
-        <div class="feature-dot"></div>
-        <h4>Books calls for you</h4>
-        <p>Looped handles objections, builds trust, and drives every warm lead to your booking link.</p>
-      </div>
-      <div class="feature reveal" data-delay="80">
-        <div class="feature-dot"></div>
-        <h4>24/7 response time</h4>
-        <p>Replies in seconds at any hour. No more leads going cold because you were busy.</p>
-      </div>
-      <div class="feature reveal" data-delay="160">
-        <div class="feature-dot"></div>
-        <h4>Lead qualification built in</h4>
-        <p>Asks the right questions to filter out tyre-kickers and only push serious leads to a call.</p>
+    <div class="reel-wrap reveal">
+      <div class="reel-card">
+        <div class="reel-progress" id="reelProgress">
+          <div class="reel-prog-seg active"></div>
+          <div class="reel-prog-seg"></div>
+          <div class="reel-prog-seg"></div>
+          <div class="reel-prog-seg"></div>
+          <div class="reel-prog-seg"></div>
+          <div class="reel-prog-seg"></div>
+        </div>
+        <div class="reel-scroller" id="reelScroller">
+          <div class="reel-slide">
+            <div class="reel-glow" style="background:rgba(45,107,255,0.55);top:5%;left:-10%;"></div>
+            <div class="reel-hint">
+              <div class="reel-hint-label">Scroll</div>
+              <div class="reel-hint-chevron">&#8964;</div>
+            </div>
+            <div class="reel-content">
+              <div class="reel-icon-wrap">💬</div>
+              <div class="reel-title">DM replies in your voice</div>
+              <div class="reel-desc">GPT-4o trained on your real messages. Sounds like you, not like a bot.</div>
+            </div>
+          </div>
+          <div class="reel-slide">
+            <div class="reel-glow" style="background:rgba(140,82,255,0.5);top:10%;left:30%;"></div>
+            <div class="reel-content">
+              <div class="reel-icon-wrap">📸</div>
+              <div class="reel-title">Story reply automation</div>
+              <div class="reel-desc">Someone reacts to your story? Looped starts a qualifying conversation automatically.</div>
+            </div>
+          </div>
+          <div class="reel-slide">
+            <div class="reel-glow" style="background:rgba(0,200,150,0.4);top:20%;left:10%;"></div>
+            <div class="reel-content">
+              <div class="reel-icon-wrap">🔑</div>
+              <div class="reel-title">Comment keyword DMs</div>
+              <div class="reel-desc">Comment a keyword on your post and get an instant DM. Perfect for lead magnets.</div>
+            </div>
+          </div>
+          <div class="reel-slide">
+            <div class="reel-glow" style="background:rgba(255,154,60,0.4);top:15%;left:25%;"></div>
+            <div class="reel-content">
+              <div class="reel-icon-wrap">📅</div>
+              <div class="reel-title">Books calls for you</div>
+              <div class="reel-desc">Handles objections, builds trust, and drives every warm lead to your booking link.</div>
+            </div>
+          </div>
+          <div class="reel-slide">
+            <div class="reel-glow" style="background:rgba(45,107,255,0.45);top:8%;left:40%;"></div>
+            <div class="reel-content">
+              <div class="reel-icon-wrap">⚡</div>
+              <div class="reel-title">24/7 response time</div>
+              <div class="reel-desc">Replies in seconds at any hour. No more leads going cold because you were busy.</div>
+            </div>
+          </div>
+          <div class="reel-slide">
+            <div class="reel-glow" style="background:rgba(220,60,120,0.4);top:18%;left:15%;"></div>
+            <div class="reel-content">
+              <div class="reel-icon-wrap">🎯</div>
+              <div class="reel-title">Lead qualification built in</div>
+              <div class="reel-desc">Asks the right questions to filter tyre-kickers and push only serious leads to a call.</div>
+            </div>
+          </div>
+        </div>
+        <div class="reel-rail">
+          <button class="reel-rail-btn" tabindex="-1">&#9825;</button>
+          <button class="reel-rail-btn" tabindex="-1">&#128172;</button>
+          <button class="reel-rail-btn" tabindex="-1">&#10148;</button>
+          <button class="reel-rail-btn" tabindex="-1">&#128278;</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1386,6 +1440,20 @@ function landingPage(token, monthlyAmount) {
       step.addEventListener('click',      function () { hiwActivate(idx); });
     });
   } catch (e) { console.warn('[looped] hiw error:', e); }
+
+  // 7. Reel progress bar
+  try {
+    var reelScroller = document.getElementById('reelScroller');
+    var reelSegs = document.querySelectorAll('#reelProgress .reel-prog-seg');
+    if (reelScroller && reelSegs.length) {
+      var REEL_SLIDE_H = 534;
+      function updateReelProgress() {
+        var idx = Math.min(Math.round(reelScroller.scrollTop / REEL_SLIDE_H), reelSegs.length - 1);
+        reelSegs.forEach(function (seg, i) { seg.classList.toggle('active', i <= idx); });
+      }
+      reelScroller.addEventListener('scroll', updateReelProgress, { passive: true });
+    }
+  } catch (e) { console.warn('[looped] reel error:', e); }
 
 })();
 
