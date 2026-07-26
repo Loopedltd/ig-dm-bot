@@ -628,7 +628,7 @@ function landingPage(token, monthlyAmount) {
       <div class="hiw-steps">
         <div class="hiw-step hiw-step-active" data-step="0">
           <div class="hiw-step-title">Connect your Instagram</div>
-          <div class="hiw-step-desc">One-click Instagram connection via the dashboard No technical setup required</div>
+          <div class="hiw-step-desc">One-click Instagram connection via the dashboard no technical setup required</div>
         </div>
         <div class="hiw-step" data-step="1">
           <div class="hiw-step-title">Train it on your voice</div>
