@@ -617,11 +617,11 @@ function landingPage(token, monthlyAmount) {
 
     /* S1 — DM Voice (4-phase JS-driven) */
     .rm1-bg { position: absolute; inset: 0; overflow: hidden; background: #111318; }
-    .rm1-homescreen { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 16px 14px 14px; filter: blur(0.4px); }
-    .rm1-app-grid { flex: 1; display: grid; grid-template-columns: repeat(4,1fr); grid-template-rows: repeat(6,1fr); gap: 8px; }
-    .rm1-icon { border-radius: 22%; }
-    .rm1-dock { display: flex; gap: 8px; margin-top: 14px; padding: 8px 6px; background: rgba(255,255,255,0.08); border-radius: 20px; flex-shrink: 0; }
-    .rm1-dock-icon { flex: 1; aspect-ratio: 1; border-radius: 22%; }
+    .rm1-homescreen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; padding: 24px 20px 14px; filter: blur(0.4px); }
+    .rm1-app-grid { display: grid; grid-template-columns: repeat(4,54px); grid-template-rows: repeat(6,54px); gap: 14px; flex-shrink: 0; }
+    .rm1-icon { width: 54px; height: 54px; border-radius: 14px; box-shadow: inset 0 1px 1px rgba(255,255,255,0.25), 0 2px 6px rgba(0,0,0,0.25); }
+    .rm1-dock { display: flex; gap: 14px; margin-top: auto; padding: 10px 16px; background: rgba(255,255,255,0.10); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.12); border-radius: 26px; flex-shrink: 0; }
+    .rm1-dock-icon { width: 54px; height: 54px; border-radius: 14px; box-shadow: inset 0 1px 1px rgba(255,255,255,0.25), 0 2px 6px rgba(0,0,0,0.25); }
     .rm1-chat { position: absolute; inset: 0; background: #f2f2f4; overflow-y: scroll; scrollbar-width: none; display: flex; flex-direction: column; opacity: 0; padding-bottom: 170px; }
     .rm1-chat::-webkit-scrollbar { display: none; }
     .rm1-chat-header { flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 10px 10px 8px; background: #f2f2f4; border-bottom: 1px solid rgba(0,0,0,0.07); position: sticky; top: 0; z-index: 1; }
