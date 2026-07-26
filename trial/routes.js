@@ -590,7 +590,7 @@ function landingPage(token, monthlyAmount) {
     }
 
     /* FEATURES */
-    .features-wrap { background: var(--panel); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .features-wrap { background: var(--bg); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
     .reel-wrap { display: flex; justify-content: center; margin-top: 44px; }
     .reel-card { position: relative; width: 300px; height: 534px; border-radius: 28px; background: #0b0d12; overflow: hidden; flex-shrink: 0; }
     .reel-home-ind { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); width: 103px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.82); box-shadow: 0 0 0 0.5px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.22); opacity: 0; transition: opacity 175ms ease; pointer-events: none; z-index: 10; }
