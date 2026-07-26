@@ -428,8 +428,16 @@ function landingPage(token, monthlyAmount) {
     .hiw-dm-bubble { max-width: 82%; padding: 9px 13px; border-radius: 14px; font-size: 13px; line-height: 1.5; }
     .hiw-dm-bubble.in { align-self: flex-start; background: rgba(15,23,42,0.06); color: var(--text); border-bottom-left-radius: 4px; }
     .hiw-dm-bubble.out { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
-    .hiw-dm-booked { display: flex; align-items: center; justify-content: flex-end; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ok); margin-top: 2px; }
+    .hiw-dm-booked { display: flex; align-items: center; justify-content: flex-end; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ok); margin-top: 2px; transition: opacity 0.3s ease; }
     .hiw-dm-check { width: 18px; height: 18px; border-radius: 50%; background: var(--ok-bg); border: 1px solid var(--ok-border); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    /* typing indicator for the DM card (reuses dmPulse keyframe from hero demo) */
+    .hiw-dm-typing { display: flex; align-self: flex-start; gap: 5px; padding: 9px 13px; background: rgba(15,23,42,0.06); border-radius: 14px; border-bottom-left-radius: 4px; align-items: center; }
+    .hiw-dm-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(15,23,42,0.30); animation: dmPulse 1.3s ease-in-out infinite; }
+    .hiw-dm-dot:nth-child(2) { animation-delay: 0.22s; }
+    .hiw-dm-dot:nth-child(3) { animation-delay: 0.44s; }
+    /* blinking cursor for voice card character-by-character typing */
+    .hiw-voice-cursor { display: inline-block; width: 2px; height: 0.85em; background: var(--primary); margin-left: 1px; vertical-align: text-bottom; animation: hiwBlink 0.85s step-end infinite; }
+    @keyframes hiwBlink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
     @media (max-width: 820px) {
       .hiw-layout { grid-template-columns: 1fr; }
       .hiw-preview { min-height: 300px; }
@@ -593,7 +601,7 @@ function landingPage(token, monthlyAmount) {
           <div class="hiw-voice-body">
             <div class="hiw-voice-label">Your example DMs</div>
             <div class="hiw-voice-sub">Paste a few real conversations to train your tone</div>
-            <div class="hiw-voice-area">
+            <div class="hiw-voice-area" id="hiw-voice-area">
               <span class="hiw-voice-speaker">Follower:</span> Hey, what does your coaching include?<br>
               <span class="hiw-voice-me">Me:</span> Hey, good question. Before I go into it, what is your main goal right now?<br><br>
               <span class="hiw-voice-speaker">Follower:</span> I want to get consistent and grow my business<br>
@@ -606,14 +614,14 @@ function landingPage(token, monthlyAmount) {
         <!-- Panel 3: Qualify and book (static DM preview) -->
         <div class="hiw-panel" id="hiw-panel-2">
           <div class="hiw-panel-header">Live DM conversation</div>
-          <div class="hiw-dm-body">
+          <div class="hiw-dm-body" id="hiw-dm-body">
             <div class="hiw-dm-bubble in">Hey, saw your post, how much is coaching?</div>
             <div class="hiw-dm-bubble out">Hey, thanks for reaching out. Quick one first, what is your main goal right now?</div>
             <div class="hiw-dm-bubble in">I want to grow my online business and sign more clients</div>
             <div class="hiw-dm-bubble in">I've tried coaching before and it didn't really work</div>
             <div class="hiw-dm-bubble out">Totally get that, most people felt the same until they had someone keeping them accountable week to week</div>
             <div class="hiw-dm-bubble out">Right, that's kind of what we're built around. I help coaches in exactly that position book 3 to 5 calls a week on autopilot. Want me to send you the details?</div>
-            <div class="hiw-dm-booked">
+            <div class="hiw-dm-booked" id="hiw-dm-booked">
               <span class="hiw-dm-check">
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="#027a48" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </span>
@@ -965,18 +973,186 @@ function landingPage(token, monthlyAmount) {
     }
   } catch (e) { console.warn('[looped] reveal error:', e); }
 
-  // ── 6. HOW IT WORKS STEP SWITCHER ───────────────────────────────────────────
+  // ── 6. HOW IT WORKS STEP SWITCHER + PANEL ANIMATIONS ───────────────────────
   try {
     var hiwSteps  = document.querySelectorAll('.hiw-step');
     var hiwPanels = document.querySelectorAll('.hiw-panel');
 
+    // Central timer registry — lets hiwActivate cancel all pending animation
+    // timeouts whenever the user switches to a different step mid-animation.
+    var hiwTimers = [];
+    function hiwDelay(ms, fn) {
+      var t = setTimeout(fn, ms);
+      hiwTimers.push(t);
+    }
+    function hiwClearTimers() {
+      hiwTimers.forEach(function (t) { clearTimeout(t); });
+      hiwTimers = [];
+    }
+
+    // ── Panel 2 animation: "Train it on your voice" ────────────────────────
+    // Follower lines appear instantly; Me: lines type out character-by-character
+    // with a blinking cursor, reusing the same timing approach as the hero demo.
+    var VOICE_DATA = [
+      { type: 'follower', text: 'Hey, what does your coaching include?' },
+      { type: 'me',       text: 'Hey, good question. Before I go into it, what is your main goal right now?' },
+      { type: 'follower', text: 'I want to get consistent and grow my business' },
+      { type: 'me',       text: 'Perfect, I work with people in exactly your position. Want me to send over the details?' },
+    ];
+
+    function initVoiceAnim() {
+      var area = document.getElementById('hiw-voice-area');
+      if (!area) return;
+      area.innerHTML = '';  // reset to empty before each run
+
+      var lineIdx = 0;
+      var CHAR_MS = 28;  // ms per character — same rhythm as hero demo
+
+      function addFollower(text, onDone) {
+        var sp = document.createElement('span');
+        sp.className = 'hiw-voice-speaker';
+        sp.textContent = 'Follower:';
+        area.appendChild(sp);
+        area.appendChild(document.createTextNode(' ' + text));
+        area.appendChild(document.createElement('br'));
+        hiwDelay(350, onDone);
+      }
+
+      function addMe(text, onDone) {
+        var sp = document.createElement('span');
+        sp.className = 'hiw-voice-me';
+        sp.textContent = 'Me:';
+        area.appendChild(sp);
+        area.appendChild(document.createTextNode(' '));
+
+        var typed = document.createElement('span');
+        area.appendChild(typed);
+
+        var cursor = document.createElement('span');
+        cursor.className = 'hiw-voice-cursor';
+        area.appendChild(cursor);
+
+        var i = 0;
+        function tick() {
+          if (i >= text.length) {
+            hiwDelay(500, function () {
+              cursor.remove();
+              area.appendChild(document.createElement('br'));
+              area.appendChild(document.createElement('br'));
+              hiwDelay(200, onDone);
+            });
+            return;
+          }
+          typed.textContent += text[i++];
+          hiwDelay(CHAR_MS, tick);
+        }
+        tick();
+      }
+
+      function step() {
+        if (lineIdx >= VOICE_DATA.length) {
+          var pl = document.createElement('span');
+          pl.className = 'hiw-voice-placeholder';
+          pl.style.cursor = 'pointer';
+          pl.onclick = function (e) { if (typeof startTrial === 'function') startTrial(e); };
+          pl.textContent = '+ Paste more examples here...';
+          area.appendChild(pl);
+          return;
+        }
+        var item = VOICE_DATA[lineIdx++];
+        if (item.type === 'follower') {
+          addFollower(item.text, step);
+        } else {
+          addMe(item.text, step);
+        }
+      }
+
+      step();
+    }
+
+    // ── Panel 3 animation: "Watch it qualify and book" ─────────────────────
+    // Incoming bubbles appear directly; outgoing (blue) bubbles are preceded by
+    // a 1-second typing indicator before revealing. 2-second gap after each bubble.
+    var DM_SCRIPT = [
+      { cls: 'in',  text: 'Hey, saw your post, how much is coaching?' },
+      { cls: 'out', text: 'Hey, thanks for reaching out. Quick one first, what is your main goal right now?' },
+      { cls: 'in',  text: 'I want to grow my online business and sign more clients' },
+      { cls: 'in',  text: "I've tried coaching before and it didn't really work" },
+      { cls: 'out', text: 'Totally get that, most people felt the same until they had someone keeping them accountable week to week' },
+      { cls: 'out', text: "Right, that\u2019s kind of what we\u2019re built around. I help coaches in exactly that position book 3 to 5 calls a week on autopilot. Want me to send you the details?" },
+    ];
+
+    function initDmAnim() {
+      var body   = document.getElementById('hiw-dm-body');
+      var booked = document.getElementById('hiw-dm-booked');
+      if (!body || !booked) return;
+
+      // Reset: remove all bubbles and typing indicators, hide booked indicator
+      Array.from(body.children).forEach(function (el) {
+        if (el !== booked) el.remove();
+      });
+      booked.style.opacity = '0';
+      booked.style.display = 'none';
+
+      var msgIdx = 0;
+      var BUBBLE_GAP  = 2000;  // ms between bubble appearing and next action
+      var TYPING_SHOW = 1000;  // ms to show typing dots before an outgoing bubble
+
+      function scrollDown() { body.scrollTop = body.scrollHeight; }
+
+      function addBubble(item) {
+        var div = document.createElement('div');
+        div.className = 'hiw-dm-bubble ' + item.cls;
+        div.textContent = item.text;
+        body.insertBefore(div, booked);
+        scrollDown();
+      }
+
+      function addTyping() {
+        var t = document.createElement('div');
+        t.className = 'hiw-dm-typing';
+        t.innerHTML = '<div class="hiw-dm-dot"></div><div class="hiw-dm-dot"></div><div class="hiw-dm-dot"></div>';
+        body.insertBefore(t, booked);
+        scrollDown();
+        return t;
+      }
+
+      function nextMsg() {
+        if (msgIdx >= DM_SCRIPT.length) {
+          booked.style.display = 'flex';
+          hiwDelay(30, function () { booked.style.opacity = '1'; scrollDown(); });
+          return;
+        }
+        var item = DM_SCRIPT[msgIdx++];
+        if (item.cls === 'out') {
+          var typingEl = addTyping();
+          hiwDelay(TYPING_SHOW, function () {
+            typingEl.remove();
+            addBubble(item);
+            hiwDelay(BUBBLE_GAP, nextMsg);
+          });
+        } else {
+          addBubble(item);
+          hiwDelay(BUBBLE_GAP, nextMsg);
+        }
+      }
+
+      hiwDelay(400, nextMsg);  // brief initial pause before first bubble
+    }
+
+    // ── Step switcher ───────────────────────────────────────────────────────
     function hiwActivate(idx) {
+      hiwClearTimers();  // stop any in-progress animation on the outgoing panel
+
       hiwSteps.forEach(function (s, i) {
         s.classList.toggle('hiw-step-active', i === idx);
       });
       hiwPanels.forEach(function (p, i) {
         p.classList.toggle('hiw-active', i === idx);
       });
+
+      if (idx === 1) initVoiceAnim();
+      if (idx === 2) initDmAnim();
     }
 
     hiwSteps.forEach(function (step, idx) {
