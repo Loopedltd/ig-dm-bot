@@ -616,10 +616,11 @@ function landingPage(token, monthlyAmount) {
     .reel-mock { position: absolute; top: 34px; left: 20px; right: 52px; bottom: 178px; display: flex; align-items: center; justify-content: center; pointer-events: none; overflow: hidden; }
 
     /* S1 — DM Voice (4-phase JS-driven) */
-    .rm1-bg { position: absolute; top: 34px; left: 20px; right: 52px; bottom: 178px; overflow: hidden; border-radius: 12px; background: #111318; }
-    .rm1-grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(4,1fr); gap: 7px; padding: 10px; align-content: start; filter: blur(0.5px); }
-    .rm1-icon { border-radius: 9px; aspect-ratio: 1; }
-    .rm1-chat { position: absolute; inset: 0; background: #f2f2f4; overflow-y: scroll; scrollbar-width: none; padding: 10px 8px; display: flex; flex-direction: column; gap: 5px; opacity: 0; }
+    .rm1-bg { position: absolute; inset: 0; overflow: hidden; background: #111318; }
+    .rm1-grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(4,1fr); grid-auto-rows: 1fr; gap: 8px; padding: 12px; filter: blur(0.5px); }
+    .rm1-icon { border-radius: 10px; }
+    .rm1-chat { position: absolute; inset: 0; background: #f2f2f4; overflow-y: scroll; scrollbar-width: none; padding: 10px 8px 170px; display: flex; flex-direction: column; gap: 5px; opacity: 0; }
+    .rm1-bottom-grad { position: absolute; bottom: 0; left: 0; right: 0; height: 205px; background: linear-gradient(to bottom, transparent, rgba(11,13,18,0.76) 52%, rgba(11,13,18,0.96) 100%); pointer-events: none; }
     .rm1-chat::-webkit-scrollbar { display: none; }
     .rm1-bubble { font-size: 10.5px; line-height: 1.45; padding: 6px 9px; border-radius: 12px; max-width: 82%; word-break: break-word; flex-shrink: 0; }
     .rm1-in { background: rgba(0,0,0,0.09); color: #1a1a2e; border-bottom-left-radius: 3px; align-self: flex-start; }
@@ -960,7 +961,6 @@ function landingPage(token, monthlyAmount) {
         <div class="reel-scroller" id="reelScroller">
           <!-- S1: DM voice (4-phase) -->
           <div class="reel-slide">
-            <div class="reel-glow" style="background:rgba(45,107,255,0.35);top:5%;left:-10%;"></div>
             <div class="rm1-bg">
               <div class="rm1-grid" id="rm1Grid">
                 <div class="rm1-icon" style="background:rgba(255,95,75,0.65)"></div>
@@ -975,9 +975,26 @@ function landingPage(token, monthlyAmount) {
                 <div class="rm1-icon" style="background:rgba(255,135,55,0.65)"></div>
                 <div class="rm1-icon" style="background:rgba(75,180,115,0.65)"></div>
                 <div class="rm1-icon" style="background:rgba(155,75,215,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(65,180,180,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(255,95,75,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(215,155,55,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(215,85,115,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(115,115,135,0.55)"></div>
+                <div class="rm1-icon" style="background:rgba(75,180,115,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(155,75,215,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(255,135,55,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(255,95,75,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(65,180,180,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(215,155,55,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(215,85,115,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(115,115,135,0.55)"></div>
+                <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
               </div>
               <div class="rm1-chat" id="rm1Chat"></div>
             </div>
+            <div class="rm1-bottom-grad"></div>
             <div class="rm1-notif" id="rm1Notif">
               <div class="rm1-notif-icon"></div>
               <span class="rm1-notif-text">New message</span>
