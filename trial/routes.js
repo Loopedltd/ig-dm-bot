@@ -336,8 +336,8 @@ function landingPage(token, monthlyAmount) {
     .hero-gradient { position: absolute; inset: -30%; pointer-events: none; z-index: 0; }
 
     /* HERO */
-    .hero { padding: 100px 32px 56px; text-align: center; max-width: 1000px; margin: 0 auto; position: relative; z-index: 1; }
-    .hero h1 { font-size: clamp(28px, 4.5vw, 46px); font-weight: 900; line-height: 1.1; letter-spacing: -1.2px; margin-bottom: 14px; color: var(--text); }
+    .hero { padding: 223px 32px 56px; text-align: center; max-width: 1000px; margin: 0 auto; position: relative; z-index: 1; }
+    .hero h1 { font-size: clamp(28px, 3.6vw, 48px); font-weight: 900; line-height: 1.1; letter-spacing: -1.2px; margin-bottom: 14px; color: var(--text); }
     .hero h1 em { font-style: normal; color: var(--primary); }
     .hero-lead { font-size: 18px; color: var(--muted); max-width: 620px; margin: 0 auto 24px; line-height: 1.65; }
     .cta-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -350,7 +350,7 @@ function landingPage(token, monthlyAmount) {
     .err-msg { display: none; color: #b42318; font-size: 13px; background: #fff5f5; border: 1px solid rgba(180,35,24,0.18); border-radius: 10px; padding: 11px 16px; max-width: 420px; }
 
     /* DM DEMO */
-    .dm-demo { margin: 72px auto 0; max-width: 320px; }
+    .dm-demo { margin: 54px auto 0; max-width: 320px; }
     .dm-phone { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow-lg); overflow: hidden; }
     .dm-header { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); background: rgba(15,23,42,0.02); }
     .dm-avatar { width: 32px; height: 32px; border-radius: 50%; background: rgba(45,107,255,0.12); border: 1px solid rgba(45,107,255,0.20); flex-shrink: 0; }
@@ -380,7 +380,7 @@ function landingPage(token, monthlyAmount) {
     .dm-try-again-btn:hover { color: var(--primary-dark); }
 
     /* STATS */
-    .stats-section { padding: 64px 32px 64px; }
+    .stats-section { padding: 180px 32px 64px; }
     .stats-inner { max-width: 720px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); background: var(--panel); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
     .stat-item { padding: 28px 16px; text-align: center; border-right: 1px solid var(--border); }
     .stat-item:last-child { border-right: none; }
