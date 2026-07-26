@@ -337,7 +337,7 @@ function landingPage(token, monthlyAmount) {
 
     /* HERO */
     .hero { padding: 223px 32px 56px; text-align: center; max-width: 1000px; margin: 0 auto; position: relative; z-index: 1; }
-    .hero h1 { font-size: clamp(28px, 3.6vw, 48px); font-weight: 600; font-family: 'Inter', system-ui, sans-serif; line-height: 1; margin-bottom: 14px; color: var(--text); }
+    .hero h1 { font-size: clamp(28px, 3.6vw, 48px); font-weight: 700; font-family: 'Inter', system-ui, sans-serif; line-height: 1.05; letter-spacing: -0.04em; margin-bottom: 14px; color: var(--text); }
     .hero h1 em { font-style: normal; color: var(--primary); }
     .hero-lead { font-size: 15px; color: var(--muted); max-width: 800px; margin: 0 auto 24px; line-height: 1.65; }
     .cta-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -482,7 +482,7 @@ function landingPage(token, monthlyAmount) {
 
     @media (max-width: 600px) {
       .hero { padding: 72px 20px 44px; }
-      .hero h1 { line-height: 1.05; }
+      .hero h1 { letter-spacing: -0.02em; }
       .section { padding: 40px 20px; }
       .stats-section { padding: 44px 20px 44px; }
       .pricing-card { padding: 28px 22px; }
