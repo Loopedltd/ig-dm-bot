@@ -565,9 +565,7 @@ function landingPage(token, monthlyAmount) {
 <div class="section">
   <div class="section-inner">
     <div class="section-intro reveal">
-      <div class="section-label">How it works</div>
-      <div class="section-heading">Set up in minutes. Works while you sleep.</div>
-      <p class="section-sub">Connect your Instagram, fill in a few details about your offer and your voice, and Looped handles the rest.</p>
+      <div class="section-heading">Meet Looped</div>
     </div>
     <div class="hiw-layout reveal">
 
