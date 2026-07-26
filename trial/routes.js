@@ -607,10 +607,12 @@ function landingPage(token, monthlyAmount) {
         <div class="hiw-panel" id="hiw-panel-2">
           <div class="hiw-panel-header">Live DM conversation</div>
           <div class="hiw-dm-body">
-            <div class="hiw-dm-bubble in">Hey! Saw your post, how much is coaching?</div>
-            <div class="hiw-dm-bubble out">Hey! Thanks for reaching out. Quick one first, what is your main goal right now?</div>
+            <div class="hiw-dm-bubble in">Hey, saw your post, how much is coaching?</div>
+            <div class="hiw-dm-bubble out">Hey, thanks for reaching out. Quick one first, what is your main goal right now?</div>
             <div class="hiw-dm-bubble in">I want to grow my online business and sign more clients</div>
-            <div class="hiw-dm-bubble out">Got it. I help coaches in exactly that position book 3 to 5 calls a week on autopilot. Want me to send you the details?</div>
+            <div class="hiw-dm-bubble in">I've tried coaching before and it didn't really work</div>
+            <div class="hiw-dm-bubble out">Totally get that, most people felt the same until they had someone keeping them accountable week to week</div>
+            <div class="hiw-dm-bubble out">Right, that's kind of what we're built around. I help coaches in exactly that position book 3 to 5 calls a week on autopilot. Want me to send you the details?</div>
             <div class="hiw-dm-booked">
               <span class="hiw-dm-check">
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="#027a48" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -634,7 +636,7 @@ function landingPage(token, monthlyAmount) {
         </div>
         <div class="hiw-step" data-step="2">
           <div class="hiw-step-title">Watch it qualify and book</div>
-          <div class="hiw-step-desc">Looped replies to every DM, story reply, and comment keyword, qualifying leads and booking them into your discovery call.</div>
+          <div class="hiw-step-desc">Looped replies to every DM, story reply, and comment keyword, qualifying leads and booking them into your discovery call</div>
         </div>
       </div>
 
