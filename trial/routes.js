@@ -539,6 +539,7 @@ function landingPage(token, monthlyAmount) {
     .hiw-voice-placeholder { color: rgba(15,23,42,0.22); }
     /* panel 3 — qualify and book (static DM preview) */
     .hiw-dm-body { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 16px 20px 20px; overflow: auto; }
+    .hiw-story-reply { align-self: flex-start; font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; }
     .hiw-dm-bubble { max-width: 82%; padding: 9px 13px; border-radius: 14px; font-size: 13px; line-height: 1.5; }
     .hiw-dm-bubble.in { align-self: flex-start; background: rgba(15,23,42,0.06); color: var(--text); border-bottom-left-radius: 4px; }
     .hiw-dm-bubble.out { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
@@ -733,7 +734,8 @@ function landingPage(token, monthlyAmount) {
         <div class="hiw-panel" id="hiw-panel-2">
           <div class="hiw-panel-header">Live DM conversation</div>
           <div class="hiw-dm-body" id="hiw-dm-body">
-            <div class="hiw-dm-bubble in">Hey, saw your post, what does it include?</div>
+            <div class="hiw-story-reply">Story reply</div>
+            <div class="hiw-dm-bubble in">Hey, saw your story, what does it include?</div>
             <div class="hiw-dm-bubble out">Hey, thanks for reaching out. Quick one first, what is your main goal right now?</div>
             <div class="hiw-dm-bubble in">I want to grow my online business and sign more clients</div>
             <div class="hiw-dm-bubble in">I've tried coaching before and it didn't really work</div>
@@ -1260,7 +1262,7 @@ function landingPage(token, monthlyAmount) {
     // Incoming bubbles appear directly; outgoing (blue) bubbles are preceded by
     // a 1-second typing indicator before revealing. 2-second gap after each bubble.
     var DM_SCRIPT = [
-      { cls: 'in',  text: 'Hey, saw your post, what does it include?' },
+      { cls: 'in',  text: 'Hey, saw your story, what does it include?' },
       { cls: 'out', text: 'Hey, thanks for reaching out. Quick one first, what is your main goal right now?' },
       { cls: 'in',  text: 'I want to grow my online business and sign more clients' },
       { cls: 'in',  text: "I've tried coaching before and it didn't really work" },
@@ -1279,6 +1281,12 @@ function landingPage(token, monthlyAmount) {
       });
       booked.style.opacity = '0';
       booked.style.display = 'none';
+
+      // Inject story reply indicator above the first bubble
+      var storyTag = document.createElement('div');
+      storyTag.className = 'hiw-story-reply';
+      storyTag.textContent = 'Story reply';
+      body.insertBefore(storyTag, booked);
 
       var msgIdx = 0;
       var BUBBLE_GAP  = 2000;  // ms between bubble appearing and next action
