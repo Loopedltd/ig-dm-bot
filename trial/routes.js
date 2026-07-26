@@ -994,7 +994,7 @@ function landingPage(token, monthlyAmount) {
           setTimeout(function () {
             var ctaBubble = document.createElement('div');
             ctaBubble.className = 'dm-bubble incoming';
-            ctaBubble.appendChild(document.createTextNode("Perfect, let's get you booked in"));
+            ctaBubble.appendChild(document.createTextNode("That\u2019s Looped in action. Ready to set this up for your own Instagram DMs?"));
 
             var pill = document.createElement('button');
             pill.type = 'button';
