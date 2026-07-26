@@ -612,6 +612,127 @@ function landingPage(token, monthlyAmount) {
     .reel-hint-chevron { color: rgba(255,255,255,0.3); font-size: 18px; line-height: 1; }
     @keyframes reelHintBob { 0%,100% { opacity: 1; transform: translateY(-50%); } 50% { opacity: 0.5; transform: translateY(calc(-50% + 5px)); } }
 
+    /* REEL SLIDE MOCKUPS */
+    .reel-mock { position: absolute; top: 34px; left: 20px; right: 52px; bottom: 178px; display: flex; align-items: center; justify-content: center; pointer-events: none; overflow: hidden; }
+
+    /* S1 — DM Voice */
+    .rm-voice { flex-direction: column; align-items: stretch; gap: 7px; padding: 0 6px; width: 100%; }
+    .rm-v-bubble { font-size: 11px; line-height: 1.4; padding: 6px 9px; border-radius: 12px; max-width: 148px; }
+    .rm-v-in { background: rgba(255,255,255,0.09); color: rgba(255,255,255,0.68); border-bottom-left-radius: 3px; align-self: flex-start; }
+    .rm-v-out { background: rgba(45,107,255,0.42); color: rgba(255,255,255,0.88); border-bottom-right-radius: 3px; align-self: flex-end; }
+    .rm-v-typing { display: inline-flex; gap: 4px; padding: 7px 9px; background: rgba(255,255,255,0.09); border-radius: 12px; border-bottom-left-radius: 3px; align-self: flex-start; }
+    .rm-v-dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.5); }
+    .reel-slide .rm-v-in { opacity: 0; animation: none; }
+    .reel-slide .rm-v-typing { opacity: 0; animation: none; }
+    .reel-slide .rm-v-dot { animation: none; }
+    .reel-slide .rm-v-out { opacity: 0; animation: none; }
+    .reel-slide.is-active .rm-v-in { animation: rmVIn 5s ease infinite; }
+    .reel-slide.is-active .rm-v-typing { animation: rmVTyp 5s ease infinite; }
+    .reel-slide.is-active .rm-v-dot { animation: rmVDot 0.9s ease-in-out infinite; }
+    .reel-slide.is-active .rm-v-dot:nth-child(2) { animation-delay: 0.2s; }
+    .reel-slide.is-active .rm-v-dot:nth-child(3) { animation-delay: 0.4s; }
+    .reel-slide.is-active .rm-v-out { animation: rmVOut 5s ease infinite; }
+    @keyframes rmVIn { 0%,6%{opacity:0;transform:translateY(5px)} 16%,78%{opacity:1;transform:translateY(0)} 90%,100%{opacity:0} }
+    @keyframes rmVTyp { 0%,26%{opacity:0} 34%,52%{opacity:1} 62%,100%{opacity:0} }
+    @keyframes rmVDot { 0%,100%{opacity:0.3;transform:translateY(0)} 50%{opacity:1;transform:translateY(-3px)} }
+    @keyframes rmVOut { 0%,50%{opacity:0;transform:translateY(5px)} 62%,78%{opacity:1;transform:translateY(0)} 90%,100%{opacity:0} }
+
+    /* S2 — Story Reply */
+    .rm-story { flex-direction: column; align-items: center; gap: 10px; }
+    .rm-s-thumb { width: 46px; height: 80px; border-radius: 10px; background: linear-gradient(150deg,rgba(45,107,255,0.28),rgba(140,82,255,0.18)); border: 1.5px solid rgba(255,255,255,0.14); display: flex; align-items: center; justify-content: center; }
+    .rm-s-heart { font-size: 18px; line-height: 1; display: inline-block; }
+    .rm-s-dm { font-size: 11px; padding: 5px 10px; background: rgba(255,255,255,0.09); border-radius: 10px; color: rgba(255,255,255,0.7); white-space: nowrap; }
+    .reel-slide .rm-s-thumb { opacity: 0; animation: none; }
+    .reel-slide .rm-s-heart { animation: none; }
+    .reel-slide .rm-s-dm { opacity: 0; animation: none; }
+    .reel-slide.is-active .rm-s-thumb { animation: rmSThumb 5s ease infinite; }
+    .reel-slide.is-active .rm-s-heart { animation: rmSHeart 5s ease infinite; }
+    .reel-slide.is-active .rm-s-dm { animation: rmSDm 5s ease infinite; }
+    @keyframes rmSThumb { 0%,5%{opacity:0;transform:scale(0.9)} 14%,82%{opacity:1;transform:scale(1)} 92%,100%{opacity:0} }
+    @keyframes rmSHeart { 0%,22%{transform:scale(1)} 30%{transform:scale(1.55)} 37%{transform:scale(0.9)} 43%{transform:scale(1.12)} 49%,100%{transform:scale(1)} }
+    @keyframes rmSDm { 0%,44%{opacity:0;transform:translateY(8px)} 54%,82%{opacity:1;transform:translateY(0)} 92%,100%{opacity:0} }
+
+    /* S3 — Comment Keyword */
+    .rm-comment { flex-direction: column; align-items: center; gap: 10px; }
+    .rm-c-field { display: inline-flex; align-items: center; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 6px 10px; font-size: 11px; color: rgba(255,255,255,0.6); gap: 2px; }
+    .rm-c-label { color: rgba(255,255,255,0.3); }
+    .rm-c-word { overflow: hidden; white-space: nowrap; display: inline-block; width: 0; color: rgba(255,255,255,0.85); font-weight: 700; letter-spacing: 0.5px; }
+    .rm-c-cur { display: inline-block; width: 1.5px; height: 0.85em; background: rgba(255,255,255,0.7); margin-left: 1px; vertical-align: text-bottom; opacity: 0; }
+    .rm-c-notif { font-size: 11px; padding: 5px 10px; background: rgba(45,107,255,0.22); border: 1px solid rgba(45,107,255,0.28); border-radius: 10px; color: rgba(255,255,255,0.75); white-space: nowrap; }
+    .reel-slide .rm-c-field { opacity: 0; animation: none; }
+    .reel-slide .rm-c-word { width: 0; animation: none; }
+    .reel-slide .rm-c-cur { opacity: 0; animation: none; }
+    .reel-slide .rm-c-notif { opacity: 0; animation: none; }
+    .reel-slide.is-active .rm-c-field { animation: rmCField 5.5s ease infinite; }
+    .reel-slide.is-active .rm-c-word { animation: rmCWord 5.5s linear infinite; }
+    .reel-slide.is-active .rm-c-cur { animation: rmCCur 5.5s step-end infinite; }
+    .reel-slide.is-active .rm-c-notif { animation: rmCNotif 5.5s ease infinite; }
+    @keyframes rmCField { 0%,5%{opacity:0} 12%,88%{opacity:1} 96%,100%{opacity:0} }
+    @keyframes rmCWord { 0%,10%{width:0} 36%{width:2.5em} 80%{width:2.5em} 92%,100%{width:0} }
+    @keyframes rmCCur { 0%,9%{opacity:1} 10%{opacity:0} 11%{opacity:1} 12%{opacity:0} 13%{opacity:1} 14%{opacity:0} 15%{opacity:1} 16%{opacity:0} 17%{opacity:1} 18%{opacity:0} 19%{opacity:1} 20%{opacity:0} 21%{opacity:1} 22%{opacity:0} 23%{opacity:1} 24%{opacity:0} 25%{opacity:1} 26%{opacity:0} 27%{opacity:1} 28%{opacity:0} 29%{opacity:1} 30%{opacity:0} 31%{opacity:1} 32%{opacity:0} 33%{opacity:1} 34%{opacity:0} 35%{opacity:1} 36%{opacity:0} 37%,100%{opacity:0} }
+    @keyframes rmCNotif { 0%,44%{opacity:0;transform:translateY(7px)} 54%,80%{opacity:1;transform:translateY(0)} 92%,100%{opacity:0} }
+
+    /* S4 — Calendar */
+    .rm-cal { flex-direction: column; align-items: center; gap: 10px; }
+    .rm-cal-grid { display: grid; grid-template-columns: repeat(4,20px); gap: 5px; }
+    .rm-cal-cell { width: 20px; height: 20px; border-radius: 5px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); }
+    .rm-cal-pick { transition: background 0.3s, border-color 0.3s, box-shadow 0.3s; }
+    .rm-cal-confirm { font-size: 12px; color: rgba(255,255,255,0.82); font-weight: 700; }
+    .reel-slide .rm-cal-grid { opacity: 0; animation: none; }
+    .reel-slide .rm-cal-pick { animation: none; }
+    .reel-slide .rm-cal-confirm { opacity: 0; animation: none; }
+    .reel-slide.is-active .rm-cal-grid { animation: rmCalGrid 5s ease infinite; }
+    .reel-slide.is-active .rm-cal-pick { animation: rmCalPick 5s ease infinite; }
+    .reel-slide.is-active .rm-cal-confirm { animation: rmCalConfirm 5s ease infinite; }
+    @keyframes rmCalGrid { 0%,6%{opacity:0} 14%,85%{opacity:1} 94%,100%{opacity:0} }
+    @keyframes rmCalPick { 0%,28%{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.08);box-shadow:none} 42%,82%{background:rgba(45,107,255,0.5);border-color:rgba(45,107,255,0.6);box-shadow:0 0 8px rgba(45,107,255,0.35)} 94%,100%{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.08);box-shadow:none} }
+    @keyframes rmCalConfirm { 0%,42%{opacity:0;transform:translateY(5px) scale(0.85)} 54%{opacity:1;transform:translateY(0) scale(1.06)} 60%,82%{opacity:1;transform:translateY(0) scale(1)} 94%,100%{opacity:0} }
+
+    /* S5 — Clock */
+    .rm-clock-wrap { flex-direction: column; align-items: center; gap: 12px; }
+    .rm-clock-face { width: 62px; height: 62px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.18); position: relative; }
+    .rm-clock-face::before { content:""; position:absolute; top:4px; left:50%; width:2px; height:6px; background:rgba(255,255,255,0.28); transform:translateX(-50%); border-radius:1px; }
+    .rm-clock-face::after { content:""; position:absolute; bottom:4px; left:50%; width:2px; height:6px; background:rgba(255,255,255,0.28); transform:translateX(-50%); border-radius:1px; }
+    .rm-ch { position: absolute; bottom: 50%; left: 50%; transform-origin: 50% 100%; border-radius: 2px; background: rgba(255,255,255,0.75); }
+    .rm-ch-hr { width: 2px; height: 18px; margin-left: -1px; }
+    .rm-ch-mn { width: 1.5px; height: 24px; margin-left: -0.75px; }
+    .rm-clock-ctr { position: absolute; top: 50%; left: 50%; width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.9); transform: translate(-50%,-50%); z-index: 1; }
+    .rm-clock-msg { font-size: 11px; padding: 5px 10px; background: rgba(45,107,255,0.22); border: 1px solid rgba(45,107,255,0.28); border-radius: 10px; color: rgba(255,255,255,0.75); white-space: nowrap; }
+    .reel-slide .rm-clock-face { opacity: 0; animation: none; }
+    .reel-slide .rm-ch { animation: none; }
+    .reel-slide .rm-clock-msg { opacity: 0; animation: none; }
+    .reel-slide.is-active .rm-clock-face { animation: rmClockFace 5s ease infinite; }
+    .reel-slide.is-active .rm-ch-hr { animation: rmSweep 4s linear infinite; }
+    .reel-slide.is-active .rm-ch-mn { animation: rmSweep 1.1s linear infinite; }
+    .reel-slide.is-active .rm-clock-msg { animation: rmClockMsg 5s ease infinite; }
+    @keyframes rmClockFace { 0%,6%{opacity:0} 14%,85%{opacity:1} 94%,100%{opacity:0} }
+    @keyframes rmSweep { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+    @keyframes rmClockMsg { 0%,46%{opacity:0;transform:translateY(6px) scale(0.9)} 56%,82%{opacity:1;transform:translateY(0) scale(1)} 92%,100%{opacity:0} }
+
+    /* S6 — Funnel */
+    .rm-funnel-wrap { flex-direction: column; align-items: center; gap: 6px; }
+    .rm-funnel-body { position: relative; width: 80px; height: 70px; flex-shrink: 0; }
+    .rm-funnel-svg { display: block; }
+    .rm-fdot { position: absolute; top: 5px; width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.65); opacity: 0; }
+    .rm-fd1 { left: 8px; }
+    .rm-fd2 { left: 57px; }
+    .rm-fd3 { left: 28px; }
+    .rm-fd4 { left: 39px; background: rgba(45,107,255,0.9); }
+    .rm-funnel-check { font-size: 15px; color: rgba(255,255,255,0.85); font-weight: 700; opacity: 0; }
+    .reel-slide .rm-funnel-svg { opacity: 0; animation: none; }
+    .reel-slide .rm-fdot { animation: none; }
+    .reel-slide .rm-funnel-check { animation: none; opacity: 0; }
+    .reel-slide.is-active .rm-funnel-svg { animation: rmFShow 5.5s ease infinite; }
+    .reel-slide.is-active .rm-fd1 { animation: rmFOut 5.5s ease 0.1s infinite; }
+    .reel-slide.is-active .rm-fd2 { animation: rmFOut 5.5s ease 0.3s infinite; }
+    .reel-slide.is-active .rm-fd3 { animation: rmFOut 5.5s ease 0s infinite; }
+    .reel-slide.is-active .rm-fd4 { animation: rmFThru 5.5s ease 0.2s infinite; }
+    .reel-slide.is-active .rm-funnel-check { animation: rmFCheck 5.5s ease infinite; }
+    @keyframes rmFShow { 0%,5%{opacity:0} 12%,85%{opacity:0.6} 95%,100%{opacity:0} }
+    @keyframes rmFOut { 0%,8%{opacity:0;transform:translateY(0)} 16%{opacity:0.8;transform:translateY(0)} 44%{opacity:0;transform:translateY(26px)} 100%{opacity:0;transform:translateY(26px)} }
+    @keyframes rmFThru { 0%,8%{opacity:0;transform:translateY(0)} 16%{opacity:1;transform:translateY(0)} 50%{opacity:1;transform:translateY(52px)} 60%,100%{opacity:0;transform:translateY(52px)} }
+    @keyframes rmFCheck { 0%,56%{opacity:0;transform:scale(0.6)} 66%{opacity:1;transform:scale(1.2)} 72%,85%{opacity:1;transform:scale(1)} 95%,100%{opacity:0} }
+
     /* PRICING */
     .pricing-card { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; padding: 40px; max-width: 480px; box-shadow: var(--shadow-lg); margin-top: 44px; transition: transform 0.22s ease, box-shadow 0.22s ease; }
     .pricing-card:hover { transform: translateY(-8px); box-shadow: 0 36px 80px rgba(15,23,42,0.18); }
@@ -834,8 +955,14 @@ function landingPage(token, monthlyAmount) {
           <div class="reel-prog-seg"></div>
         </div>
         <div class="reel-scroller" id="reelScroller">
+          <!-- S1: DM voice -->
           <div class="reel-slide">
             <div class="reel-glow" style="background:rgba(45,107,255,0.55);top:5%;left:-10%;"></div>
+            <div class="reel-mock rm-voice">
+              <div class="rm-v-bubble rm-v-in">what does it include?</div>
+              <div class="rm-v-typing"><span class="rm-v-dot"></span><span class="rm-v-dot"></span><span class="rm-v-dot"></span></div>
+              <div class="rm-v-bubble rm-v-out">It covers 1-1 coaching&#8230;</div>
+            </div>
             <div class="reel-hint">
               <div class="reel-hint-label">Scroll</div>
               <div class="reel-hint-chevron">&#8964;</div>
@@ -846,40 +973,78 @@ function landingPage(token, monthlyAmount) {
               <div class="reel-desc">GPT-4o trained on your real messages. Sounds like you, not like a bot.</div>
             </div>
           </div>
+          <!-- S2: Story reply -->
           <div class="reel-slide">
             <div class="reel-glow" style="background:rgba(140,82,255,0.5);top:10%;left:30%;"></div>
+            <div class="reel-mock rm-story">
+              <div class="rm-s-thumb"><span class="rm-s-heart">&#9829;</span></div>
+              <div class="rm-s-dm">new message</div>
+            </div>
             <div class="reel-content">
               <div class="reel-icon-wrap">📸</div>
               <div class="reel-title">Story reply automation</div>
               <div class="reel-desc">Someone reacts to your story? Looped starts a qualifying conversation automatically.</div>
             </div>
           </div>
+          <!-- S3: Comment keyword -->
           <div class="reel-slide">
             <div class="reel-glow" style="background:rgba(0,200,150,0.4);top:20%;left:10%;"></div>
+            <div class="reel-mock rm-comment">
+              <div class="rm-c-field"><span class="rm-c-label">reply&#8202;</span><span class="rm-c-word">INFO</span><span class="rm-c-cur"></span></div>
+              <div class="rm-c-notif">DM sent</div>
+            </div>
             <div class="reel-content">
               <div class="reel-icon-wrap">🔑</div>
               <div class="reel-title">Comment keyword DMs</div>
               <div class="reel-desc">Comment a keyword on your post and get an instant DM. Perfect for lead magnets.</div>
             </div>
           </div>
+          <!-- S4: Calendar -->
           <div class="reel-slide">
             <div class="reel-glow" style="background:rgba(255,154,60,0.4);top:15%;left:25%;"></div>
+            <div class="reel-mock rm-cal">
+              <div class="rm-cal-grid">
+                <div class="rm-cal-cell"></div><div class="rm-cal-cell"></div><div class="rm-cal-cell"></div><div class="rm-cal-cell"></div>
+                <div class="rm-cal-cell rm-cal-pick"></div><div class="rm-cal-cell"></div><div class="rm-cal-cell"></div><div class="rm-cal-cell"></div>
+              </div>
+              <div class="rm-cal-confirm">&#10003;&#160;booked</div>
+            </div>
             <div class="reel-content">
               <div class="reel-icon-wrap">📅</div>
               <div class="reel-title">Books calls for you</div>
               <div class="reel-desc">Handles objections, builds trust, and drives every warm lead to your booking link.</div>
             </div>
           </div>
+          <!-- S5: Clock -->
           <div class="reel-slide">
             <div class="reel-glow" style="background:rgba(45,107,255,0.45);top:8%;left:40%;"></div>
+            <div class="reel-mock rm-clock-wrap">
+              <div class="rm-clock-face">
+                <div class="rm-ch rm-ch-hr"></div>
+                <div class="rm-ch rm-ch-mn"></div>
+                <div class="rm-clock-ctr"></div>
+              </div>
+              <div class="rm-clock-msg">replied instantly</div>
+            </div>
             <div class="reel-content">
               <div class="reel-icon-wrap">⚡</div>
               <div class="reel-title">24/7 response time</div>
               <div class="reel-desc">Replies in seconds at any hour. No more leads going cold because you were busy.</div>
             </div>
           </div>
+          <!-- S6: Funnel -->
           <div class="reel-slide">
             <div class="reel-glow" style="background:rgba(220,60,120,0.4);top:18%;left:15%;"></div>
+            <div class="reel-mock rm-funnel-wrap">
+              <div class="rm-funnel-body">
+                <svg class="rm-funnel-svg" viewBox="0 0 80 70" width="80" height="70" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 4 L76 4 L52 50 L52 66 L28 66 L28 50 Z" stroke="rgba(255,255,255,0.22)" stroke-width="1.5" stroke-linejoin="round" fill="rgba(255,255,255,0.04)"/></svg>
+                <div class="rm-fdot rm-fd1"></div>
+                <div class="rm-fdot rm-fd2"></div>
+                <div class="rm-fdot rm-fd3"></div>
+                <div class="rm-fdot rm-fd4"></div>
+              </div>
+              <div class="rm-funnel-check">&#10003;</div>
+            </div>
             <div class="reel-content">
               <div class="reel-icon-wrap">🎯</div>
               <div class="reel-title">Lead qualification built in</div>
@@ -1441,15 +1606,24 @@ function landingPage(token, monthlyAmount) {
     });
   } catch (e) { console.warn('[looped] hiw error:', e); }
 
-  // 7. Reel progress bar
+  // 7. Reel progress bar + slide animation gating
   try {
     var reelScroller = document.getElementById('reelScroller');
     var reelSegs = document.querySelectorAll('#reelProgress .reel-prog-seg');
+    var reelSlides = reelScroller ? Array.prototype.slice.call(reelScroller.querySelectorAll('.reel-slide')) : [];
     if (reelScroller && reelSegs.length) {
       var REEL_SLIDE_H = 534;
+      var reelActiveIdx = 0;
+      // activate first slide immediately so its animations run on page load
+      if (reelSlides[0]) reelSlides[0].classList.add('is-active');
       function updateReelProgress() {
         var idx = Math.min(Math.round(reelScroller.scrollTop / REEL_SLIDE_H), reelSegs.length - 1);
         reelSegs.forEach(function (seg, i) { seg.classList.toggle('active', i <= idx); });
+        if (idx !== reelActiveIdx) {
+          reelActiveIdx = idx;
+          // toggling is-active changes animation: none → animation: X, which restarts the keyframe
+          reelSlides.forEach(function (slide, i) { slide.classList.toggle('is-active', i === idx); });
+        }
       }
       reelScroller.addEventListener('scroll', updateReelProgress, { passive: true });
     }
