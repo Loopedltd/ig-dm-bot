@@ -419,7 +419,7 @@ function landingPage(token, monthlyAmount) {
     .hiw-voice-body { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 16px 20px 20px; }
     .hiw-voice-label { font-size: 13px; font-weight: 700; color: var(--text); }
     .hiw-voice-sub { font-size: 12px; color: var(--muted); margin-top: -4px; margin-bottom: 4px; }
-    .hiw-voice-area { flex: 1; background: rgba(15,23,42,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; font-size: 13px; color: var(--text); line-height: 1.75; overflow: auto; }
+    .hiw-voice-area { flex: 1; background: rgba(15,23,42,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; font-size: 13px; color: var(--text); line-height: 1.75; overflow: hidden; }
     .hiw-voice-speaker { color: var(--muted); font-weight: 600; }
     .hiw-voice-me { color: var(--primary); font-weight: 700; }
     .hiw-voice-placeholder { color: rgba(15,23,42,0.22); }
@@ -595,11 +595,11 @@ function landingPage(token, monthlyAmount) {
             <div class="hiw-voice-label">Your example DMs</div>
             <div class="hiw-voice-sub">Paste a few real conversations to train your tone</div>
             <div class="hiw-voice-area">
-              <span class="hiw-voice-speaker">Follower:</span> Hey! What does your coaching include?<br>
-              <span class="hiw-voice-me">Me:</span> Hey! Good question. Before I go into it, what is your main goal right now?<br><br>
+              <span class="hiw-voice-speaker">Follower:</span> Hey, what does your coaching include?<br>
+              <span class="hiw-voice-me">Me:</span> Hey, good question. Before I go into it, what is your main goal right now?<br><br>
               <span class="hiw-voice-speaker">Follower:</span> I want to get consistent and grow my business<br>
-              <span class="hiw-voice-me">Me:</span> Love that. I work with people in exactly that position. Want me to send over the details?<br><br>
-              <span class="hiw-voice-placeholder">+ Paste more examples here...</span>
+              <span class="hiw-voice-me">Me:</span> Perfect, I work with people in exactly your position. Want me to send over the details?<br><br>
+              <span class="hiw-voice-placeholder" style="cursor:pointer;" onclick="startTrial(event)">+ Paste more examples here...</span>
             </div>
             <div class="hiw-voice-save">Save examples</div>
           </div>
@@ -632,7 +632,7 @@ function landingPage(token, monthlyAmount) {
         </div>
         <div class="hiw-step" data-step="1">
           <div class="hiw-step-title">Train it on your voice</div>
-          <div class="hiw-step-desc">Paste in a few real DMs showing how you handle common questions. Looped learns your tone exactly.</div>
+          <div class="hiw-step-desc">Paste in a few real DMs showing how you handle common questions Looped learns your tone exactly</div>
         </div>
         <div class="hiw-step" data-step="2">
           <div class="hiw-step-title">Watch it qualify and book</div>
