@@ -326,8 +326,8 @@ function landingPage(token, monthlyAmount) {
     body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased; }
 
     /* NAV */
-    nav { height: 60px; padding: 0 28px; display: flex; align-items: center; background: rgba(255,255,255,0.72); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; transition: background 0.25s ease, box-shadow 0.25s ease; }
-    nav.nav-scrolled { background: rgba(255,255,255,0.96); box-shadow: 0 2px 20px rgba(15,23,42,0.07); }
+    nav { height: 60px; padding: 0 28px; display: flex; align-items: center; background: transparent; border-bottom: 1px solid transparent; position: sticky; top: 0; z-index: 10; transition: background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease; }
+    nav.nav-scrolled { background: rgba(255,255,255,0.96); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); box-shadow: 0 2px 20px rgba(15,23,42,0.07); }
     .logo { font-weight: 900; font-size: 17px; color: var(--primary); letter-spacing: -0.2px; }
 
     /* HERO SECTION wrapper for gradient */
@@ -336,8 +336,8 @@ function landingPage(token, monthlyAmount) {
     .hero-gradient { position: absolute; inset: -30%; pointer-events: none; z-index: 0; }
 
     /* HERO */
-    .hero { padding: 52px 32px 40px; text-align: center; max-width: 1000px; margin: 0 auto; position: relative; z-index: 1; }
-    .hero h1 { font-size: clamp(32px, 5vw, 52px); font-weight: 900; line-height: 1.1; letter-spacing: -1.5px; margin-bottom: 14px; color: var(--text); }
+    .hero { padding: 100px 32px 56px; text-align: center; max-width: 1000px; margin: 0 auto; position: relative; z-index: 1; }
+    .hero h1 { font-size: clamp(28px, 4.5vw, 46px); font-weight: 900; line-height: 1.1; letter-spacing: -1.2px; margin-bottom: 14px; color: var(--text); }
     .hero h1 em { font-style: normal; color: var(--primary); }
     .hero-lead { font-size: 18px; color: var(--muted); max-width: 620px; margin: 0 auto 24px; line-height: 1.65; }
     .cta-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -350,7 +350,7 @@ function landingPage(token, monthlyAmount) {
     .err-msg { display: none; color: #b42318; font-size: 13px; background: #fff5f5; border: 1px solid rgba(180,35,24,0.18); border-radius: 10px; padding: 11px 16px; max-width: 420px; }
 
     /* DM DEMO */
-    .dm-demo { margin: 48px auto 0; max-width: 320px; }
+    .dm-demo { margin: 72px auto 0; max-width: 320px; }
     .dm-phone { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow-lg); overflow: hidden; }
     .dm-header { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); background: rgba(15,23,42,0.02); }
     .dm-avatar { width: 32px; height: 32px; border-radius: 50%; background: rgba(45,107,255,0.12); border: 1px solid rgba(45,107,255,0.20); flex-shrink: 0; }
@@ -380,7 +380,7 @@ function landingPage(token, monthlyAmount) {
     .dm-try-again-btn:hover { color: var(--primary-dark); }
 
     /* STATS */
-    .stats-section { padding: 0 32px 48px; }
+    .stats-section { padding: 64px 32px 64px; }
     .stats-inner { max-width: 720px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); background: var(--panel); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
     .stat-item { padding: 28px 16px; text-align: center; border-right: 1px solid var(--border); }
     .stat-item:last-child { border-right: none; }
@@ -447,10 +447,10 @@ function landingPage(token, monthlyAmount) {
     .reveal.revealed { opacity: 1; transform: translateY(0); }
 
     @media (max-width: 600px) {
-      .hero { padding: 36px 20px 32px; }
-      .hero h1 { letter-spacing: -1px; }
+      .hero { padding: 72px 20px 44px; }
+      .hero h1 { letter-spacing: -0.8px; }
       .section { padding: 40px 20px; }
-      .stats-section { padding: 0 20px 36px; }
+      .stats-section { padding: 44px 20px 44px; }
       .pricing-card { padding: 28px 22px; }
       .guarantee-card { padding: 28px 22px; }
       .final-cta { padding: 48px 20px 44px; }
