@@ -608,7 +608,7 @@ function landingPage(token, monthlyAmount) {
     .reel-title { font-size: 17px; font-weight: 800; color: #fff; margin-bottom: 7px; line-height: 1.25; }
     .reel-desc { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.6; }
     .reel-rail { position: absolute; right: 0; top: 0; width: 44px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 32px; gap: 22px; z-index: 2; pointer-events: none; }
-    .reel-rail-btn { background: none; border: none; padding: 0; color: rgba(255,255,255,0.65); font-size: 20px; line-height: 1; }
+    .reel-rail-btn { background: none; border: none; padding: 0; color: rgba(255,255,255,0.65); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; line-height: 1; }
 
     /* REEL SLIDE MOCKUPS */
     .reel-mock { position: absolute; top: 34px; left: 20px; right: 52px; bottom: 178px; display: flex; align-items: center; justify-content: center; pointer-events: none; overflow: hidden; }
@@ -1026,7 +1026,6 @@ function landingPage(token, monthlyAmount) {
               <div class="rm1-notif-time">now</div>
             </div>
             <div class="reel-content">
-              <div class="reel-icon-wrap">💬</div>
               <div class="reel-title">DM replies in your voice</div>
               <div class="reel-desc">GPT-4o trained on your real messages. Sounds like you, not like a bot.</div>
             </div>
@@ -1039,7 +1038,6 @@ function landingPage(token, monthlyAmount) {
               <div class="rm-s-dm">new message</div>
             </div>
             <div class="reel-content">
-              <div class="reel-icon-wrap">📸</div>
               <div class="reel-title">Story reply automation</div>
               <div class="reel-desc">Someone reacts to your story? Looped starts a qualifying conversation automatically.</div>
             </div>
@@ -1052,7 +1050,6 @@ function landingPage(token, monthlyAmount) {
               <div class="rm-c-notif">DM sent</div>
             </div>
             <div class="reel-content">
-              <div class="reel-icon-wrap">🔑</div>
               <div class="reel-title">Comment keyword DMs</div>
               <div class="reel-desc">Comment a keyword on your post and get an instant DM. Perfect for lead magnets.</div>
             </div>
@@ -1068,7 +1065,6 @@ function landingPage(token, monthlyAmount) {
               <div class="rm-cal-confirm">&#10003;&#160;booked</div>
             </div>
             <div class="reel-content">
-              <div class="reel-icon-wrap">📅</div>
               <div class="reel-title">Books calls for you</div>
               <div class="reel-desc">Handles objections, builds trust, and drives every warm lead to your booking link.</div>
             </div>
@@ -1085,7 +1081,6 @@ function landingPage(token, monthlyAmount) {
               <div class="rm-clock-msg">replied instantly</div>
             </div>
             <div class="reel-content">
-              <div class="reel-icon-wrap">⚡</div>
               <div class="reel-title">24/7 response time</div>
               <div class="reel-desc">Replies in seconds at any hour. No more leads going cold because you were busy.</div>
             </div>
@@ -1104,17 +1099,16 @@ function landingPage(token, monthlyAmount) {
               <div class="rm-funnel-check">&#10003;</div>
             </div>
             <div class="reel-content">
-              <div class="reel-icon-wrap">🎯</div>
               <div class="reel-title">Lead qualification built in</div>
               <div class="reel-desc">Asks the right questions to filter tyre-kickers and push only serious leads to a call.</div>
             </div>
           </div>
         </div>
         <div class="reel-rail">
-          <button class="reel-rail-btn" tabindex="-1">&#9825;</button>
-          <button class="reel-rail-btn" tabindex="-1">&#128172;</button>
-          <button class="reel-rail-btn" tabindex="-1">&#10148;</button>
-          <button class="reel-rail-btn" tabindex="-1">&#128278;</button>
+          <button class="reel-rail-btn" tabindex="-1"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
+          <button class="reel-rail-btn" tabindex="-1"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+          <button class="reel-rail-btn" tabindex="-1"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+          <button class="reel-rail-btn" tabindex="-1"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
         </div>
       </div>
     </div>
