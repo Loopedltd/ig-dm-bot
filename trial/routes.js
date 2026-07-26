@@ -394,13 +394,47 @@ function landingPage(token, monthlyAmount) {
     .section-heading { font-size: clamp(22px, 3vw, 34px); font-weight: 900; letter-spacing: -0.4px; margin-bottom: 16px; line-height: 1.15; }
     .section-sub { font-size: 16px; color: var(--muted); max-width: 640px; line-height: 1.65; }
 
-    /* HOW IT WORKS */
-    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 44px; }
-    .step { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 28px 24px; box-shadow: var(--shadow); transition: transform 0.22s ease, box-shadow 0.22s ease; }
-    .step:hover { transform: translateY(-8px); box-shadow: 0 24px 52px rgba(15,23,42,0.14); }
-    .step-num { width: 32px; height: 32px; border-radius: 10px; background: rgba(45,107,255,0.08); border: 1px solid rgba(45,107,255,0.15); color: var(--primary); font-weight: 900; font-size: 13px; display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
-    .step h3 { font-size: 15px; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.1px; }
-    .step p { font-size: 14px; color: var(--muted); line-height: 1.65; }
+    /* HOW IT WORKS — two-column interactive */
+    .hiw-layout { display: grid; grid-template-columns: 480px 1fr; gap: 52px; margin-top: 48px; align-items: start; }
+    .hiw-preview { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow-lg); overflow: hidden; position: relative; min-height: 360px; }
+    .hiw-panel { position: absolute; inset: 0; opacity: 0; transition: opacity 0.35s ease; display: flex; flex-direction: column; }
+    .hiw-panel.hiw-active { opacity: 1; }
+    .hiw-steps { display: flex; flex-direction: column; padding: 8px 0; }
+    .hiw-step { padding: 22px 28px; border-left: 3px solid transparent; cursor: pointer; transition: border-color 0.2s ease; }
+    .hiw-step:hover { background: rgba(45,107,255,0.025); }
+    .hiw-step.hiw-step-active { border-left-color: var(--primary); }
+    .hiw-step.hiw-step-active .hiw-step-title { color: var(--primary); }
+    .hiw-step-title { font-size: 15px; font-weight: 800; letter-spacing: -0.1px; margin-bottom: 6px; color: var(--text); transition: color 0.2s ease; }
+    .hiw-step-desc { font-size: 14px; color: var(--muted); line-height: 1.65; }
+    /* preview panel shared chrome */
+    .hiw-panel-header { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; padding: 16px 20px 10px; border-bottom: 1px solid var(--border); }
+    /* panel 1 — connect */
+    .hiw-connect-body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 28px 32px; text-align: center; }
+    .hiw-ig-icon { width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .hiw-connect-label { font-size: 15px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+    .hiw-connect-sub { font-size: 13px; color: var(--muted); max-width: 220px; line-height: 1.5; }
+    .hiw-connect-btn { background: var(--primary); color: #fff; border: none; border-radius: 10px; padding: 11px 26px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: default; box-shadow: 0 2px 10px rgba(45,107,255,0.25); }
+    .hiw-connect-hint { font-size: 12px; color: rgba(15,23,42,0.35); }
+    /* panel 2 — voice training */
+    .hiw-voice-body { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 16px 20px 20px; }
+    .hiw-voice-label { font-size: 13px; font-weight: 700; color: var(--text); }
+    .hiw-voice-sub { font-size: 12px; color: var(--muted); margin-top: -4px; margin-bottom: 4px; }
+    .hiw-voice-area { flex: 1; background: rgba(15,23,42,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; font-size: 13px; color: var(--text); line-height: 1.75; overflow: auto; }
+    .hiw-voice-speaker { color: var(--muted); font-weight: 600; }
+    .hiw-voice-me { color: var(--primary); font-weight: 700; }
+    .hiw-voice-placeholder { color: rgba(15,23,42,0.22); }
+    .hiw-voice-save { align-self: flex-end; background: var(--primary); color: #fff; border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 700; }
+    /* panel 3 — qualify and book (static DM preview) */
+    .hiw-dm-body { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 16px 20px 20px; overflow: auto; }
+    .hiw-dm-bubble { max-width: 82%; padding: 9px 13px; border-radius: 14px; font-size: 13px; line-height: 1.5; }
+    .hiw-dm-bubble.in { align-self: flex-start; background: rgba(15,23,42,0.06); color: var(--text); border-bottom-left-radius: 4px; }
+    .hiw-dm-bubble.out { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
+    .hiw-dm-booked { display: flex; align-items: center; justify-content: flex-end; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ok); margin-top: 2px; }
+    .hiw-dm-check { width: 18px; height: 18px; border-radius: 50%; background: var(--ok-bg); border: 1px solid var(--ok-border); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    @media (max-width: 820px) {
+      .hiw-layout { grid-template-columns: 1fr; }
+      .hiw-preview { min-height: 300px; }
+    }
 
     /* FEATURES */
     .features-wrap { background: var(--panel); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
@@ -535,22 +569,79 @@ function landingPage(token, monthlyAmount) {
       <div class="section-heading">Set up in minutes. Works while you sleep.</div>
       <p class="section-sub">Connect your Instagram, fill in a few details about your offer and your voice, and Looped handles the rest.</p>
     </div>
-    <div class="steps">
-      <div class="step reveal" data-delay="0">
-        <div class="step-num">1</div>
-        <h3>Connect your Instagram</h3>
-        <p>One-click Instagram connection via the dashboard. No technical setup required.</p>
+    <div class="hiw-layout reveal">
+
+      <!-- LEFT: preview panel -->
+      <div class="hiw-preview">
+
+        <!-- Panel 1: Connect Instagram -->
+        <div class="hiw-panel hiw-active" id="hiw-panel-0">
+          <div class="hiw-panel-header">Dashboard preview</div>
+          <div class="hiw-connect-body">
+            <div class="hiw-ig-icon">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5.5" stroke="#fff" stroke-width="1.8"/><circle cx="12" cy="12" r="4.5" stroke="#fff" stroke-width="1.8"/><circle cx="17.2" cy="6.8" r="1.1" fill="#fff"/></svg>
+            </div>
+            <div>
+              <div class="hiw-connect-label">Connect your Instagram</div>
+              <div class="hiw-connect-sub">Link your account so Looped can read and reply to your DMs on your behalf.</div>
+            </div>
+            <button class="hiw-connect-btn">Connect account</button>
+            <div class="hiw-connect-hint">You can disconnect at any time from settings</div>
+          </div>
+        </div>
+
+        <!-- Panel 2: Train on your voice -->
+        <div class="hiw-panel" id="hiw-panel-1">
+          <div class="hiw-panel-header">Voice training</div>
+          <div class="hiw-voice-body">
+            <div class="hiw-voice-label">Your example DMs</div>
+            <div class="hiw-voice-sub">Paste a few real conversations to train your tone</div>
+            <div class="hiw-voice-area">
+              <span class="hiw-voice-speaker">Follower:</span> Hey! What does your coaching include?<br>
+              <span class="hiw-voice-me">Me:</span> Hey! Good question. Before I go into it, what is your main goal right now?<br><br>
+              <span class="hiw-voice-speaker">Follower:</span> I want to get consistent and grow my business<br>
+              <span class="hiw-voice-me">Me:</span> Love that. I work with people in exactly that position. Want me to send over the details?<br><br>
+              <span class="hiw-voice-placeholder">+ Paste more examples here...</span>
+            </div>
+            <div class="hiw-voice-save">Save examples</div>
+          </div>
+        </div>
+
+        <!-- Panel 3: Qualify and book (static DM preview) -->
+        <div class="hiw-panel" id="hiw-panel-2">
+          <div class="hiw-panel-header">Live DM conversation</div>
+          <div class="hiw-dm-body">
+            <div class="hiw-dm-bubble in">Hey! Saw your post, how much is coaching?</div>
+            <div class="hiw-dm-bubble out">Hey! Thanks for reaching out. Quick one first, what is your main goal right now?</div>
+            <div class="hiw-dm-bubble in">I want to grow my online business and sign more clients</div>
+            <div class="hiw-dm-bubble out">Got it. I help coaches in exactly that position book 3 to 5 calls a week on autopilot. Want me to send you the details?</div>
+            <div class="hiw-dm-booked">
+              <span class="hiw-dm-check">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="#027a48" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+              Call booked
+            </div>
+          </div>
+        </div>
+
       </div>
-      <div class="step reveal" data-delay="120">
-        <div class="step-num">2</div>
-        <h3>Train it on your voice</h3>
-        <p>Paste in a few real DMs showing how you handle common questions. Looped learns your tone exactly.</p>
+
+      <!-- RIGHT: step list -->
+      <div class="hiw-steps">
+        <div class="hiw-step hiw-step-active" data-step="0">
+          <div class="hiw-step-title">Connect your Instagram</div>
+          <div class="hiw-step-desc">One-click Instagram connection via the dashboard. No technical setup required.</div>
+        </div>
+        <div class="hiw-step" data-step="1">
+          <div class="hiw-step-title">Train it on your voice</div>
+          <div class="hiw-step-desc">Paste in a few real DMs showing how you handle common questions. Looped learns your tone exactly.</div>
+        </div>
+        <div class="hiw-step" data-step="2">
+          <div class="hiw-step-title">Watch it qualify and book</div>
+          <div class="hiw-step-desc">Looped replies to every DM, story reply, and comment keyword, qualifying leads and booking them into your discovery call.</div>
+        </div>
       </div>
-      <div class="step reveal" data-delay="240">
-        <div class="step-num">3</div>
-        <h3>Watch it qualify and book</h3>
-        <p>Looped replies to every DM, story reply, and comment keyword, qualifying leads and booking them into your discovery call.</p>
-      </div>
+
     </div>
   </div>
 </div>
@@ -875,6 +966,26 @@ function landingPage(token, monthlyAmount) {
       revealEls.forEach(function (el) { revealObs.observe(el); });
     }
   } catch (e) { console.warn('[looped] reveal error:', e); }
+
+  // ── 6. HOW IT WORKS STEP SWITCHER ───────────────────────────────────────────
+  try {
+    var hiwSteps  = document.querySelectorAll('.hiw-step');
+    var hiwPanels = document.querySelectorAll('.hiw-panel');
+
+    function hiwActivate(idx) {
+      hiwSteps.forEach(function (s, i) {
+        s.classList.toggle('hiw-step-active', i === idx);
+      });
+      hiwPanels.forEach(function (p, i) {
+        p.classList.toggle('hiw-active', i === idx);
+      });
+    }
+
+    hiwSteps.forEach(function (step, idx) {
+      step.addEventListener('mouseenter', function () { hiwActivate(idx); });
+      step.addEventListener('click',      function () { hiwActivate(idx); });
+    });
+  } catch (e) { console.warn('[looped] hiw error:', e); }
 
 })();
 </script>
