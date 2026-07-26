@@ -467,11 +467,12 @@ function landingPage(token, monthlyAmount) {
     .dm-send-btn { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background 0.15s, transform 0.1s; }
     .dm-send-btn:hover:not(:disabled) { background: var(--primary-dark); transform: scale(1.05); }
     .dm-send-btn:disabled { opacity: 0.4; cursor: default; }
-    .dm-try-again { display: none; padding: 10px 14px 12px; gap: 8px; }
-    .dm-try-again-btn { flex: 1; background: rgba(15,23,42,0.04); border: 1px solid var(--border); color: var(--text); font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; border-radius: 8px; padding: 8px 6px; }
-    .dm-try-again-btn:hover { background: rgba(15,23,42,0.08); }
-    .dm-start-trial-btn { flex: 1; background: var(--primary); color: #fff; border: none; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; border-radius: 8px; padding: 8px 6px; }
-    .dm-start-trial-btn:hover { background: var(--primary-dark); }
+    .dm-try-again { display: none; padding: 4px 14px 10px; text-align: center; }
+    .dm-try-again-btn { background: none; border: none; color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; text-decoration: underline; text-underline-offset: 2px; }
+    .dm-try-again-btn:hover { color: var(--text); }
+    /* CTA pill rendered inside the final AI chat bubble */
+    .dm-cta-pill { display: block; width: 100%; margin-top: 8px; background: var(--primary); color: #fff; border: none; border-radius: 10px; padding: 8px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; text-align: center; }
+    .dm-cta-pill:hover { background: var(--primary-dark); }
 
     /* STATS */
     .stats-section { padding: 130px 32px 64px; }
@@ -642,7 +643,6 @@ function landingPage(token, monthlyAmount) {
         </div>
         <div class="dm-try-again" id="dm-try-again">
           <button class="dm-try-again-btn" id="dm-try-again-btn">Try again</button>
-          <button type="button" class="dm-start-trial-btn" onclick="startTrial(event)">Start your 7-day free trial</button>
         </div>
       </div>
     </div>
@@ -932,8 +932,21 @@ function landingPage(token, monthlyAmount) {
     var dmBooked   = document.getElementById('dm-booked');
 
     if (dmMessages && dmInput && dmSendBtn && dmBooked) {
-      var dmExchange = 0;
-      var dmHistory  = []; // [{role:'user'|'assistant', content}] of completed turns
+      var dmExchange  = 0;
+      var dmHistory   = []; // [{role:'user'|'assistant', content}] of completed turns
+      var dmFirstFocus = true; // select-all on first focus to allow typing-to-overwrite
+      var DM_STARTER  = "Hey, I'm looking for some help";
+
+      // Pre-fill with editable starter text on initial load
+      dmInput.value = DM_STARTER;
+
+      // Select all starter text on first focus so the visitor can type to overwrite
+      dmInput.addEventListener('focus', function () {
+        if (dmFirstFocus) {
+          dmFirstFocus = false;
+          dmInput.select();
+        }
+      });
 
       function dmScrollBottom() { dmMessages.scrollTop = dmMessages.scrollHeight; }
 
@@ -952,10 +965,29 @@ function landingPage(token, monthlyAmount) {
 
       function dmShowEndState() {
         setTimeout(function () {
+          // Step 1: "Call booked" checkmark fades in
           dmBooked.style.opacity = '1';
           dmScrollBottom();
-          if (dmInputRow) dmInputRow.style.display = 'none';
-          if (dmTryAgain) dmTryAgain.style.display = 'flex';
+
+          // Step 2: closing message bubble with inline CTA pill
+          setTimeout(function () {
+            var ctaBubble = document.createElement('div');
+            ctaBubble.className = 'dm-bubble incoming';
+            ctaBubble.appendChild(document.createTextNode("Perfect, let's get you booked in"));
+
+            var pill = document.createElement('button');
+            pill.type = 'button';
+            pill.className = 'dm-cta-pill';
+            pill.textContent = 'Start your 7-day free trial';
+            pill.onclick = function (e) { if (typeof startTrial === 'function') startTrial(e); };
+            ctaBubble.appendChild(pill);
+
+            dmMessages.insertBefore(ctaBubble, dmBooked);
+            dmScrollBottom();
+
+            if (dmInputRow) dmInputRow.style.display = 'none';
+            if (dmTryAgain) dmTryAgain.style.display = 'flex';
+          }, 600);
         }, 500);
       }
 
@@ -1017,17 +1049,18 @@ function landingPage(token, monthlyAmount) {
       }
 
       function dmReset() {
-        dmExchange = 0;
-        dmHistory  = [];
+        dmExchange   = 0;
+        dmHistory    = [];
+        dmFirstFocus = true; // re-arm select-all so the starter text is selectable again
         Array.from(dmMessages.children).forEach(function (el) {
           if (el !== dmBooked) el.remove();
         });
         dmBooked.style.opacity = '0';
         if (dmInputRow) dmInputRow.style.display = 'flex';
         if (dmTryAgain) dmTryAgain.style.display = 'none';
-        dmInput.value = '';
+        dmInput.value = DM_STARTER;
         dmSetEnabled(true);
-        dmInput.focus();
+        dmInput.focus(); // triggers focus listener → select all
       }
 
       dmSendBtn.addEventListener('click', dmSend);
