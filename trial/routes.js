@@ -504,8 +504,8 @@ function landingPage(token, monthlyAmount) {
 <div class="hero-section">
   <div class="hero-gradient"></div>
   <div class="hero">
-    <h1>Keep people <em>in the loop.</em></h1>
-    <p class="hero-lead">Replies to every DM, qualifies the lead, and books the call. Automatically.</p>
+    <h1>Keep people <em>in the loop</em></h1>
+    <p class="hero-lead">Replies to every DM, qualifies the lead, and books the call Automatically</p>
     <form id="startForm" onsubmit="startTrial(event)" style="display:contents;">
       <div class="cta-wrap">
         <button type="submit" class="cta-btn" id="startBtn">Start your 7-day free trial</button>
