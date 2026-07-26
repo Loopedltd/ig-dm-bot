@@ -593,6 +593,8 @@ function landingPage(token, monthlyAmount) {
     .features-wrap { background: var(--panel); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
     .reel-wrap { display: flex; justify-content: center; margin-top: 44px; }
     .reel-card { position: relative; width: 300px; height: 534px; border-radius: 28px; background: #0b0d12; overflow: hidden; flex-shrink: 0; }
+    .reel-home-ind { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); width: 103px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.82); box-shadow: 0 0 0 0.5px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.22); opacity: 0; transition: opacity 175ms ease; pointer-events: none; z-index: 10; }
+    @media (hover: hover) { .reel-card:hover .reel-home-ind { opacity: 1; } }
     .reel-progress { position: absolute; top: 0; left: 0; right: 44px; display: flex; gap: 4px; padding: 14px 14px 0; z-index: 3; pointer-events: none; }
     .reel-prog-seg { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.18); transition: background 0.25s; }
     .reel-prog-seg.active { background: rgba(255,255,255,0.85); }
@@ -969,6 +971,7 @@ function landingPage(token, monthlyAmount) {
           <div class="reel-prog-seg"></div>
           <div class="reel-prog-seg"></div>
         </div>
+        <div class="reel-home-ind"></div>
         <div class="reel-scroller" id="reelScroller">
           <!-- S1: DM voice (4-phase) -->
           <div class="reel-slide">
