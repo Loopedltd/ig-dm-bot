@@ -617,11 +617,19 @@ function landingPage(token, monthlyAmount) {
 
     /* S1 — DM Voice (4-phase JS-driven) */
     .rm1-bg { position: absolute; inset: 0; overflow: hidden; background: #111318; }
-    .rm1-grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(4,1fr); grid-auto-rows: 1fr; gap: 8px; padding: 12px; filter: blur(0.5px); }
-    .rm1-icon { border-radius: 10px; }
-    .rm1-chat { position: absolute; inset: 0; background: #f2f2f4; overflow-y: scroll; scrollbar-width: none; padding: 10px 8px 170px; display: flex; flex-direction: column; gap: 5px; opacity: 0; }
-    .rm1-bottom-grad { position: absolute; bottom: 0; left: 0; right: 0; height: 205px; background: linear-gradient(to bottom, transparent, rgba(11,13,18,0.76) 52%, rgba(11,13,18,0.96) 100%); pointer-events: none; }
+    .rm1-homescreen { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 16px 14px 14px; filter: blur(0.4px); }
+    .rm1-app-grid { flex: 1; display: grid; grid-template-columns: repeat(4,1fr); grid-template-rows: repeat(6,1fr); gap: 8px; }
+    .rm1-icon { border-radius: 22%; }
+    .rm1-dock { display: flex; gap: 8px; margin-top: 14px; padding: 8px 6px; background: rgba(255,255,255,0.08); border-radius: 20px; flex-shrink: 0; }
+    .rm1-dock-icon { flex: 1; aspect-ratio: 1; border-radius: 22%; }
+    .rm1-chat { position: absolute; inset: 0; background: #f2f2f4; overflow-y: scroll; scrollbar-width: none; display: flex; flex-direction: column; opacity: 0; padding-bottom: 170px; }
     .rm1-chat::-webkit-scrollbar { display: none; }
+    .rm1-chat-header { flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 10px 10px 8px; background: #f2f2f4; border-bottom: 1px solid rgba(0,0,0,0.07); position: sticky; top: 0; z-index: 1; }
+    .rm1-chat-avatar { width: 26px; height: 26px; border-radius: 50%; background: rgba(0,0,0,0.14); flex-shrink: 0; }
+    .rm1-chat-name { font-size: 11px; font-weight: 800; color: #1a1a2e; line-height: 1.2; }
+    .rm1-chat-status { font-size: 9.5px; color: #22c55e; font-weight: 600; }
+    .rm1-msgs { flex-shrink: 0; display: flex; flex-direction: column; gap: 5px; padding: 8px 8px 0; }
+    .rm1-bottom-grad { position: absolute; bottom: 0; left: 0; right: 0; height: 205px; background: linear-gradient(to bottom, transparent, rgba(11,13,18,0.76) 52%, rgba(11,13,18,0.96) 100%); pointer-events: none; }
     .rm1-bubble { font-size: 10.5px; line-height: 1.45; padding: 6px 9px; border-radius: 12px; max-width: 82%; word-break: break-word; flex-shrink: 0; }
     .rm1-in { background: rgba(0,0,0,0.09); color: #1a1a2e; border-bottom-left-radius: 3px; align-self: flex-start; }
     .rm1-out { background: #2d6bff; color: #fff; border-bottom-right-radius: 3px; align-self: flex-end; }
@@ -634,11 +642,14 @@ function landingPage(token, monthlyAmount) {
     .rm1-dot:nth-child(2) { animation-delay: 0.2s; }
     .rm1-dot:nth-child(3) { animation-delay: 0.4s; }
     .rm1-link { display: block; margin-top: 5px; background: rgba(45,107,255,0.1); border: 1px solid rgba(45,107,255,0.28); border-radius: 8px; padding: 4px 8px; font-size: 9.5px; color: #2d6bff; font-weight: 700; text-align: center; letter-spacing: 0.1px; }
-    .rm1-notif { position: absolute; top: -64px; left: 20px; right: 52px; background: rgba(28,32,44,0.96); border-radius: 13px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; z-index: 4; transition: top 0.45s cubic-bezier(0.22,1,0.36,1), box-shadow 0.2s; }
-    .rm1-notif.visible { top: 44px; }
+    .rm1-notif { position: absolute; top: -80px; left: 10px; right: 10px; background: rgba(28,32,44,0.96); border-radius: 16px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; z-index: 4; transition: top 0.45s cubic-bezier(0.22,1,0.36,1), box-shadow 0.2s; }
+    .rm1-notif.visible { top: 24px; }
     .rm1-notif.pulse { box-shadow: 0 0 0 3px rgba(255,255,255,0.28); }
-    .rm1-notif-icon { width: 28px; height: 28px; border-radius: 7px; background: rgba(45,107,255,0.42); flex-shrink: 0; }
-    .rm1-notif-text { font-size: 11px; color: rgba(255,255,255,0.9); font-weight: 600; white-space: nowrap; }
+    .rm1-notif-icon { width: 32px; height: 32px; border-radius: 8px; background: rgba(45,107,255,0.42); flex-shrink: 0; }
+    .rm1-notif-body { flex: 1; min-width: 0; }
+    .rm1-notif-title { font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.92); line-height: 1.25; }
+    .rm1-notif-preview { font-size: 10px; color: rgba(255,255,255,0.55); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rm1-notif-time { font-size: 9.5px; color: rgba(255,255,255,0.4); flex-shrink: 0; align-self: flex-start; }
     @keyframes rm1Dot { 0%,100%{opacity:0.3;transform:translateY(0)} 50%{opacity:1;transform:translateY(-3px)} }
 
     /* S2 — Story Reply */
@@ -962,42 +973,59 @@ function landingPage(token, monthlyAmount) {
           <!-- S1: DM voice (4-phase) -->
           <div class="reel-slide">
             <div class="rm1-bg">
-              <div class="rm1-grid" id="rm1Grid">
-                <div class="rm1-icon" style="background:rgba(255,95,75,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(75,180,115,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(215,155,55,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(155,75,215,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(65,180,180,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(215,85,115,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(115,115,135,0.55)"></div>
-                <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(255,135,55,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(75,180,115,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(155,75,215,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(65,180,180,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(255,95,75,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(215,155,55,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(215,85,115,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(115,115,135,0.55)"></div>
-                <div class="rm1-icon" style="background:rgba(75,180,115,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(155,75,215,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(255,135,55,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(255,95,75,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(65,180,180,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(215,155,55,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(215,85,115,0.65)"></div>
-                <div class="rm1-icon" style="background:rgba(115,115,135,0.55)"></div>
-                <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
+              <div class="rm1-homescreen" id="rm1Grid">
+                <div class="rm1-app-grid">
+                  <div class="rm1-icon" style="background:rgba(255,95,75,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(75,180,115,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(215,155,55,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(155,75,215,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(65,180,180,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(215,85,115,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(115,115,135,0.55)"></div>
+                  <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(255,135,55,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(75,180,115,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(155,75,215,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(65,180,180,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(255,95,75,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(215,155,55,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(215,85,115,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(115,115,135,0.55)"></div>
+                  <div class="rm1-icon" style="background:rgba(75,180,115,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(155,75,215,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(255,135,55,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(65,180,180,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(255,95,75,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(215,85,115,0.65)"></div>
+                </div>
+                <div class="rm1-dock">
+                  <div class="rm1-dock-icon" style="background:rgba(75,130,215,0.72)"></div>
+                  <div class="rm1-dock-icon" style="background:rgba(75,180,115,0.72)"></div>
+                  <div class="rm1-dock-icon" style="background:rgba(255,95,75,0.72)"></div>
+                  <div class="rm1-dock-icon" style="background:rgba(155,75,215,0.72)"></div>
+                </div>
               </div>
-              <div class="rm1-chat" id="rm1Chat"></div>
+              <div class="rm1-chat" id="rm1Chat">
+                <div class="rm1-chat-header">
+                  <div class="rm1-chat-avatar"></div>
+                  <div>
+                    <div class="rm1-chat-name">Looped</div>
+                    <div class="rm1-chat-status">Active now</div>
+                  </div>
+                </div>
+                <div class="rm1-msgs" id="rm1Msgs"></div>
+              </div>
             </div>
             <div class="rm1-bottom-grad"></div>
             <div class="rm1-notif" id="rm1Notif">
               <div class="rm1-notif-icon"></div>
-              <span class="rm1-notif-text">New message</span>
+              <div class="rm1-notif-body">
+                <div class="rm1-notif-title">Message</div>
+                <div class="rm1-notif-preview">Hey, saw your page, how does this work?</div>
+              </div>
+              <div class="rm1-notif-time">now</div>
             </div>
             <div class="reel-hint">
               <div class="reel-hint-label">Scroll</div>
@@ -1673,7 +1701,8 @@ function landingPage(token, monthlyAmount) {
         var grid  = document.getElementById('rm1Grid');
         var chat  = document.getElementById('rm1Chat');
         var notif = document.getElementById('rm1Notif');
-        if (!grid || !chat || !notif) return;
+        var msgs  = document.getElementById('rm1Msgs');
+        if (!grid || !chat || !notif || !msgs) return;
 
         // Instant reset — disable transitions, jump to start state
         notif.style.transition = 'none';
@@ -1685,7 +1714,7 @@ function landingPage(token, monthlyAmount) {
         grid.style.opacity = '1';
         chat.style.transition = 'none';
         chat.style.opacity = '0';
-        chat.innerHTML = '';
+        msgs.innerHTML = '';
 
         var MSGS = [
           { cls: 'in',  text: 'Hey, saw your page, how does this work?' },
@@ -1724,7 +1753,7 @@ function landingPage(token, monthlyAmount) {
               var typ = document.createElement('div');
               typ.className = 'rm1-typing ' + m.cls;
               typ.innerHTML = '<div class="rm1-dot"></div><div class="rm1-dot"></div><div class="rm1-dot"></div>';
-              chat.appendChild(typ);
+              msgs.appendChild(typ);
               chat.scrollTop = chat.scrollHeight;
 
               rm1Delay(sess, TYPING, function () {
@@ -1738,7 +1767,7 @@ function landingPage(token, monthlyAmount) {
                   lnk.textContent = 'looped.io \u2192';
                   bub.appendChild(lnk);
                 }
-                chat.appendChild(bub);
+                msgs.appendChild(bub);
                 chat.scrollTop = chat.scrollHeight;
               });
             });
@@ -1753,7 +1782,7 @@ function landingPage(token, monthlyAmount) {
           chat.style.transition = 'opacity 0.7s ease';
           chat.style.opacity = '0';
           rm1Delay(sess, 900, function () {
-            chat.innerHTML = '';
+            msgs.innerHTML = '';
             rm1Play();       // restart from phase 1
           });
         });
