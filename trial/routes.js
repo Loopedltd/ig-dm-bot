@@ -620,7 +620,7 @@ function landingPage(token, monthlyAmount) {
             <div class="hiw-dm-bubble in">I want to grow my online business and sign more clients</div>
             <div class="hiw-dm-bubble in">I've tried coaching before and it didn't really work</div>
             <div class="hiw-dm-bubble out">Totally get that, most people felt the same until they had someone keeping them accountable week to week</div>
-            <div class="hiw-dm-bubble out">Right, that's kind of what we're built around. I help coaches in exactly that position book 3 to 5 calls a week on autopilot. Want me to send you the details?</div>
+            <div class="hiw-dm-bubble out">Got it, that's what we're built around. I help coaches in exactly your position book 3 to 5 calls a week on autopilot. Want me to send you the details?</div>
             <div class="hiw-dm-booked" id="hiw-dm-booked">
               <span class="hiw-dm-check">
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="#027a48" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1079,7 +1079,7 @@ function landingPage(token, monthlyAmount) {
       { cls: 'in',  text: 'I want to grow my online business and sign more clients' },
       { cls: 'in',  text: "I've tried coaching before and it didn't really work" },
       { cls: 'out', text: 'Totally get that, most people felt the same until they had someone keeping them accountable week to week' },
-      { cls: 'out', text: "Right, that\u2019s kind of what we\u2019re built around. I help coaches in exactly that position book 3 to 5 calls a week on autopilot. Want me to send you the details?" },
+      { cls: 'out', text: "Got it, that\u2019s what we\u2019re built around. I help coaches in exactly your position book 3 to 5 calls a week on autopilot. Want me to send you the details?" },
     ];
 
     function initDmAnim() {
