@@ -583,7 +583,7 @@ function landingPage(token, monthlyAmount) {
               <div class="hiw-connect-label">Connect your Instagram</div>
               <div class="hiw-connect-sub">Link your account so Looped can read and reply to your DMs on your behalf</div>
             </div>
-            <button class="hiw-connect-btn" onclick="startTrial(event)">Connect account</button>
+            <button type="button" class="hiw-connect-btn" onclick="startTrial(event)">Connect account</button>
             <div class="hiw-connect-hint">You can disconnect at any time from settings</div>
           </div>
         </div>
@@ -986,6 +986,19 @@ function landingPage(token, monthlyAmount) {
   } catch (e) { console.warn('[looped] hiw error:', e); }
 
 })();
+
+// Reset error state on every page show (handles bfcache restoration, which
+// replays the page with inline styles intact — including errMsg display:block
+// from a previous failed fetch).
+window.addEventListener('pageshow', function () {
+  var errEl = document.getElementById('errMsg');
+  if (errEl) errEl.style.display = 'none';
+  var btn = document.getElementById('startBtn');
+  if (btn && btn.classList.contains('loading')) {
+    btn.textContent = 'Start your 7-day free trial';
+    btn.classList.remove('loading');
+  }
+});
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════════
