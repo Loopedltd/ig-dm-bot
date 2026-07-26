@@ -302,7 +302,7 @@ function landingPage(token, monthlyAmount) {
   <meta name="description" content="Looped replies to your Instagram DMs in your voice, qualifies leads, and books them into calls. 24/7, hands-free." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Geist:wght@600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -337,7 +337,7 @@ function landingPage(token, monthlyAmount) {
 
     /* HERO */
     .hero { padding: 223px 32px 56px; text-align: center; max-width: 1000px; margin: 0 auto; position: relative; z-index: 1; }
-    .hero h1 { font-size: clamp(28px, 3.6vw, 48px); font-weight: 900; line-height: 1.1; letter-spacing: -1.2px; margin-bottom: 14px; color: var(--text); }
+    .hero h1 { font-size: clamp(28px, 3.6vw, 48px); font-weight: 600; font-family: 'Geist', 'Inter', system-ui, sans-serif; line-height: 1.1; letter-spacing: -0.8px; margin-bottom: 14px; color: var(--text); }
     .hero h1 em { font-style: normal; color: var(--primary); }
     .hero-lead { font-size: 15px; color: var(--muted); max-width: 800px; margin: 0 auto 24px; line-height: 1.65; }
     .cta-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -391,7 +391,7 @@ function landingPage(token, monthlyAmount) {
     .section { padding: 56px 32px; }
     .section-inner { max-width: 1080px; margin: 0 auto; }
     .section-label { font-size: 11px; font-weight: 800; color: var(--primary); text-transform: uppercase; letter-spacing: .7px; margin-bottom: 12px; }
-    .section-heading { font-size: clamp(22px, 3vw, 34px); font-weight: 900; letter-spacing: -0.4px; margin-bottom: 16px; line-height: 1.15; }
+    .section-heading { font-size: clamp(22px, 3vw, 34px); font-weight: 700; font-family: 'Geist', 'Inter', system-ui, sans-serif; letter-spacing: -0.3px; margin-bottom: 16px; line-height: 1.15; }
     .section-sub { font-size: 16px; color: var(--muted); max-width: 640px; line-height: 1.65; }
 
     /* HOW IT WORKS — two-column interactive */
@@ -468,7 +468,7 @@ function landingPage(token, monthlyAmount) {
 
     /* FINAL CTA */
     .final-cta { text-align: center; padding: 68px 32px 60px; }
-    .final-cta h2 { font-size: clamp(24px, 3vw, 36px); font-weight: 900; letter-spacing: -0.5px; margin-bottom: 14px; line-height: 1.1; }
+    .final-cta h2 { font-size: clamp(24px, 3vw, 36px); font-weight: 700; font-family: 'Geist', 'Inter', system-ui, sans-serif; letter-spacing: -0.4px; margin-bottom: 14px; line-height: 1.1; }
     .final-cta .final-sub { color: var(--muted); font-size: 16px; margin-bottom: 36px; }
 
     /* FOOTER */
