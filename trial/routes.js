@@ -615,27 +615,30 @@ function landingPage(token, monthlyAmount) {
     /* REEL SLIDE MOCKUPS */
     .reel-mock { position: absolute; top: 34px; left: 20px; right: 52px; bottom: 178px; display: flex; align-items: center; justify-content: center; pointer-events: none; overflow: hidden; }
 
-    /* S1 — DM Voice */
-    .rm-voice { flex-direction: column; align-items: stretch; gap: 7px; padding: 0 6px; width: 100%; }
-    .rm-v-bubble { font-size: 11px; line-height: 1.4; padding: 6px 9px; border-radius: 12px; max-width: 148px; }
-    .rm-v-in { background: rgba(255,255,255,0.09); color: rgba(255,255,255,0.68); border-bottom-left-radius: 3px; align-self: flex-start; }
-    .rm-v-out { background: rgba(45,107,255,0.42); color: rgba(255,255,255,0.88); border-bottom-right-radius: 3px; align-self: flex-end; }
-    .rm-v-typing { display: inline-flex; gap: 4px; padding: 7px 9px; background: rgba(255,255,255,0.09); border-radius: 12px; border-bottom-left-radius: 3px; align-self: flex-start; }
-    .rm-v-dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.5); }
-    .reel-slide .rm-v-in { opacity: 0; animation: none; }
-    .reel-slide .rm-v-typing { opacity: 0; animation: none; }
-    .reel-slide .rm-v-dot { animation: none; }
-    .reel-slide .rm-v-out { opacity: 0; animation: none; }
-    .reel-slide.is-active .rm-v-in { animation: rmVIn 5s ease infinite; }
-    .reel-slide.is-active .rm-v-typing { animation: rmVTyp 5s ease infinite; }
-    .reel-slide.is-active .rm-v-dot { animation: rmVDot 0.9s ease-in-out infinite; }
-    .reel-slide.is-active .rm-v-dot:nth-child(2) { animation-delay: 0.2s; }
-    .reel-slide.is-active .rm-v-dot:nth-child(3) { animation-delay: 0.4s; }
-    .reel-slide.is-active .rm-v-out { animation: rmVOut 5s ease infinite; }
-    @keyframes rmVIn { 0%,6%{opacity:0;transform:translateY(5px)} 16%,78%{opacity:1;transform:translateY(0)} 90%,100%{opacity:0} }
-    @keyframes rmVTyp { 0%,26%{opacity:0} 34%,52%{opacity:1} 62%,100%{opacity:0} }
-    @keyframes rmVDot { 0%,100%{opacity:0.3;transform:translateY(0)} 50%{opacity:1;transform:translateY(-3px)} }
-    @keyframes rmVOut { 0%,50%{opacity:0;transform:translateY(5px)} 62%,78%{opacity:1;transform:translateY(0)} 90%,100%{opacity:0} }
+    /* S1 — DM Voice (4-phase JS-driven) */
+    .rm1-bg { position: absolute; top: 34px; left: 20px; right: 52px; bottom: 178px; overflow: hidden; border-radius: 12px; background: #111318; }
+    .rm1-grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(4,1fr); gap: 7px; padding: 10px; align-content: start; filter: blur(0.5px); }
+    .rm1-icon { border-radius: 9px; aspect-ratio: 1; }
+    .rm1-chat { position: absolute; inset: 0; background: #f2f2f4; overflow-y: scroll; scrollbar-width: none; padding: 10px 8px; display: flex; flex-direction: column; gap: 5px; opacity: 0; }
+    .rm1-chat::-webkit-scrollbar { display: none; }
+    .rm1-bubble { font-size: 10.5px; line-height: 1.45; padding: 6px 9px; border-radius: 12px; max-width: 82%; word-break: break-word; flex-shrink: 0; }
+    .rm1-in { background: rgba(0,0,0,0.09); color: #1a1a2e; border-bottom-left-radius: 3px; align-self: flex-start; }
+    .rm1-out { background: #2d6bff; color: #fff; border-bottom-right-radius: 3px; align-self: flex-end; }
+    .rm1-typing { display: inline-flex; gap: 4px; padding: 7px 9px; border-radius: 12px; flex-shrink: 0; }
+    .rm1-typing.in { align-self: flex-start; background: rgba(0,0,0,0.09); border-bottom-left-radius: 3px; }
+    .rm1-typing.out { align-self: flex-end; background: #2d6bff; border-bottom-right-radius: 3px; }
+    .rm1-dot { width: 5px; height: 5px; border-radius: 50%; animation: rm1Dot 0.9s ease-in-out infinite; }
+    .rm1-typing.in .rm1-dot { background: rgba(0,0,0,0.35); }
+    .rm1-typing.out .rm1-dot { background: rgba(255,255,255,0.7); }
+    .rm1-dot:nth-child(2) { animation-delay: 0.2s; }
+    .rm1-dot:nth-child(3) { animation-delay: 0.4s; }
+    .rm1-link { display: block; margin-top: 5px; background: rgba(45,107,255,0.1); border: 1px solid rgba(45,107,255,0.28); border-radius: 8px; padding: 4px 8px; font-size: 9.5px; color: #2d6bff; font-weight: 700; text-align: center; letter-spacing: 0.1px; }
+    .rm1-notif { position: absolute; top: -64px; left: 20px; right: 52px; background: rgba(28,32,44,0.96); border-radius: 13px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; z-index: 4; transition: top 0.45s cubic-bezier(0.22,1,0.36,1), box-shadow 0.2s; }
+    .rm1-notif.visible { top: 44px; }
+    .rm1-notif.pulse { box-shadow: 0 0 0 3px rgba(255,255,255,0.28); }
+    .rm1-notif-icon { width: 28px; height: 28px; border-radius: 7px; background: rgba(45,107,255,0.42); flex-shrink: 0; }
+    .rm1-notif-text { font-size: 11px; color: rgba(255,255,255,0.9); font-weight: 600; white-space: nowrap; }
+    @keyframes rm1Dot { 0%,100%{opacity:0.3;transform:translateY(0)} 50%{opacity:1;transform:translateY(-3px)} }
 
     /* S2 — Story Reply */
     .rm-story { flex-direction: column; align-items: center; gap: 10px; }
@@ -955,13 +958,29 @@ function landingPage(token, monthlyAmount) {
           <div class="reel-prog-seg"></div>
         </div>
         <div class="reel-scroller" id="reelScroller">
-          <!-- S1: DM voice -->
+          <!-- S1: DM voice (4-phase) -->
           <div class="reel-slide">
-            <div class="reel-glow" style="background:rgba(45,107,255,0.55);top:5%;left:-10%;"></div>
-            <div class="reel-mock rm-voice">
-              <div class="rm-v-bubble rm-v-in">what does it include?</div>
-              <div class="rm-v-typing"><span class="rm-v-dot"></span><span class="rm-v-dot"></span><span class="rm-v-dot"></span></div>
-              <div class="rm-v-bubble rm-v-out">It covers 1-1 coaching&#8230;</div>
+            <div class="reel-glow" style="background:rgba(45,107,255,0.35);top:5%;left:-10%;"></div>
+            <div class="rm1-bg">
+              <div class="rm1-grid" id="rm1Grid">
+                <div class="rm1-icon" style="background:rgba(255,95,75,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(75,180,115,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(215,155,55,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(155,75,215,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(65,180,180,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(215,85,115,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(115,115,135,0.55)"></div>
+                <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(255,135,55,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(75,180,115,0.65)"></div>
+                <div class="rm1-icon" style="background:rgba(155,75,215,0.65)"></div>
+              </div>
+              <div class="rm1-chat" id="rm1Chat"></div>
+            </div>
+            <div class="rm1-notif" id="rm1Notif">
+              <div class="rm1-notif-icon"></div>
+              <span class="rm1-notif-text">New message</span>
             </div>
             <div class="reel-hint">
               <div class="reel-hint-label">Scroll</div>
@@ -1614,15 +1633,129 @@ function landingPage(token, monthlyAmount) {
     if (reelScroller && reelSegs.length) {
       var REEL_SLIDE_H = 534;
       var reelActiveIdx = 0;
-      // activate first slide immediately so its animations run on page load
+
+      // ── Slide 1: 4-phase DM voice animation ──────────────────────────────
+      var rm1Timers = [];
+      var rm1Session = 0;
+
+      function rm1Delay(sess, ms, fn) {
+        var t = setTimeout(function () { if (rm1Session === sess) fn(); }, ms);
+        rm1Timers.push(t);
+      }
+
+      function rm1Stop() {
+        rm1Session++;                          // invalidates all pending callbacks
+        rm1Timers.forEach(clearTimeout);
+        rm1Timers = [];
+      }
+
+      function rm1Play() {
+        rm1Stop();
+        var sess = rm1Session;
+
+        var grid  = document.getElementById('rm1Grid');
+        var chat  = document.getElementById('rm1Chat');
+        var notif = document.getElementById('rm1Notif');
+        if (!grid || !chat || !notif) return;
+
+        // Instant reset — disable transitions, jump to start state
+        notif.style.transition = 'none';
+        notif.classList.remove('visible', 'pulse');
+        void notif.offsetWidth;               // force reflow so transition re-enables cleanly
+        notif.style.transition = '';
+
+        grid.style.transition = 'none';
+        grid.style.opacity = '1';
+        chat.style.transition = 'none';
+        chat.style.opacity = '0';
+        chat.innerHTML = '';
+
+        var MSGS = [
+          { cls: 'in',  text: 'Hey, saw your page, how does this work?' },
+          { cls: 'out', text: 'Hey, thanks for reaching out. What are you looking to achieve right now?' },
+          { cls: 'in',  text: 'Trying to get more consistent leads from Instagram' },
+          { cls: 'out', text: "Got it, that's exactly what this is built for. Have you tried anything like this before?" },
+          { cls: 'in',  text: 'Yeah, tried a VA doing it manually but it fell apart' },
+          { cls: 'out', text: "Makes sense, manual is hard to keep up with. This runs around the clock and never drops a message" },
+          { cls: 'in',  text: "Okay, that's actually what I need" },
+          { cls: 'out', text: "Great, here's the link to get started", link: true },
+        ];
+
+        var TYPING = 1100;   // typing indicator duration (ms)
+        var GAP    = 1600;   // gap between bubble appearing and next typing starting
+
+        // Phase 2: notification slides in at 3 s
+        rm1Delay(sess, 3000, function () { notif.classList.add('visible'); });
+
+        // Phase 2→3: pulse at 5 s, crossfade at 5.6 s
+        rm1Delay(sess, 5000, function () { notif.classList.add('pulse'); });
+        rm1Delay(sess, 5400, function () { notif.classList.remove('pulse'); });
+        rm1Delay(sess, 5600, function () {
+          notif.classList.remove('visible');
+          grid.style.transition = 'opacity 0.65s ease';
+          grid.style.opacity = '0';
+          chat.style.transition = 'opacity 0.65s ease';
+          chat.style.opacity = '1';
+        });
+
+        // Phase 4: conversation starts at 6.4 s
+        var now = 6400;
+        MSGS.forEach(function (msg) {
+          (function (m, t) {
+            rm1Delay(sess, t, function () {
+              // typing indicator
+              var typ = document.createElement('div');
+              typ.className = 'rm1-typing ' + m.cls;
+              typ.innerHTML = '<div class="rm1-dot"></div><div class="rm1-dot"></div><div class="rm1-dot"></div>';
+              chat.appendChild(typ);
+              chat.scrollTop = chat.scrollHeight;
+
+              rm1Delay(sess, TYPING, function () {
+                if (typ.parentNode) typ.remove();
+                var bub = document.createElement('div');
+                bub.className = 'rm1-bubble rm1-' + m.cls;
+                bub.textContent = m.text;
+                if (m.link) {
+                  var lnk = document.createElement('div');
+                  lnk.className = 'rm1-link';
+                  lnk.textContent = 'looped.io \u2192';
+                  bub.appendChild(lnk);
+                }
+                chat.appendChild(bub);
+                chat.scrollTop = chat.scrollHeight;
+              });
+            });
+          })(msg, now);
+          now += TYPING + GAP;
+        });
+
+        // Hold 2 s after last message, then fade back and loop
+        rm1Delay(sess, now + 2000, function () {
+          grid.style.transition = 'opacity 0.7s ease';
+          grid.style.opacity = '1';
+          chat.style.transition = 'opacity 0.7s ease';
+          chat.style.opacity = '0';
+          rm1Delay(sess, 900, function () {
+            chat.innerHTML = '';
+            rm1Play();       // restart from phase 1
+          });
+        });
+      }
+      // ── End slide 1 ──────────────────────────────────────────────────────
+
+      // Activate first slide on load
       if (reelSlides[0]) reelSlides[0].classList.add('is-active');
+      rm1Play();
+
       function updateReelProgress() {
         var idx = Math.min(Math.round(reelScroller.scrollTop / REEL_SLIDE_H), reelSegs.length - 1);
         reelSegs.forEach(function (seg, i) { seg.classList.toggle('active', i <= idx); });
         if (idx !== reelActiveIdx) {
+          var prev = reelActiveIdx;
           reelActiveIdx = idx;
-          // toggling is-active changes animation: none → animation: X, which restarts the keyframe
           reelSlides.forEach(function (slide, i) { slide.classList.toggle('is-active', i === idx); });
+          if (prev === 0) rm1Stop();
+          if (idx === 0) rm1Play();
         }
       }
       reelScroller.addEventListener('scroll', updateReelProgress, { passive: true });
