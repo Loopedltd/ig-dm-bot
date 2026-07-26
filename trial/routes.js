@@ -339,7 +339,7 @@ function landingPage(token, monthlyAmount) {
     .hero { padding: 223px 32px 56px; text-align: center; max-width: 1000px; margin: 0 auto; position: relative; z-index: 1; }
     .hero h1 { font-size: clamp(28px, 3.6vw, 48px); font-weight: 900; line-height: 1.1; letter-spacing: -1.2px; margin-bottom: 14px; color: var(--text); }
     .hero h1 em { font-style: normal; color: var(--primary); }
-    .hero-lead { font-size: 18px; color: var(--muted); max-width: 620px; margin: 0 auto 24px; line-height: 1.65; }
+    .hero-lead { font-size: 15px; color: var(--muted); max-width: 800px; margin: 0 auto 24px; line-height: 1.65; }
     .cta-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
     .cta-btn { display: inline-flex; align-items: center; justify-content: center; background: var(--primary); color: #fff; font-size: 16px; font-weight: 800; padding: 17px 42px; border-radius: 12px; border: none; cursor: pointer; letter-spacing: 0px; box-shadow: 0 4px 20px rgba(45,107,255,0.30); transition: box-shadow .15s, transform .1s, background .15s; font-family: inherit; }
     .cta-btn:hover { background: var(--primary-dark); box-shadow: 0 8px 32px rgba(45,107,255,0.38); transform: translateY(-1px); }
