@@ -954,8 +954,7 @@ function landingPage(token, monthlyAmount) {
 <div class="section features-wrap">
   <div class="section-inner">
     <div class="section-intro reveal">
-      <div class="section-label">What you get</div>
-      <div class="section-heading">Everything your DMs need.</div>
+      <div class="section-heading">Features</div>
     </div>
     <div class="reel-wrap reveal">
       <div class="reel-card">
