@@ -430,9 +430,13 @@ function landingPage(token, monthlyAmount) {
     .hiw-dm-bubble.out { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
     .hiw-dm-booked { display: flex; align-items: center; justify-content: flex-end; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ok); margin-top: 2px; transition: opacity 0.3s ease; }
     .hiw-dm-check { width: 18px; height: 18px; border-radius: 50%; background: var(--ok-bg); border: 1px solid var(--ok-border); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    /* typing indicator for the DM card (reuses dmPulse keyframe from hero demo) */
-    .hiw-dm-typing { display: flex; align-self: flex-start; gap: 5px; padding: 9px 13px; background: rgba(15,23,42,0.06); border-radius: 14px; border-bottom-left-radius: 4px; align-items: center; }
-    .hiw-dm-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(15,23,42,0.30); animation: dmPulse 1.3s ease-in-out infinite; }
+    /* typing indicators for the DM card (reuses dmPulse keyframe from hero demo) */
+    .hiw-dm-typing { display: flex; gap: 5px; padding: 9px 13px; border-radius: 14px; align-items: center; }
+    .hiw-dm-typing.in  { align-self: flex-start; background: rgba(15,23,42,0.06); border-bottom-left-radius: 4px; }
+    .hiw-dm-typing.out { align-self: flex-end;   background: var(--primary);       border-bottom-right-radius: 4px; }
+    .hiw-dm-dot { width: 6px; height: 6px; border-radius: 50%; animation: dmPulse 1.3s ease-in-out infinite; }
+    .hiw-dm-typing.in  .hiw-dm-dot { background: rgba(15,23,42,0.30); }
+    .hiw-dm-typing.out .hiw-dm-dot { background: rgba(255,255,255,0.75); }
     .hiw-dm-dot:nth-child(2) { animation-delay: 0.22s; }
     .hiw-dm-dot:nth-child(3) { animation-delay: 0.44s; }
     /* blinking cursor for voice card character-by-character typing */
@@ -1108,9 +1112,9 @@ function landingPage(token, monthlyAmount) {
         scrollDown();
       }
 
-      function addTyping() {
+      function addTyping(cls) {
         var t = document.createElement('div');
-        t.className = 'hiw-dm-typing';
+        t.className = 'hiw-dm-typing ' + cls;
         t.innerHTML = '<div class="hiw-dm-dot"></div><div class="hiw-dm-dot"></div><div class="hiw-dm-dot"></div>';
         body.insertBefore(t, booked);
         scrollDown();
@@ -1124,17 +1128,13 @@ function landingPage(token, monthlyAmount) {
           return;
         }
         var item = DM_SCRIPT[msgIdx++];
-        if (item.cls === 'out') {
-          var typingEl = addTyping();
-          hiwDelay(TYPING_SHOW, function () {
-            typingEl.remove();
-            addBubble(item);
-            hiwDelay(BUBBLE_GAP, nextMsg);
-          });
-        } else {
+        // Every bubble — both in and out — gets a typing indicator on its own side
+        var typingEl = addTyping(item.cls);
+        hiwDelay(TYPING_SHOW, function () {
+          typingEl.remove();
           addBubble(item);
           hiwDelay(BUBBLE_GAP, nextMsg);
-        }
+        });
       }
 
       hiwDelay(400, nextMsg);  // brief initial pause before first bubble
