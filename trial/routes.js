@@ -987,16 +987,41 @@ function landingPage(token, monthlyAmount) {
 
 })();
 
-// Reset error state on every page show (handles bfcache restoration, which
-// replays the page with inline styles intact — including errMsg display:block
-// from a previous failed fetch).
-window.addEventListener('pageshow', function () {
+// Reset button + error state on bfcache restoration (back/forward navigation).
+// event.persisted === true means the page was restored from bfcache, not a
+// fresh load — the DOM is replayed exactly as it was, including the button
+// stuck at "Redirecting to checkout…" with pointer-events:none from .loading.
+// We reset unconditionally on persisted so the user can always click again.
+// errMsg is reset on every pageshow (fresh or cached) to avoid stale errors.
+function resetCtaState() {
   var errEl = document.getElementById('errMsg');
   if (errEl) errEl.style.display = 'none';
   var btn = document.getElementById('startBtn');
-  if (btn && btn.classList.contains('loading')) {
+  if (btn) {
     btn.textContent = 'Start your 7-day free trial';
     btn.classList.remove('loading');
+    btn.disabled = false;
+  }
+}
+
+window.addEventListener('pageshow', function (e) {
+  // Always clear stale error messages
+  var errEl = document.getElementById('errMsg');
+  if (errEl) errEl.style.display = 'none';
+  // On bfcache restore, unconditionally reset the CTA button
+  if (e.persisted) {
+    resetCtaState();
+  }
+});
+
+// Fallback: visibilitychange fires when the user returns to a tab or page,
+// catches browsers where pageshow.persisted isn't set (e.g. some WebKit builds).
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') {
+    var btn = document.getElementById('startBtn');
+    if (btn && btn.classList.contains('loading')) {
+      resetCtaState();
+    }
   }
 });
 </script>
