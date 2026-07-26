@@ -423,7 +423,6 @@ function landingPage(token, monthlyAmount) {
     .hiw-voice-speaker { color: var(--muted); font-weight: 600; }
     .hiw-voice-me { color: var(--primary); font-weight: 700; }
     .hiw-voice-placeholder { color: rgba(15,23,42,0.22); }
-    .hiw-voice-save { align-self: flex-end; background: var(--primary); color: #fff; border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 700; }
     /* panel 3 — qualify and book (static DM preview) */
     .hiw-dm-body { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 16px 20px 20px; overflow: auto; }
     .hiw-dm-bubble { max-width: 82%; padding: 9px 13px; border-radius: 14px; font-size: 13px; line-height: 1.5; }
@@ -601,7 +600,6 @@ function landingPage(token, monthlyAmount) {
               <span class="hiw-voice-me">Me:</span> Perfect, I work with people in exactly your position. Want me to send over the details?<br><br>
               <span class="hiw-voice-placeholder" style="cursor:pointer;" onclick="startTrial(event)">+ Paste more examples here...</span>
             </div>
-            <div class="hiw-voice-save">Save examples</div>
           </div>
         </div>
 
