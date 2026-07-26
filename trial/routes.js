@@ -624,7 +624,7 @@ function landingPage(token, monthlyAmount) {
     .rm1-dock-icon { width: 54px; height: 54px; border-radius: 14px; box-shadow: inset 0 1px 1px rgba(255,255,255,0.25), 0 2px 6px rgba(0,0,0,0.25); }
     .rm1-chat { position: absolute; inset: 0; background: #f2f2f4; overflow-y: scroll; scrollbar-width: none; display: flex; flex-direction: column; opacity: 0; padding-bottom: 170px; }
     .rm1-chat::-webkit-scrollbar { display: none; }
-    .rm1-chat-header { flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 10px 10px 8px; background: #f2f2f4; border-bottom: 1px solid rgba(0,0,0,0.07); position: sticky; top: 0; z-index: 1; }
+    .rm1-chat-header { flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 19px 10px 8px; background: #f2f2f4; border-bottom: 1px solid rgba(0,0,0,0.07); position: sticky; top: 0; z-index: 1; }
     .rm1-chat-avatar { width: 26px; height: 26px; border-radius: 50%; background: rgba(0,0,0,0.14); flex-shrink: 0; }
     .rm1-chat-name { font-size: 11px; font-weight: 800; color: #1a1a2e; line-height: 1.2; }
     .rm1-chat-status { font-size: 9.5px; color: #22c55e; font-weight: 600; }
