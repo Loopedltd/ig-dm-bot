@@ -877,7 +877,7 @@ function landingPage(token, monthlyAmount) {
     .final-cta h2 { font-size: clamp(28px, 3.6vw, 48px); font-weight: 700; font-family: 'Inter', system-ui, sans-serif; letter-spacing: -0.04em; margin-bottom: 36px; line-height: 1.1; }
 
     /* FOOTER (inside final CTA) */
-    .cta-footer { margin-top: 48px; font-size: 13px; color: var(--muted); text-align: center; }
+    .cta-footer { position: absolute; bottom: 28px; left: 0; right: 0; font-size: 13px; color: var(--muted); text-align: center; z-index: 1; }
 
     /* SCROLL REVEAL */
     .reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.55s ease, transform 0.55s ease; }
@@ -1335,8 +1335,8 @@ function landingPage(token, monthlyAmount) {
       <button class="cta-btn" onclick="startTrial(event)">Start your free trial now</button>
       <p class="hero-meta">Card required upfront. Cancel any time. ${monthlyAmount}/month after trial.</p>
     </div>
-    <p class="cta-footer">&copy; ${new Date().getFullYear()} Looped &middot; Looped.ltd</p>
   </div>
+  <p class="cta-footer">&copy; ${new Date().getFullYear()} Looped &middot; Looped.ltd</p>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════
