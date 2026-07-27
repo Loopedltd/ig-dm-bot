@@ -639,7 +639,7 @@ function landingPage(token, monthlyAmount) {
     .rm1-typing.out .rm1-dot { background: rgba(255,255,255,0.7); }
     .rm1-dot:nth-child(2) { animation-delay: 0.2s; }
     .rm1-dot:nth-child(3) { animation-delay: 0.4s; }
-    .rm1-link { display: block; margin-top: 5px; background: rgba(45,107,255,0.1); border: 1px solid rgba(45,107,255,0.28); border-radius: 8px; padding: 4px 8px; font-size: 9.5px; color: #2d6bff; font-weight: 700; text-align: center; letter-spacing: 0.1px; }
+    .rm1-link { display: block; align-self: flex-end; margin-top: 3px; background: rgba(45,107,255,0.09); border: 1px solid rgba(45,107,255,0.30); border-radius: 20px; padding: 5px 11px; font-size: 9px; color: #2d6bff; font-weight: 700; text-align: center; letter-spacing: 0.2px; }
     .rm1-notif { position: absolute; top: -80px; left: 10px; right: 10px; background: rgba(28,32,44,0.96); border-radius: 16px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; z-index: 4; transition: top 0.45s cubic-bezier(0.22,1,0.36,1), box-shadow 0.2s; }
     .rm1-notif.visible { top: 24px; }
     .rm1-notif.pulse { box-shadow: 0 0 0 3px rgba(255,255,255,0.28); }
@@ -1749,13 +1749,13 @@ function landingPage(token, monthlyAmount) {
                 var bub = document.createElement('div');
                 bub.className = 'rm1-bubble rm1-' + m.cls;
                 bub.textContent = m.text;
+                msgs.appendChild(bub);
                 if (m.link) {
                   var lnk = document.createElement('div');
                   lnk.className = 'rm1-link';
-                  lnk.textContent = 'looped.io \u2192';
-                  bub.appendChild(lnk);
+                  lnk.textContent = 'app.looped.ltd \u2192';
+                  msgs.appendChild(lnk);
                 }
-                msgs.appendChild(bub);
                 chat.scrollTop = chat.scrollHeight;
               });
             });
