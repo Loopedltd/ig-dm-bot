@@ -19,7 +19,7 @@ const router = express.Router();
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const APP_PUBLIC_URL     = process.env.APP_PUBLIC_URL  || "http://localhost:3000";
+const APP_PUBLIC_URL     = process.env.APP_PUBLIC_URL  || process.env.APP_BASE_URL || "http://localhost:3000";
 const PAY_PUBLIC_URL     = process.env.APP_BASE_URL    || "http://localhost:3000";
 const HOME_MONTHLY_PENCE = 10000; // £100/month
 
