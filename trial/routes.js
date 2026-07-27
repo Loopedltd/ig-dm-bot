@@ -1988,7 +1988,7 @@ function landingPage(token, monthlyAmount) {
         addTyping(t, function () {
           var b = document.createElement('div');
           b.className = 'rm1-bubble rm1-out';
-          b.textContent = 'Hey, thanks for reaching out. It replies to DMs, story replies, and comments automatically, in your voice';
+          b.textContent = 'Hey, thanks for reacting. It replies to DMs, story replies, and comments automatically, in your voice';
           msgs.appendChild(b);
           chat.scrollTop = chat.scrollHeight;
         });
