@@ -668,7 +668,7 @@ function landingPage(token, monthlyAmount) {
     .rm2-notif.visible { top: 24px; }
     .rm2-chat { position: absolute; inset: 0; background: #f2f2f4; overflow-y: scroll; scrollbar-width: none; display: flex; flex-direction: column; opacity: 0; padding-bottom: 80px; z-index: 3; }
     .rm2-chat::-webkit-scrollbar { display: none; }
-    .rm2-story-thumb { width: 74px; height: 100px; border-radius: 10px; background: #3f7dc0; align-self: flex-end; flex-shrink: 0; margin: 6px 4px 2px 0; }
+    .rm2-story-thumb { width: 74px; height: 100px; border-radius: 10px; background: #3f7dc0; align-self: flex-start; flex-shrink: 0; margin: 6px 0 2px 4px; }
     .rm2-bottom-grad { position: absolute; bottom: 0; left: 0; right: 0; height: 180px; background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.52) 55%, rgba(0,0,0,0.76) 100%); pointer-events: none; z-index: 1; }
     @keyframes rm2Blink { 0%,100%{opacity:1} 50%{opacity:0} }
 
@@ -1072,7 +1072,7 @@ function landingPage(token, monthlyAmount) {
             <div class="rm2-bottom-grad"></div>
             <div class="reel-content">
               <div class="reel-title">Story reply automation</div>
-              <div class="reel-desc">Someone reacts to your story? Looped starts a qualifying conversation automatically.</div>
+              <div class="reel-desc">Someone replies to your story? Looped responds automatically.</div>
             </div>
           </div>
           <!-- S3: Comment keyword -->
@@ -1940,8 +1940,8 @@ function landingPage(token, monthlyAmount) {
         });
 
         // ── Phase 6 at 9.4 s: conversation ───────────────────────────
-        var TYPING = 2000;
-        var GAP    = 5000;
+        var TYPING = 1100;   // match slide 1 exactly
+        var GAP    = 1600;   // match slide 1 exactly
 
         function addBub(cls, text, t) {
           rm2Delay(sess, t, function () {
@@ -1953,10 +1953,11 @@ function landingPage(token, monthlyAmount) {
           });
         }
 
+        // Typing indicator always 'out' (blue) — Looped's automated replies
         function addTyping(t, cb) {
           rm2Delay(sess, t, function () {
             var typ = document.createElement('div');
-            typ.className = 'rm1-typing in';
+            typ.className = 'rm1-typing out';
             typ.innerHTML = '<div class="rm1-dot"></div><div class="rm1-dot"></div><div class="rm1-dot"></div>';
             msgs.appendChild(typ);
             chat.scrollTop = chat.scrollHeight;
@@ -1970,7 +1971,7 @@ function landingPage(token, monthlyAmount) {
 
         var t = 9400;
 
-        // Story thumbnail (blue mini-preview, right-aligned above first bubble)
+        // Story thumbnail (left-aligned — prospect's incoming story reply)
         rm2Delay(sess, t, function () {
           var thumb = document.createElement('div');
           thumb.className = 'rm2-story-thumb';
@@ -1979,36 +1980,34 @@ function landingPage(token, monthlyAmount) {
         });
         t += 400;
 
-        // Outgoing: the story reply they typed
-        addBub('rm1-out', 'this looks amazing, how does it work?', t);
+        // Prospect's story reply (grey/incoming, direct — no typing indicator)
+        addBub('rm1-in', 'this looks amazing, how does it work?', t);
         t += GAP;
 
-        // Incoming: qualification response (with typing indicator)
+        // Looped's response (blue/outgoing, preceded by typing indicator)
         addTyping(t, function () {
           var b = document.createElement('div');
-          b.className = 'rm1-bubble rm1-in';
-          b.textContent = 'Hey, thanks for reacting. It replies to DMs, story replies, and comments automatically, in your voice';
+          b.className = 'rm1-bubble rm1-out';
+          b.textContent = 'Hey, thanks for reaching out. It replies to DMs, story replies, and comments automatically, in your voice';
           msgs.appendChild(b);
           chat.scrollTop = chat.scrollHeight;
         });
         t += TYPING + GAP;
 
-        // Outgoing: affirmation
-        addBub('rm1-out', "okay that's actually really useful", t);
+        // Prospect (grey/incoming, direct)
+        addBub('rm1-in', "okay that's actually really useful", t);
         t += GAP;
 
-        // Incoming: link close (with typing indicator)
+        // Looped (blue/outgoing, preceded by typing indicator) + link pill
         addTyping(t, function () {
           var b = document.createElement('div');
-          b.className = 'rm1-bubble rm1-in';
+          b.className = 'rm1-bubble rm1-out';
           b.textContent = "Glad it landed, here's the link to get started";
           msgs.appendChild(b);
           chat.scrollTop = chat.scrollHeight;
-          // Link pill: left-aligned (incoming side)
           rm2Delay(sess, 350, function () {
             var lnk = document.createElement('div');
             lnk.className = 'rm1-link';
-            lnk.style.alignSelf = 'flex-start';
             lnk.textContent = 'app.looped.ltd/start \u2192';
             msgs.appendChild(lnk);
             chat.scrollTop = chat.scrollHeight;
