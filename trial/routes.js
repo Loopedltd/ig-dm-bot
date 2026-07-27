@@ -871,14 +871,13 @@ function landingPage(token, monthlyAmount) {
     @keyframes rmFCheck { 0%,56%{opacity:0;transform:scale(0.6)} 66%{opacity:1;transform:scale(1.2)} 72%,85%{opacity:1;transform:scale(1)} 95%,100%{opacity:0} }
 
     /* FINAL CTA */
-    .final-cta { text-align: center; padding: 68px 32px 60px; }
-    .final-cta h2 { font-size: clamp(24px, 3vw, 36px); font-weight: 700; font-family: 'Geist', 'Inter', system-ui, sans-serif; letter-spacing: -0.4px; margin-bottom: 14px; line-height: 1.1; }
-    .final-cta .final-sub { color: var(--muted); font-size: 16px; margin-bottom: 36px; }
+    .final-cta { text-align: center; padding: 68px 32px 60px; position: relative; overflow: hidden; }
+    .cta-gradient { position: absolute; inset: -30%; pointer-events: none; z-index: 0; }
+    .cta-inner { position: relative; z-index: 1; }
+    .final-cta h2 { font-size: clamp(24px, 3vw, 36px); font-weight: 700; font-family: 'Geist', 'Inter', system-ui, sans-serif; letter-spacing: -0.4px; margin-bottom: 36px; line-height: 1.1; }
 
     /* FOOTER */
-    footer { padding: 28px 24px; text-align: center; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); }
-    footer a { color: var(--muted); text-decoration: none; }
-    footer a:hover { color: var(--text); }
+    footer { padding: 28px 24px; text-align: center; font-size: 13px; color: var(--muted); }
 
     /* SCROLL REVEAL */
     .reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.55s ease, transform 0.55s ease; }
@@ -1329,16 +1328,18 @@ function landingPage(token, monthlyAmount) {
 
 <!-- FINAL CTA -->
 <div class="final-cta reveal">
-  <h2>Ready to stop leaving DMs on read?</h2>
-  <p class="final-sub">Start your 7-day free trial. Your card won't be charged until day 8.</p>
-  <div class="cta-wrap">
-    <button class="cta-btn" onclick="startTrial(event)">Start your free trial now</button>
-    <p class="hero-meta">Card required upfront. Cancel any time. ${monthlyAmount}/month after trial.</p>
+  <div class="cta-gradient"></div>
+  <div class="cta-inner">
+    <h2>Ready to stop leaving DMs on read?</h2>
+    <div class="cta-wrap">
+      <button class="cta-btn" onclick="startTrial(event)">Start your free trial now</button>
+      <p class="hero-meta">Card required upfront. Cancel any time. ${monthlyAmount}/month after trial.</p>
+    </div>
   </div>
 </div>
 
 <footer>
-  &copy; ${new Date().getFullYear()} Looped &middot; <a href="mailto:james@looped.ltd">james@looped.ltd</a>
+  &copy; ${new Date().getFullYear()} Looped &middot; Looped.ltd
 </footer>
 
 <!-- ═══════════════════════════════════════════════════════════════════
@@ -1410,6 +1411,52 @@ function landingPage(token, monthlyAmount) {
       tickGradient();
     }
   } catch (e) { console.warn('[looped] hero gradient error:', e); }
+
+  // ── 2b. FINAL CTA GRADIENT — same cursor-following lerp + ambient drift ──────
+  try {
+    var ctaGradEl  = document.querySelector('.cta-gradient');
+    var ctaSect    = document.querySelector('.final-cta');
+    if (ctaGradEl) {
+      var ctaCx = 35, ctaCy = 42;
+      var ctaTx = 35, ctaTy = 42;
+      var ctaDriftT = 0;
+      var ctaHasMouse = false;
+
+      if (ctaSect) {
+        ctaSect.addEventListener('mousemove', function (e) {
+          var r = ctaSect.getBoundingClientRect();
+          ctaTx = ((e.clientX - r.left) / r.width)  * 100;
+          ctaTy = ((e.clientY - r.top)  / r.height) * 100;
+          ctaHasMouse = true;
+        }, { passive: true });
+        ctaSect.addEventListener('mouseleave', function () { ctaHasMouse = false; }, { passive: true });
+      }
+
+      function ctaLerp(a, b, t) { return a + (b - a) * t; }
+
+      function tickCtaGradient() {
+        ctaDriftT += 0.004;
+        var ambX = ctaHasMouse ? 0 : Math.sin(ctaDriftT * 1.3) * 14;
+        var ambY = ctaHasMouse ? 0 : Math.cos(ctaDriftT * 0.9) * 9;
+        var speed = ctaHasMouse ? 0.07 : 0.025;
+
+        ctaCx = ctaLerp(ctaCx, ctaTx + ambX, speed);
+        ctaCy = ctaLerp(ctaCy, ctaTy + ambY, speed);
+
+        var x1 = ctaCx.toFixed(1), y1 = ctaCy.toFixed(1);
+        var x2 = (100 - ctaCx * 0.55).toFixed(1);
+        var y2 = (ctaCy * 0.55 + 32).toFixed(1);
+
+        ctaGradEl.style.background =
+          'radial-gradient(ellipse 72% 65% at ' + x1 + '% ' + y1 + '%, rgba(45,107,255,0.24) 0%, transparent 58%),' +
+          'radial-gradient(ellipse 52% 52% at ' + x2 + '% ' + y2 + '%, rgba(45,107,255,0.14) 0%, transparent 60%)';
+
+        requestAnimationFrame(tickCtaGradient);
+      }
+
+      tickCtaGradient();
+    }
+  } catch (e) { console.warn('[looped] cta gradient error:', e); }
 
   // ── 3. INTERACTIVE DM DEMO (AI via /api/demo/chat) ─────────────────────────
   try {
