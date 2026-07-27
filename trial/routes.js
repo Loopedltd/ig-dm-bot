@@ -1333,7 +1333,7 @@ function landingPage(token, monthlyAmount) {
     <h2>Ready to stop leaving DMs on read?</h2>
     <div class="cta-wrap">
       <button class="cta-btn" onclick="startTrial(event)">Start your free trial now</button>
-      <p class="hero-meta">Card required upfront. Cancel any time. ${monthlyAmount}/month after trial.</p>
+      <p class="hero-meta">Cancel any time.</p>
     </div>
   </div>
   <p class="cta-footer">&copy; ${new Date().getFullYear()} Looped &middot; Looped.ltd</p>
