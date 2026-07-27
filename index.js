@@ -319,10 +319,6 @@ function isAppHost(req) {
   return getHost(req) === "app.looped.ltd";
 }
 
-function isHomeHost(req) {
-  return getHost(req) === "home.looped.ltd";
-}
-
 // ---------------------------
 // IG HELPERS (webhook parsing)
 // ---------------------------
@@ -6743,10 +6739,6 @@ app.get("/", (req, res) => {
     return res.redirect("/login");
   }
 
-  if (isHomeHost(req)) {
-    return res.redirect("/home");
-  }
-
   return res.send("IG DM Bot is running");
 });
 
@@ -10588,7 +10580,7 @@ import("./trial/routes.js")
   })
   .catch((e) => console.error("[trial] failed to mount routes:", e?.message || e));
 
-// ── ADDITIVE: Public homepage at home.looped.ltd ──────────────────────────────
+// ── ADDITIVE: Public homepage at pay.looped.ltd/home ─────────────────────────
 // All logic lives in home/routes.js — this is the only change to this file.
 // Routes added: GET /home, POST /api/homepage/checkout, GET /home/success
 // Remove this block to disable the homepage entirely.

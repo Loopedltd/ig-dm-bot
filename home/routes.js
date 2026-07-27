@@ -1,7 +1,8 @@
 /**
- * home/routes.js — Public fixed-price homepage at home.looped.ltd
+ * home/routes.js — Public fixed-price landing page at pay.looped.ltd/home
  *
- * Routes (GET / served from index.js with isHomeHost check):
+ * Routes:
+ *   GET  /home                   — Public landing page (no token required)
  *   POST /api/homepage/checkout  — Create Stripe checkout + new client record
  *   GET  /home/success           — Verify payment, redirect to set-password
  *
@@ -18,8 +19,8 @@ const router = express.Router();
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const APP_PUBLIC_URL    = process.env.APP_PUBLIC_URL  || "http://localhost:3000";
-const HOME_PUBLIC_URL   = process.env.HOME_PUBLIC_URL || process.env.APP_BASE_URL || "http://localhost:3000";
+const APP_PUBLIC_URL     = process.env.APP_PUBLIC_URL  || "http://localhost:3000";
+const PAY_PUBLIC_URL     = process.env.APP_BASE_URL    || "http://localhost:3000";
 const HOME_MONTHLY_PENCE = 10000; // £100/month
 
 const stripe = STRIPE_SECRET_KEY
@@ -2185,7 +2186,7 @@ document.addEventListener('visibilitychange', function () {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUBLIC LANDING PAGE — GET /home
-// home.looped.ltd/ redirects here via index.js isHomeHost check.
+// Served at pay.looped.ltd/home (no subdomain or hostname check required).
 // ─────────────────────────────────────────────────────────────────────────────
 router.get("/home", (req, res) => {
   return res.send(landingHomePage());
@@ -2278,7 +2279,7 @@ router.post("/api/homepage/checkout", async (req, res) => {
         source: "homepage",
       },
       success_url: `${APP_PUBLIC_URL}/home/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url:  `${HOME_PUBLIC_URL}/`,
+      cancel_url:  `${PAY_PUBLIC_URL}/home`,
       billing_address_collection: "required",
       automatic_tax: { enabled: true },
     });
