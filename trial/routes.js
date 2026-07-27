@@ -1074,7 +1074,7 @@ function landingPage(token, monthlyAmount) {
               <div class="fc-cal-confirm">&#10003;</div>
             </div>
           </div>
-          <div><div class="fc-title">Books calls for you</div><div class="fc-desc">Handles objections, builds trust, and drives every warm lead to your booking link.</div></div>
+          <div><div class="fc-title">Books calls for you</div><div class="fc-desc">Handles objections, builds trust, and drives every warm lead to your booking link</div></div>
         </div>
         <!-- Card 2: 24/7 response time -->
         <div class="feat-card" id="fc2">
@@ -1088,7 +1088,7 @@ function landingPage(token, monthlyAmount) {
               <div class="fc-clock-bubble"></div>
             </div>
           </div>
-          <div><div class="fc-title">24/7 response time</div><div class="fc-desc">Replies in seconds at any hour. No more leads going cold because you were busy.</div></div>
+          <div><div class="fc-title">24/7 response time</div><div class="fc-desc">Replies in seconds at any hour no more leads going cold because you were busy</div></div>
         </div>
         <!-- Card 3: Lead qualification -->
         <div class="feat-card" id="fc3">
@@ -1104,7 +1104,7 @@ function landingPage(token, monthlyAmount) {
               <div class="fc-fcheck">&#10003;</div>
             </div>
           </div>
-          <div><div class="fc-title">Lead qualification built in</div><div class="fc-desc">Asks the right questions to filter tyre-kickers and push only serious leads to a call.</div></div>
+          <div><div class="fc-title">Lead qualification built in</div><div class="fc-desc">Asks the right questions to filter tyre-kickers and push only serious leads to a call</div></div>
         </div>
         <!-- Card 4: Custom dashboard -->
         <div class="feat-card" id="fc4">
@@ -1115,7 +1115,7 @@ function landingPage(token, monthlyAmount) {
               <div class="fc-dash-b fc-db3"></div>
             </div>
           </div>
-          <div><div class="fc-title">Custom dashboard</div><div class="fc-desc">See every lead, conversation, and booking in one place, built around how you work.</div></div>
+          <div><div class="fc-title">Custom dashboard</div><div class="fc-desc">See every lead, conversation, and booking in one place, built around how you work</div></div>
         </div>
       </div>
       </div>
