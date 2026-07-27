@@ -693,7 +693,7 @@ function landingPage(token, monthlyAmount) {
     .reel-progress { position: absolute; top: 0; left: 0; right: 51px; display: flex; gap: 4px; padding: 16px 16px 0; z-index: 3; pointer-events: none; }
     .reel-prog-seg { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.18); transition: background 0.25s; }
     .reel-prog-seg.active { background: rgba(255,255,255,0.85); }
-    .reel-card.reel-on-light .reel-prog-seg { background: rgba(15,23,42,0.12); }
+    .reel-card.reel-on-light .reel-prog-seg { background: rgba(15,23,42,0.22); }
     .reel-card.reel-on-light .reel-prog-seg.active { background: #2d6bff; }
     .reel-scroller { position: absolute; inset: 0; overflow-y: scroll; scroll-snap-type: y mandatory; overscroll-behavior: contain; scrollbar-width: none; }
     .reel-scroller::-webkit-scrollbar { display: none; }
@@ -712,10 +712,10 @@ function landingPage(token, monthlyAmount) {
 
     /* S1 — DM Voice (4-phase JS-driven) */
     .rm1-bg { position: absolute; inset: 0; overflow: hidden; background: #111318; }
-    .rm1-homescreen { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 24px 20px 14px; filter: blur(0.4px); background: #fff; }
+    .rm1-homescreen { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 24px 20px 14px; filter: blur(0.4px); background: #e2e5ea; }
     .rm1-app-grid { display: grid; grid-template-columns: repeat(4,54px); grid-template-rows: repeat(6,54px); gap: 14px; flex-shrink: 0; align-self: center; margin-top: 40px; }
     .rm1-icon { width: 54px; height: 54px; border-radius: 14px; box-shadow: inset 0 1px 1px rgba(255,255,255,0.25), 0 2px 6px rgba(0,0,0,0.25); }
-    .rm1-dock { display: flex; justify-content: space-between; margin-top: auto; padding: 10px 0; width: 258px; align-self: center; background: rgba(15,23,42,0.06); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(15,23,42,0.10); border-radius: 26px; flex-shrink: 0; }
+    .rm1-dock { display: flex; justify-content: space-between; margin-top: auto; padding: 10px 0; width: 258px; align-self: center; background: rgba(15,23,42,0.12); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(15,23,42,0.18); border-radius: 26px; flex-shrink: 0; }
     .rm1-dock-icon { width: 54px; height: 54px; border-radius: 14px; box-shadow: inset 0 1px 1px rgba(255,255,255,0.25), 0 2px 6px rgba(0,0,0,0.25); }
     .rm1-chat { position: absolute; inset: 0; background: #f2f2f4; overflow-y: scroll; scrollbar-width: none; display: flex; flex-direction: column; opacity: 0; padding-bottom: 170px; }
     .rm1-chat::-webkit-scrollbar { display: none; }
