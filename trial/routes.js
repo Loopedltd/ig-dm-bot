@@ -1700,6 +1700,8 @@ function landingPage(token, monthlyAmount) {
     if (reelScroller && reelSegs.length) {
       var REEL_SLIDE_H = 534;
       var reelActiveIdx = 0;
+      var rm1AutoAdvanced = false;
+      var rm2AutoAdvanced = false;
 
       // ── Slide 1: 4-phase DM voice animation ──────────────────────────────
       var rm1Timers = [];
@@ -1805,6 +1807,12 @@ function landingPage(token, monthlyAmount) {
           chat.style.opacity = '0';
           rm1Delay(sess, 900, function () {
             msgs.innerHTML = '';
+            // First-ever loop completion: auto-advance to slide 2
+            if (!rm1AutoAdvanced && reelActiveIdx === 0) {
+              rm1AutoAdvanced = true;
+              reelScroller.scrollTo({ top: REEL_SLIDE_H, behavior: 'smooth' });
+              return;
+            }
             // Bounce-peek: only nudge if still on slide 1 (scrollTop near 0)
             if (reelScroller && reelScroller.scrollTop < 50) {
               var PEEK = 26;   // px to peek
@@ -2020,6 +2028,12 @@ function landingPage(token, monthlyAmount) {
           chat.style.opacity    = '0';
           rm2Delay(sess, 900, function () {
             msgs.innerHTML = '';
+            // First-ever loop completion: auto-advance to slide 3
+            if (!rm2AutoAdvanced && reelActiveIdx === 1) {
+              rm2AutoAdvanced = true;
+              reelScroller.scrollTo({ top: REEL_SLIDE_H * 2, behavior: 'smooth' });
+              return;
+            }
             rm2Play();
           });
         });
