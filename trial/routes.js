@@ -650,20 +650,27 @@ function landingPage(token, monthlyAmount) {
     .rm1-notif-time { font-size: 9.5px; color: rgba(255,255,255,0.4); flex-shrink: 0; align-self: flex-start; }
     @keyframes rm1Dot { 0%,100%{opacity:0.3;transform:translateY(0)} 50%{opacity:1;transform:translateY(-3px)} }
 
-    /* S2 — Story Reply */
-    .rm-story { flex-direction: column; align-items: center; gap: 10px; }
-    .rm-s-thumb { width: 46px; height: 80px; border-radius: 10px; background: linear-gradient(150deg,rgba(45,107,255,0.28),rgba(140,82,255,0.18)); border: 1.5px solid rgba(255,255,255,0.14); display: flex; align-items: center; justify-content: center; }
-    .rm-s-heart { font-size: 18px; line-height: 1; display: inline-block; }
-    .rm-s-dm { font-size: 11px; padding: 5px 10px; background: rgba(255,255,255,0.09); border-radius: 10px; color: rgba(255,255,255,0.7); white-space: nowrap; }
-    .reel-slide .rm-s-thumb { opacity: 0; animation: none; }
-    .reel-slide .rm-s-heart { animation: none; }
-    .reel-slide .rm-s-dm { opacity: 0; animation: none; }
-    .reel-slide.is-active .rm-s-thumb { animation: rmSThumb 5s ease infinite; }
-    .reel-slide.is-active .rm-s-heart { animation: rmSHeart 5s ease infinite; }
-    .reel-slide.is-active .rm-s-dm { animation: rmSDm 5s ease infinite; }
-    @keyframes rmSThumb { 0%,5%{opacity:0;transform:scale(0.9)} 14%,82%{opacity:1;transform:scale(1)} 92%,100%{opacity:0} }
-    @keyframes rmSHeart { 0%,22%{transform:scale(1)} 30%{transform:scale(1.55)} 37%{transform:scale(0.9)} 43%{transform:scale(1.12)} 49%,100%{transform:scale(1)} }
-    @keyframes rmSDm { 0%,44%{opacity:0;transform:translateY(8px)} 54%,82%{opacity:1;transform:translateY(0)} 92%,100%{opacity:0} }
+    /* S2 — Story reply (full-bleed JS-driven) */
+    .rm2-bg { position: absolute; inset: 0; overflow: hidden; }
+    .rm2-s1 { position: absolute; inset: 0; background: #c2733f; }
+    .rm2-s2 { position: absolute; inset: 0; background: #3f7dc0; transform: translateX(100%); transition: transform 0.5s cubic-bezier(0.22,1,0.36,1); }
+    .rm2-s2.swiped { transform: translateX(0); }
+    .rm2-prog { position: absolute; top: 36px; left: 14px; right: 58px; display: flex; gap: 5px; z-index: 2; pointer-events: none; }
+    .rm2-seg { flex: 1; height: 2.5px; border-radius: 2px; background: rgba(255,255,255,0.28); overflow: hidden; }
+    .rm2-seg-fill { height: 100%; width: 0; background: rgba(255,255,255,0.88); border-radius: 2px; }
+    .rm2-reply { position: absolute; bottom: 16px; left: 14px; right: 14px; display: flex; align-items: center; gap: 8px; z-index: 2; }
+    .rm2-reply-pill { flex: 1; background: rgba(255,255,255,0.11); border: 1px solid rgba(255,255,255,0.28); border-radius: 22px; padding: 8px 13px; font-size: 10px; color: rgba(255,255,255,0.50); overflow: hidden; white-space: nowrap; line-height: 1.4; }
+    .rm2-reply-typed { color: rgba(255,255,255,0.92); }
+    .rm2-cursor { display: inline-block; width: 1.5px; height: 10px; background: rgba(255,255,255,0.85); vertical-align: middle; margin-left: 1px; opacity: 0; }
+    .rm2-cursor.blinking { animation: rm2Blink 0.85s step-end infinite; opacity: 1; }
+    .rm2-reply-heart { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.36); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: rgba(255,255,255,0.62); }
+    .rm2-notif { position: absolute; top: -80px; left: 10px; right: 10px; background: rgba(28,32,44,0.96); border-radius: 16px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; z-index: 5; transition: top 0.45s cubic-bezier(0.22,1,0.36,1); }
+    .rm2-notif.visible { top: 24px; }
+    .rm2-chat { position: absolute; inset: 0; background: #f2f2f4; overflow-y: scroll; scrollbar-width: none; display: flex; flex-direction: column; opacity: 0; padding-bottom: 80px; z-index: 3; }
+    .rm2-chat::-webkit-scrollbar { display: none; }
+    .rm2-story-thumb { width: 74px; height: 100px; border-radius: 10px; background: #3f7dc0; align-self: flex-end; flex-shrink: 0; margin: 6px 4px 2px 0; }
+    .rm2-bottom-grad { position: absolute; bottom: 0; left: 0; right: 0; height: 180px; background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.52) 55%, rgba(0,0,0,0.76) 100%); pointer-events: none; z-index: 1; }
+    @keyframes rm2Blink { 0%,100%{opacity:1} 50%{opacity:0} }
 
     /* S3 — Comment Keyword */
     .rm-comment { flex-direction: column; align-items: center; gap: 10px; }
@@ -1030,13 +1037,39 @@ function landingPage(token, monthlyAmount) {
               <div class="reel-desc">GPT-4o trained on your real messages. Sounds like you, not like a bot.</div>
             </div>
           </div>
-          <!-- S2: Story reply -->
+          <!-- S2: Story reply (full-bleed JS-driven) -->
           <div class="reel-slide">
-            <div class="reel-glow" style="background:rgba(140,82,255,0.5);top:10%;left:30%;"></div>
-            <div class="reel-mock rm-story">
-              <div class="rm-s-thumb"><span class="rm-s-heart">&#9829;</span></div>
-              <div class="rm-s-dm">new message</div>
+            <div class="rm2-bg" id="rm2Bg">
+              <div class="rm2-s1"></div>
+              <div class="rm2-s2" id="rm2S2"></div>
+              <div class="rm2-prog">
+                <div class="rm2-seg"><div class="rm2-seg-fill" id="rm2Fill1"></div></div>
+                <div class="rm2-seg"><div class="rm2-seg-fill" id="rm2Fill2"></div></div>
+              </div>
+              <div class="rm2-reply">
+                <div class="rm2-reply-pill"><span class="rm2-reply-typed" id="rm2ReplyTxt">Send message</span><span class="rm2-cursor" id="rm2Cursor"></span></div>
+                <div class="rm2-reply-heart"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+              </div>
+              <div class="rm2-notif" id="rm2Notif">
+                <div class="rm1-notif-icon"></div>
+                <div class="rm1-notif-body">
+                  <div class="rm1-notif-title">Looped</div>
+                  <div class="rm1-notif-preview">replied to your story</div>
+                </div>
+                <div class="rm1-notif-time">now</div>
+              </div>
             </div>
+            <div class="rm2-chat" id="rm2Chat">
+              <div class="rm1-chat-header">
+                <div class="rm1-chat-avatar"></div>
+                <div>
+                  <div class="rm1-chat-name">Looped</div>
+                  <div class="rm1-chat-status">Active now</div>
+                </div>
+              </div>
+              <div class="rm1-msgs" id="rm2Msgs"></div>
+            </div>
+            <div class="rm2-bottom-grad"></div>
             <div class="reel-content">
               <div class="reel-title">Story reply automation</div>
               <div class="reel-desc">Someone reacts to your story? Looped starts a qualifying conversation automatically.</div>
@@ -1808,6 +1841,195 @@ function landingPage(token, monthlyAmount) {
       if (reelSlides[0]) reelSlides[0].classList.add('is-active');
       rm1Play();
 
+      // ── Slide 2: Story reply ──────────────────────────────────────────────
+      var rm2Timers = [];
+      var rm2Session = 0;
+
+      function rm2Delay(sess, ms, fn) {
+        var t = setTimeout(function () { if (rm2Session === sess) fn(); }, ms);
+        rm2Timers.push(t);
+      }
+
+      function rm2Stop() {
+        rm2Session++;
+        rm2Timers.forEach(clearTimeout);
+        rm2Timers = [];
+      }
+
+      function rm2Play() {
+        rm2Stop();
+        var sess = rm2Session;
+
+        var s2     = document.getElementById('rm2S2');
+        var fill1  = document.getElementById('rm2Fill1');
+        var fill2  = document.getElementById('rm2Fill2');
+        var rtxt   = document.getElementById('rm2ReplyTxt');
+        var cursor = document.getElementById('rm2Cursor');
+        var notif  = document.getElementById('rm2Notif');
+        var bg     = document.getElementById('rm2Bg');
+        var chat   = document.getElementById('rm2Chat');
+        var msgs   = document.getElementById('rm2Msgs');
+        if (!s2 || !fill1 || !fill2 || !rtxt || !cursor || !notif || !bg || !chat || !msgs) return;
+
+        // ── Instant reset ─────────────────────────────────────────────
+        s2.style.transition = 'none';
+        s2.classList.remove('swiped');
+        void s2.offsetWidth;
+        s2.style.transition = '';
+
+        fill1.style.transition = 'none'; fill1.style.width = '0';
+        fill2.style.transition = 'none'; fill2.style.width = '0';
+        void fill1.offsetWidth;
+
+        rtxt.textContent = 'Send message';
+        rtxt.style.color = '';
+        cursor.classList.remove('blinking');
+
+        notif.style.transition = 'none';
+        notif.classList.remove('visible');
+        void notif.offsetWidth;
+        notif.style.transition = '';
+
+        bg.style.transition   = 'none'; bg.style.opacity   = '1';
+        chat.style.transition = 'none'; chat.style.opacity = '0';
+        msgs.innerHTML = '';
+
+        // ── Phase 1: fill segment 1 over 3 s ─────────────────────────
+        fill1.style.transition = 'width 3000ms linear';
+        fill1.style.width = '100%';
+
+        // ── Phase 2 at 3 s: swipe story 2 in, fill segment 2 over 2.5 s
+        rm2Delay(sess, 3000, function () {
+          s2.classList.add('swiped');
+          fill2.style.transition = 'width 2500ms linear';
+          fill2.style.width = '100%';
+        });
+
+        // ── Phase 3 at 4 s: type reply text ──────────────────────────
+        var REPLY = 'this looks amazing, how does it work?';
+        rm2Delay(sess, 4000, function () {
+          rtxt.textContent = '';
+          cursor.classList.add('blinking');
+          var ci = 0;
+          var iv = setInterval(function () {
+            if (rm2Session !== sess) { clearInterval(iv); return; }
+            if (ci < REPLY.length) {
+              rtxt.textContent = REPLY.slice(0, ++ci);
+            } else {
+              clearInterval(iv);
+            }
+          }, 52);
+        });
+
+        // ── Phase 4 at 6.1 s: sent state ─────────────────────────────
+        rm2Delay(sess, 6100, function () {
+          rtxt.textContent = 'Sent';
+          cursor.classList.remove('blinking');
+        });
+
+        // ── Phase 4 at 6.5 s: notification slides in ─────────────────
+        rm2Delay(sess, 6500, function () { notif.classList.add('visible'); });
+        rm2Delay(sess, 8100, function () { notif.classList.remove('visible'); });
+
+        // ── Phase 5 at 8.6 s: crossfade to chat ──────────────────────
+        rm2Delay(sess, 8600, function () {
+          bg.style.transition   = 'opacity 0.65s ease';
+          bg.style.opacity      = '0';
+          chat.style.transition = 'opacity 0.65s ease';
+          chat.style.opacity    = '1';
+        });
+
+        // ── Phase 6 at 9.4 s: conversation ───────────────────────────
+        var TYPING = 2000;
+        var GAP    = 5000;
+
+        function addBub(cls, text, t) {
+          rm2Delay(sess, t, function () {
+            var b = document.createElement('div');
+            b.className = 'rm1-bubble ' + cls;
+            b.textContent = text;
+            msgs.appendChild(b);
+            chat.scrollTop = chat.scrollHeight;
+          });
+        }
+
+        function addTyping(t, cb) {
+          rm2Delay(sess, t, function () {
+            var typ = document.createElement('div');
+            typ.className = 'rm1-typing in';
+            typ.innerHTML = '<div class="rm1-dot"></div><div class="rm1-dot"></div><div class="rm1-dot"></div>';
+            msgs.appendChild(typ);
+            chat.scrollTop = chat.scrollHeight;
+            rm2Delay(sess, TYPING, function () {
+              if (typ.parentNode) typ.remove();
+              cb();
+              chat.scrollTop = chat.scrollHeight;
+            });
+          });
+        }
+
+        var t = 9400;
+
+        // Story thumbnail (blue mini-preview, right-aligned above first bubble)
+        rm2Delay(sess, t, function () {
+          var thumb = document.createElement('div');
+          thumb.className = 'rm2-story-thumb';
+          msgs.appendChild(thumb);
+          chat.scrollTop = chat.scrollHeight;
+        });
+        t += 400;
+
+        // Outgoing: the story reply they typed
+        addBub('rm1-out', 'this looks amazing, how does it work?', t);
+        t += GAP;
+
+        // Incoming: qualification response (with typing indicator)
+        addTyping(t, function () {
+          var b = document.createElement('div');
+          b.className = 'rm1-bubble rm1-in';
+          b.textContent = 'Hey, thanks for reacting. It replies to DMs, story replies, and comments automatically, in your voice';
+          msgs.appendChild(b);
+          chat.scrollTop = chat.scrollHeight;
+        });
+        t += TYPING + GAP;
+
+        // Outgoing: affirmation
+        addBub('rm1-out', "okay that's actually really useful", t);
+        t += GAP;
+
+        // Incoming: link close (with typing indicator)
+        addTyping(t, function () {
+          var b = document.createElement('div');
+          b.className = 'rm1-bubble rm1-in';
+          b.textContent = "Glad it landed, here's the link to get started";
+          msgs.appendChild(b);
+          chat.scrollTop = chat.scrollHeight;
+          // Link pill: left-aligned (incoming side)
+          rm2Delay(sess, 350, function () {
+            var lnk = document.createElement('div');
+            lnk.className = 'rm1-link';
+            lnk.style.alignSelf = 'flex-start';
+            lnk.textContent = 'app.looped.ltd/start \u2192';
+            msgs.appendChild(lnk);
+            chat.scrollTop = chat.scrollHeight;
+          });
+        });
+        t += TYPING + 2000 + 350;
+
+        // Hold 2 s, crossfade back to phase 1, loop
+        rm2Delay(sess, t, function () {
+          bg.style.transition   = 'opacity 0.7s ease';
+          bg.style.opacity      = '1';
+          chat.style.transition = 'opacity 0.7s ease';
+          chat.style.opacity    = '0';
+          rm2Delay(sess, 900, function () {
+            msgs.innerHTML = '';
+            rm2Play();
+          });
+        });
+      }
+      // ── End slide 2 ──────────────────────────────────────────────────────
+
       function updateReelProgress() {
         var idx = Math.min(Math.round(reelScroller.scrollTop / REEL_SLIDE_H), reelSegs.length - 1);
         reelSegs.forEach(function (seg, i) { seg.classList.toggle('active', i <= idx); });
@@ -1817,6 +2039,8 @@ function landingPage(token, monthlyAmount) {
           reelSlides.forEach(function (slide, i) { slide.classList.toggle('is-active', i === idx); });
           if (prev === 0) rm1Stop();
           if (idx === 0) rm1Play();
+          if (prev === 1) rm2Stop();
+          if (idx === 1) rm2Play();
         }
       }
       reelScroller.addEventListener('scroll', updateReelProgress, { passive: true });
