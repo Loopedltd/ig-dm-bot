@@ -608,7 +608,7 @@ function landingPage(token, monthlyAmount) {
     }
 
     /* FEATURES */
-    .features-wrap { background: var(--bg); border-bottom: 1px solid var(--border); }
+    .features-wrap { background: var(--bg); }
     /* ── Feature section layout (cards + carousel) ── */
     .feat-layout { display: flex; align-items: flex-start; gap: 36px; }
     .feat-left { display: flex; flex-direction: column; gap: 62px; }
