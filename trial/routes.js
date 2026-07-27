@@ -2336,8 +2336,12 @@ function landingPage(token, monthlyAmount) {
         });
         t += TYPING + 2000 + 350;
 
-        // Hold 2 s then fade back and loop
+        // Hold 2 s then fade back to phase 1 (green post) and loop
         rm3Delay(sess, t, function () {
+          // Snap feed back to post 1 instantly (no transition) before the
+          // bg fades in — otherwise the rose post would be visible on fade
+          feed.style.transition = 'none';
+          feed.style.transform  = 'translateY(0)';
           bg.style.transition   = 'opacity 0.7s ease';
           bg.style.opacity      = '1';
           chat.style.transition = 'opacity 0.7s ease';
