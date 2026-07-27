@@ -476,6 +476,11 @@ function landingPage(token, monthlyAmount) {
     nav { height: 60px; padding: 0 28px; display: flex; align-items: center; background: transparent; border-bottom: 1px solid transparent; position: sticky; top: 0; z-index: 10; transition: background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease; }
     nav.nav-scrolled { background: rgba(255,255,255,0.96); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); box-shadow: 0 2px 20px rgba(15,23,42,0.07); }
     .logo { font-weight: 900; font-size: 17px; color: var(--primary); letter-spacing: -0.2px; }
+    .nav-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+    .nav-signin { font-size: 14px; font-weight: 600; color: var(--text); text-decoration: none; padding: 6px 4px; transition: color 0.15s; }
+    .nav-signin:hover { color: var(--primary); }
+    .nav-cta { font-size: 14px; font-weight: 700; color: #fff; background: var(--primary); border: none; border-radius: 8px; padding: 8px 18px; cursor: pointer; font-family: inherit; transition: background 0.15s, box-shadow 0.15s; box-shadow: 0 2px 8px rgba(45,107,255,0.25); }
+    .nav-cta:hover { background: var(--primary-dark); box-shadow: 0 4px 14px rgba(45,107,255,0.35); }
 
     /* HERO SECTION wrapper for gradient */
     .hero-section { position: relative; overflow: hidden; min-height: calc(100dvh - 60px); display: flex; flex-direction: column; justify-content: center; }
@@ -899,6 +904,10 @@ function landingPage(token, monthlyAmount) {
 
 <nav id="mainNav">
   <div class="logo">Looped</div>
+  <div class="nav-actions">
+    <a href="/login" class="nav-signin">Sign in</a>
+    <button class="nav-cta" onclick="startTrial(event)">Get Started</button>
+  </div>
 </nav>
 
 <!-- HERO -->
