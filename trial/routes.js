@@ -870,27 +870,6 @@ function landingPage(token, monthlyAmount) {
     @keyframes rmFThru { 0%,8%{opacity:0;transform:translateY(0)} 16%{opacity:1;transform:translateY(0)} 50%{opacity:1;transform:translateY(52px)} 60%,100%{opacity:0;transform:translateY(52px)} }
     @keyframes rmFCheck { 0%,56%{opacity:0;transform:scale(0.6)} 66%{opacity:1;transform:scale(1.2)} 72%,85%{opacity:1;transform:scale(1)} 95%,100%{opacity:0} }
 
-    /* PRICING */
-    .pricing-card { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; padding: 40px; max-width: 480px; box-shadow: var(--shadow-lg); margin-top: 44px; transition: transform 0.22s ease, box-shadow 0.22s ease; }
-    .pricing-card:hover { transform: translateY(-8px); box-shadow: 0 36px 80px rgba(15,23,42,0.18); }
-    .price-row { display: flex; align-items: flex-start; line-height: 1; margin-bottom: 8px; }
-    .price-sym { font-size: 26px; font-weight: 800; color: var(--text); padding-top: 10px; margin-right: 2px; }
-    .price-num { font-size: 72px; font-weight: 900; letter-spacing: -2px; color: var(--text); }
-    .price-period { font-size: 15px; color: var(--muted); margin-bottom: 28px; }
-    .price-list { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; }
-    .price-list li { font-size: 14px; color: var(--text); display: flex; align-items: center; gap: 10px; }
-    .price-list li::before { content: ""; display: inline-block; width: 18px; height: 18px; flex-shrink: 0; border-radius: 50%; background: rgba(45,107,255,0.09); border: 1px solid rgba(45,107,255,0.20); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6l2.2 2.2L9.5 3.8' stroke='%232d6bff' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: center; }
-    .vs-note { background: rgba(45,107,255,0.05); border: 1px solid rgba(45,107,255,0.12); border-radius: 12px; padding: 16px 18px; font-size: 13px; color: var(--muted); line-height: 1.65; }
-    .vs-note strong { color: var(--text); font-weight: 700; }
-
-    /* GUARANTEE */
-    .guarantee-wrap { background: var(--ok-bg); border-top: 1px solid var(--ok-border); border-bottom: 1px solid var(--ok-border); }
-    .guarantee-card { background: var(--panel); border: 1px solid var(--ok-border); border-radius: 20px; padding: 40px; max-width: 700px; box-shadow: var(--shadow); transition: transform 0.22s ease, box-shadow 0.22s ease; }
-    .guarantee-card:hover { transform: translateY(-8px); box-shadow: 0 24px 52px rgba(15,23,42,0.14); }
-    .guarantee-eyebrow { font-size: 11px; font-weight: 800; color: var(--ok); text-transform: uppercase; letter-spacing: .7px; margin-bottom: 12px; }
-    .guarantee-card h3 { font-size: 22px; font-weight: 900; color: var(--ok); margin-bottom: 12px; letter-spacing: -0.3px; }
-    .guarantee-card p { font-size: 15px; color: var(--muted); line-height: 1.7; }
-
     /* FINAL CTA */
     .final-cta { text-align: center; padding: 68px 32px 60px; }
     .final-cta h2 { font-size: clamp(24px, 3vw, 36px); font-weight: 700; font-family: 'Geist', 'Inter', system-ui, sans-serif; letter-spacing: -0.4px; margin-bottom: 14px; line-height: 1.1; }
@@ -910,9 +889,7 @@ function landingPage(token, monthlyAmount) {
       .hero h1 { letter-spacing: -0.02em; }
       .section { padding: 40px 20px; }
       .stats-section { padding: 44px 20px 44px; }
-      .pricing-card { padding: 28px 22px; }
-      .guarantee-card { padding: 28px 22px; }
-      .final-cta { padding: 48px 20px 44px; }
+.final-cta { padding: 48px 20px 44px; }
       .stats-inner { grid-template-columns: 1fr; }
       .stat-item { border-right: none; border-bottom: 1px solid var(--border); }
       .stat-item:last-child { border-bottom: none; }
@@ -1346,48 +1323,6 @@ function landingPage(token, monthlyAmount) {
         </div>
       </div>
       </div>
-    </div>
-  </div>
-</div>
-
-<!-- PRICING -->
-<div class="section">
-  <div class="section-inner">
-    <div class="section-intro reveal">
-      <div class="section-label">Pricing</div>
-      <div class="section-heading">One flat rate. No surprises.</div>
-      <p class="section-sub">No per-call fees. No percentage of your revenue. Just a simple monthly subscription.</p>
-    </div>
-    <div class="pricing-card reveal">
-      <div class="price-row">
-        <span class="price-sym">£</span>
-        <span class="price-num">${monthlyAmount.replace("£", "")}</span>
-      </div>
-      <div class="price-period">per month, cancel any time</div>
-      <ul class="price-list">
-        <li>Unlimited DM replies</li>
-        <li>Story reply automation</li>
-        <li>Comment keyword triggers</li>
-        <li>GPT-4o-mini powered conversations</li>
-        <li>Full dashboard with lead activity feed</li>
-        <li>7-day free trial included</li>
-      </ul>
-      <div class="vs-note">
-        Most competitors charge <strong>£20 to £100 per booked call</strong> or take a percentage of every sale.
-        Looped charges a flat rate, so the more calls you book, the better the value.
-      </div>
-      <p class="price-note">No charge for 7 days. ${monthlyAmount}/month after the trial. Cancel any time.</p>
-    </div>
-  </div>
-</div>
-
-<!-- GUARANTEE -->
-<div class="section guarantee-wrap">
-  <div class="section-inner">
-    <div class="guarantee-card reveal">
-      <div class="guarantee-eyebrow">Our guarantee</div>
-      <h3>The 3-call guarantee</h3>
-      <p>Don't get 3 qualified calls booked in your first paid month? That month is on us. No questions, no hoops to jump through.</p>
     </div>
   </div>
 </div>
