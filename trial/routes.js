@@ -717,6 +717,7 @@ function landingPage(token, monthlyAmount) {
     .rm3-attach-name { font-size: 9.5px; font-weight: 700; color: #1a1a2e; line-height: 1.2; white-space: nowrap; }
     .rm3-attach-size { font-size: 8.5px; color: rgba(0,0,0,0.4); }
     .rm3-slide .reel-content { margin-bottom: 28px; }
+    #rm3Notif .rm1-notif-icon { background: rgba(192,80,122,0.42); }
 
     /* S4 — Calendar */
     .rm-cal { flex-direction: column; align-items: center; gap: 10px; }
