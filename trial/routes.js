@@ -713,7 +713,7 @@ function landingPage(token, monthlyAmount) {
     /* S1 — DM Voice (4-phase JS-driven) */
     .rm1-bg { position: absolute; inset: 0; overflow: hidden; background: #111318; }
     .rm1-homescreen { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 24px 20px 14px; filter: blur(0.4px); background: #fff; }
-    .rm1-app-grid { display: grid; grid-template-columns: repeat(4,54px); grid-template-rows: repeat(6,54px); gap: 14px; flex-shrink: 0; align-self: center; }
+    .rm1-app-grid { display: grid; grid-template-columns: repeat(4,54px); grid-template-rows: repeat(6,54px); gap: 14px; flex-shrink: 0; align-self: center; margin-top: 40px; }
     .rm1-icon { width: 54px; height: 54px; border-radius: 14px; box-shadow: inset 0 1px 1px rgba(255,255,255,0.25), 0 2px 6px rgba(0,0,0,0.25); }
     .rm1-dock { display: flex; justify-content: space-between; margin-top: auto; padding: 10px 0; width: 258px; align-self: center; background: rgba(15,23,42,0.06); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(15,23,42,0.10); border-radius: 26px; flex-shrink: 0; }
     .rm1-dock-icon { width: 54px; height: 54px; border-radius: 14px; box-shadow: inset 0 1px 1px rgba(255,255,255,0.25), 0 2px 6px rgba(0,0,0,0.25); }
@@ -1147,36 +1147,36 @@ function landingPage(token, monthlyAmount) {
             <div class="rm1-bg">
               <div class="rm1-homescreen" id="rm1Grid">
                 <div class="rm1-app-grid">
-                  <div class="rm1-icon" style="background:rgba(255,95,75,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(75,180,115,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(215,155,55,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(155,75,215,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(65,180,180,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(215,85,115,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(115,115,135,0.55)"></div>
-                  <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(255,135,55,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(75,180,115,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(155,75,215,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(65,180,180,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(255,95,75,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(215,155,55,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(75,130,215,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(215,85,115,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(115,115,135,0.55)"></div>
-                  <div class="rm1-icon" style="background:rgba(75,180,115,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(155,75,215,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(255,135,55,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(65,180,180,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(255,95,75,0.65)"></div>
-                  <div class="rm1-icon" style="background:rgba(215,85,115,0.65)"></div>
+                  <div class="rm1-icon" style="background:rgba(255,95,75,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(75,130,215,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(75,180,115,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(215,155,55,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(155,75,215,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(65,180,180,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(215,85,115,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(115,115,135,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(75,130,215,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(255,135,55,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(75,180,115,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(155,75,215,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(65,180,180,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(255,95,75,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(215,155,55,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(75,130,215,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(215,85,115,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(115,115,135,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(75,180,115,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(155,75,215,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(255,135,55,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(65,180,180,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(255,95,75,1)"></div>
+                  <div class="rm1-icon" style="background:rgba(215,85,115,1)"></div>
                 </div>
                 <div class="rm1-dock">
-                  <div class="rm1-dock-icon" style="background:rgba(75,130,215,0.72)"></div>
-                  <div class="rm1-dock-icon" style="background:rgba(75,180,115,0.72)"></div>
-                  <div class="rm1-dock-icon" style="background:rgba(255,95,75,0.72)"></div>
-                  <div class="rm1-dock-icon" style="background:rgba(155,75,215,0.72)"></div>
+                  <div class="rm1-dock-icon" style="background:rgba(75,130,215,1)"></div>
+                  <div class="rm1-dock-icon" style="background:rgba(75,180,115,1)"></div>
+                  <div class="rm1-dock-icon" style="background:rgba(255,95,75,1)"></div>
+                  <div class="rm1-dock-icon" style="background:rgba(155,75,215,1)"></div>
                 </div>
               </div>
               <div class="rm1-chat" id="rm1Chat">
