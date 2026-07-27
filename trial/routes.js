@@ -613,7 +613,7 @@ function landingPage(token, monthlyAmount) {
     .feat-layout { display: flex; align-items: flex-start; gap: 36px; }
     .feat-left { display: flex; flex-direction: column; gap: 24px; }
     .feat-left .section-heading { margin-bottom: 0; }
-    .reel-wrap { display: flex; justify-content: center; margin-left: 17px; }
+    .reel-wrap { display: flex; justify-content: center; margin-left: 52px; }
     .feat-cards { display: grid; grid-template-columns: repeat(2, 220px); grid-template-rows: repeat(2, 220px); gap: 14px; }
     .feat-card { width: 220px; height: 220px; border-radius: 24px; background: #fff; border: 1px solid rgba(15,23,42,0.06); box-shadow: 0 4px 14px rgba(15,23,42,0.04); position: relative; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 15px 15px; overflow: hidden; flex-shrink: 0; transition: box-shadow 200ms ease, transform 200ms ease; }
     @media (hover: hover) { .feat-card:hover { box-shadow: 0 20px 44px rgba(15,23,42,0.14); transform: translateY(-3px); } }
