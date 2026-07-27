@@ -1104,7 +1104,7 @@ function landingPage(token, monthlyAmount) {
               <div class="fc-fcheck">&#10003;</div>
             </div>
           </div>
-          <div><div class="fc-title">Lead qualification built in</div><div class="fc-desc">Asks the right questions to filter tyre-kickers and push only serious leads to a call</div></div>
+          <div><div class="fc-title">Lead qualification built in</div><div class="fc-desc">Asks the right questions and pushes only serious leads through to a call</div></div>
         </div>
         <!-- Card 4: Custom dashboard -->
         <div class="feat-card" id="fc4">
