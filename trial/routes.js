@@ -682,7 +682,7 @@ function landingPage(token, monthlyAmount) {
     .rm3-post-name { height: 10px; flex: 1; border-radius: 5px; background: rgba(0,0,0,0.12); max-width: 90px; }
     .rm3-post-dots { font-size: 14px; color: rgba(0,0,0,0.3); font-weight: 900; letter-spacing: 2px; line-height: 1; }
     .rm3-post-media { flex: 1; min-height: 200px; position: relative; }
-    .rm3-media-callout { position: absolute; top: 28%; left: 0; right: 0; text-align: center; font-size: 14px; font-weight: 900; color: #ffb340; letter-spacing: 0.2px; text-shadow: 0 1px 5px rgba(0,0,0,0.28); pointer-events: none; }
+    .rm3-media-callout { position: absolute; top: 28%; left: 0; right: 0; text-align: center; font-size: 26px; font-weight: 900; color: #ffb340; letter-spacing: 0.2px; line-height: 1.3; padding: 0 10px; text-shadow: 0 1px 6px rgba(0,0,0,0.30); pointer-events: none; }
     .rm3-post-actions { display: flex; align-items: center; padding: 9px 12px 5px; gap: 14px; flex-shrink: 0; color: #1a1a2e; }
     .rm3-post-spacer { flex: 1; }
     .rm3-post-caption { padding: 2px 12px 16px; font-size: 9.5px; line-height: 1.5; color: #1a1a2e; flex-shrink: 0; }
