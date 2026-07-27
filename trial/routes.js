@@ -486,7 +486,7 @@ function landingPage(token, monthlyAmount) {
     .err-msg { display: none; color: #b42318; font-size: 13px; background: #fff5f5; border: 1px solid rgba(180,35,24,0.18); border-radius: 10px; padding: 11px 16px; max-width: 420px; }
 
     /* DM DEMO */
-    .dm-demo { margin: 54px auto 0; max-width: 320px; }
+    .dm-demo { margin: 54px auto 0; max-width: 320px; position: relative; }
     .dm-phone { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow-lg); overflow: hidden; }
     .dm-header { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); background: rgba(15,23,42,0.02); }
     .dm-avatar { width: 32px; height: 32px; border-radius: 50%; background: rgba(45,107,255,0.12); border: 1px solid rgba(45,107,255,0.20); flex-shrink: 0; }
@@ -512,6 +512,13 @@ function landingPage(token, monthlyAmount) {
     .dm-send-btn:hover:not(:disabled) { background: var(--primary-dark); transform: scale(1.05); }
     .dm-send-btn:disabled { opacity: 0.4; cursor: default; }
     .dm-try-again { display: none; padding: 4px 14px 10px; text-align: center; }
+    .dm-nudge-overlay { position: absolute; inset: 0; background: rgba(11,13,18,0.68); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); opacity: 0; transition: opacity 250ms ease; pointer-events: none; z-index: 10; border-radius: 20px; }
+    .dm-nudge-overlay.visible { opacity: 1; pointer-events: auto; }
+    .dm-nudge-bubble { position: absolute; bottom: -16px; right: -22px; width: 220px; background: #0f172a; border-radius: 16px 16px 4px 16px; padding: 14px 16px; opacity: 0; transition: opacity 220ms ease; pointer-events: none; z-index: 20; box-shadow: 0 8px 32px rgba(0,0,0,0.36); }
+    .dm-nudge-bubble.visible { opacity: 1; pointer-events: auto; }
+    .dm-nudge-copy { font-size: 12px; color: rgba(255,255,255,0.82); line-height: 1.55; margin: 0 0 11px; }
+    .dm-nudge-cta { display: block; width: 100%; background: #2d6bff; color: #fff; border: none; border-radius: 10px; padding: 9px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; text-align: center; }
+    .dm-nudge-cta:hover { background: #1a56e8; }
     .dm-try-again-btn { background: none; border: none; color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; text-decoration: underline; text-underline-offset: 2px; }
     .dm-try-again-btn:hover { color: var(--text); }
     /* CTA pill rendered inside the final AI chat bubble */
@@ -593,7 +600,7 @@ function landingPage(token, monthlyAmount) {
     .features-wrap { background: var(--bg); border-bottom: 1px solid var(--border); }
     .reel-wrap { display: flex; justify-content: center; }
     /* ── Feature section layout (cards + carousel) ── */
-    .feat-row { display: flex; align-items: center; justify-content: center; gap: 20px; margin-top: 44px; }
+    .feat-row { display: flex; align-items: flex-end; justify-content: center; gap: 20px; margin-top: 44px; }
     .feat-cards { display: flex; gap: 12px; }
     .feat-card { width: 168px; height: 168px; border-radius: 22px; background: #0b0d12; box-shadow: 0 4px 28px rgba(0,0,0,0.30); position: relative; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 14px 14px; overflow: hidden; flex-shrink: 0; }
     .fc-icon { width: 40px; height: 40px; border-radius: 12px; background: rgba(45,107,255,0.14); display: flex; align-items: center; justify-content: center; position: absolute; top: 14px; left: 14px; }
@@ -649,26 +656,26 @@ function landingPage(token, monthlyAmount) {
     @keyframes fcFThru { 0%,8%{opacity:0;transform:translateY(0)} 16%{opacity:1;transform:translateY(0)} 50%{opacity:1;transform:translateY(24px)} 58%,100%{opacity:0;transform:translateY(24px)} }
     @keyframes fcFCheck { 0%,54%{opacity:0;transform:scale(0.6)} 64%{opacity:1;transform:scale(1.2)} 70%,84%{opacity:1;transform:scale(1)} 94%,100%{opacity:0} }
     @media (max-width: 820px) { .feat-row { flex-direction: column-reverse; } .feat-cards { flex-wrap: wrap; justify-content: center; } }
-    .reel-card { position: relative; width: 300px; height: 534px; border-radius: 28px; background: #0b0d12; overflow: hidden; flex-shrink: 0; }
-    .reel-home-ind { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); width: 103px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.82); box-shadow: 0 0 0 0.5px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.22); opacity: 0; transition: opacity 175ms ease; pointer-events: none; z-index: 10; }
+    .reel-card { position: relative; width: 345px; height: 614px; border-radius: 32px; background: #0b0d12; overflow: hidden; flex-shrink: 0; }
+    .reel-home-ind { position: absolute; bottom: 7px; left: 50%; transform: translateX(-50%); width: 118px; height: 5px; border-radius: 2.5px; background: rgba(255,255,255,0.82); box-shadow: 0 0 0 0.5px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.22); opacity: 0; transition: opacity 175ms ease; pointer-events: none; z-index: 10; }
     @media (hover: hover) { .reel-card:hover .reel-home-ind { opacity: 1; } }
-    .reel-progress { position: absolute; top: 0; left: 0; right: 44px; display: flex; gap: 4px; padding: 14px 14px 0; z-index: 3; pointer-events: none; }
+    .reel-progress { position: absolute; top: 0; left: 0; right: 51px; display: flex; gap: 4px; padding: 16px 16px 0; z-index: 3; pointer-events: none; }
     .reel-prog-seg { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.18); transition: background 0.25s; }
     .reel-prog-seg.active { background: rgba(255,255,255,0.85); }
     .reel-scroller { position: absolute; inset: 0; overflow-y: scroll; scroll-snap-type: y mandatory; overscroll-behavior: contain; scrollbar-width: none; }
     .reel-scroller::-webkit-scrollbar { display: none; }
-    .reel-slide { height: 534px; scroll-snap-align: start; scroll-snap-stop: always; position: relative; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 52px 32px 20px; overflow: hidden; }
-    .reel-glow { position: absolute; width: 240px; height: 240px; border-radius: 50%; filter: blur(70px); pointer-events: none; animation: reelGlowDrift 6s ease-in-out infinite alternate; }
+    .reel-slide { height: 614px; scroll-snap-align: start; scroll-snap-stop: always; position: relative; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 60px 37px 23px; overflow: hidden; }
+    .reel-glow { position: absolute; width: 276px; height: 276px; border-radius: 50%; filter: blur(70px); pointer-events: none; animation: reelGlowDrift 6s ease-in-out infinite alternate; }
     @keyframes reelGlowDrift { 0% { transform: translate(-15px, -15px) scale(1); } 100% { transform: translate(15px, 25px) scale(1.1); } }
     .reel-content { position: relative; z-index: 1; }
-    .reel-icon-wrap { width: 46px; height: 46px; border-radius: 13px; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; font-size: 22px; }
-    .reel-title { font-size: 17px; font-weight: 800; color: #fff; margin-bottom: 7px; line-height: 1.25; }
-    .reel-desc { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.6; }
-    .reel-rail { position: absolute; right: 0; top: 0; width: 44px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 32px; gap: 22px; z-index: 2; pointer-events: none; }
-    .reel-rail-btn { background: none; border: none; padding: 0; color: rgba(255,255,255,0.65); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; line-height: 1; pointer-events: auto; cursor: pointer; }
+    .reel-icon-wrap { width: 53px; height: 53px; border-radius: 15px; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; font-size: 25px; }
+    .reel-title { font-size: 20px; font-weight: 800; color: #fff; margin-bottom: 8px; line-height: 1.25; }
+    .reel-desc { font-size: 15px; color: rgba(255,255,255,0.5); line-height: 1.6; }
+    .reel-rail { position: absolute; right: 0; top: 0; width: 51px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 37px; gap: 25px; z-index: 2; pointer-events: none; }
+    .reel-rail-btn { background: none; border: none; padding: 0; color: rgba(255,255,255,0.65); width: 51px; height: 51px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 25px; line-height: 1; pointer-events: auto; cursor: pointer; }
 
     /* REEL SLIDE MOCKUPS */
-    .reel-mock { position: absolute; top: 34px; left: 20px; right: 52px; bottom: 178px; display: flex; align-items: center; justify-content: center; pointer-events: none; overflow: hidden; }
+    .reel-mock { position: absolute; top: 39px; left: 23px; right: 60px; bottom: 205px; display: flex; align-items: center; justify-content: center; pointer-events: none; overflow: hidden; }
 
     /* S1 — DM Voice (4-phase JS-driven) */
     .rm1-bg { position: absolute; inset: 0; overflow: hidden; background: #111318; }
@@ -727,13 +734,13 @@ function landingPage(token, monthlyAmount) {
     .rm2-chat::-webkit-scrollbar { display: none; }
     .rm2-story-thumb { width: 74px; height: 100px; border-radius: 10px; background: #3f7dc0; align-self: flex-end; flex-shrink: 0; margin: 6px 4px 2px 0; }
     .rm2-bottom-grad { position: absolute; bottom: 0; left: 0; right: 0; height: 180px; background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.52) 55%, rgba(0,0,0,0.76) 100%); pointer-events: none; z-index: 1; }
-    .rm2-slide .reel-content { margin-bottom: 28px; }
+    .rm2-slide .reel-content { margin-bottom: 32px; }
     @keyframes rm2Blink { 0%,100%{opacity:1} 50%{opacity:0} }
 
     /* S3 — Comment Keyword (JS-driven) */
     .rm3-bg { position: absolute; inset: 0; background: #efefef; overflow: hidden; }
     .rm3-feed-wrap { position: absolute; top: 0; left: 0; right: 0; }
-    .rm3-post { background: #fff; border-bottom: 1px solid rgba(0,0,0,0.07); display: flex; flex-direction: column; min-height: 534px; }
+    .rm3-post { background: #fff; border-bottom: 1px solid rgba(0,0,0,0.07); display: flex; flex-direction: column; min-height: 614px; }
     .rm3-post-hdr { display: flex; align-items: center; gap: 9px; padding: 22px 12px 9px; flex-shrink: 0; }
     .rm3-post-av { width: 30px; height: 30px; border-radius: 50%; background: rgba(0,0,0,0.13); flex-shrink: 0; }
     .rm3-post-name { height: 10px; flex: 1; border-radius: 5px; background: rgba(0,0,0,0.12); max-width: 90px; }
@@ -773,7 +780,7 @@ function landingPage(token, monthlyAmount) {
     .rm3-attach-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .rm3-attach-name { font-size: 9.5px; font-weight: 700; color: #1a1a2e; line-height: 1.2; white-space: nowrap; }
     .rm3-attach-size { font-size: 8.5px; color: rgba(0,0,0,0.4); }
-    .rm3-slide .reel-content { margin-bottom: 28px; }
+    .rm3-slide .reel-content { margin-bottom: 32px; }
     #rm3Notif .rm1-notif-icon { background: rgba(192,80,122,0.42); }
 
     /* S4 — Calendar */
@@ -908,6 +915,7 @@ function landingPage(token, monthlyAmount) {
     <!-- INTERACTIVE DM DEMO -->
     <div class="dm-demo">
       <div class="dm-phone">
+        <div class="dm-nudge-overlay" id="dm-nudge-overlay"></div>
         <div class="dm-header">
           <div class="dm-avatar"></div>
           <div>
@@ -930,6 +938,10 @@ function landingPage(token, monthlyAmount) {
         <div class="dm-try-again" id="dm-try-again">
           <button class="dm-try-again-btn" id="dm-try-again-btn">Try again</button>
         </div>
+      </div>
+      <div class="dm-nudge-bubble" id="dm-nudge-bubble">
+        <p class="dm-nudge-copy">Liked what you saw? This is exactly what Looped does for your DMs, every day, automatically.</p>
+        <button class="dm-nudge-cta" onclick="startTrial(event)">Start your 7-day free trial</button>
       </div>
     </div>
   </div>
@@ -1575,7 +1587,17 @@ function landingPage(token, monthlyAmount) {
 
       dmSendBtn.addEventListener('click', dmSend);
       dmInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') dmSend(); });
-      if (dmTryBtn) dmTryBtn.addEventListener('click', dmReset);
+      if (dmTryBtn) dmTryBtn.addEventListener('click', function () {
+        var count = parseInt(sessionStorage.getItem('dm_try_count') || '0', 10) + 1;
+        sessionStorage.setItem('dm_try_count', String(count));
+        dmReset();
+        if (count >= 4) {
+          var nudgeOverlay = document.getElementById('dm-nudge-overlay');
+          var nudgeBubble  = document.getElementById('dm-nudge-bubble');
+          if (nudgeOverlay) nudgeOverlay.classList.add('visible');
+          if (nudgeBubble)  nudgeBubble.classList.add('visible');
+        }
+      });
     }
   } catch (e) { console.warn('[looped] dm demo error:', e); }
 
@@ -1865,7 +1887,7 @@ function landingPage(token, monthlyAmount) {
     var reelSegs = document.querySelectorAll('#reelProgress .reel-prog-seg');
     var reelSlides = reelScroller ? Array.prototype.slice.call(reelScroller.querySelectorAll('.reel-slide')) : [];
     if (reelScroller && reelSegs.length) {
-      var REEL_SLIDE_H = 534;
+      var REEL_SLIDE_H = 614;
       var reelActiveIdx = 0;
       var rm1AutoAdvanced = false;
       var rm2AutoAdvanced = false;
@@ -2286,7 +2308,7 @@ function landingPage(token, monthlyAmount) {
         // Phase 2: scroll to post 2 (rose, 0.5 s transition + 2.5 s hold)
         rm3Delay(sess, 2500, function () {
           feed.style.transition = 'transform 0.5s cubic-bezier(0.22,1,0.36,1)';
-          feed.style.transform  = 'translateY(-534px)';
+          feed.style.transform  = 'translateY(-614px)';
         });
 
         // Phase 3: comment sheet slides up
