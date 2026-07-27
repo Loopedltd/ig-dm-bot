@@ -871,7 +871,7 @@ function landingPage(token, monthlyAmount) {
     @keyframes rmFCheck { 0%,56%{opacity:0;transform:scale(0.6)} 66%{opacity:1;transform:scale(1.2)} 72%,85%{opacity:1;transform:scale(1)} 95%,100%{opacity:0} }
 
     /* FINAL CTA */
-    .final-cta { text-align: center; padding: 68px 32px 60px; position: relative; overflow: hidden; }
+    .final-cta { text-align: center; padding: 68px 32px 60px; position: relative; overflow: hidden; min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
     .cta-gradient { position: absolute; inset: -30%; pointer-events: none; z-index: 0; }
     .cta-inner { position: relative; z-index: 1; }
     .final-cta h2 { font-size: clamp(24px, 3vw, 36px); font-weight: 700; font-family: 'Geist', 'Inter', system-ui, sans-serif; letter-spacing: -0.4px; margin-bottom: 36px; line-height: 1.1; }
