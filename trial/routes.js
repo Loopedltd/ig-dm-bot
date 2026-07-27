@@ -753,6 +753,9 @@ function landingPage(token, monthlyAmount) {
     .rm2-s2 { position: absolute; inset: 0; background: #3f7dc0; transform: translateX(100%); transition: transform 0.5s cubic-bezier(0.22,1,0.36,1); }
     .rm2-s2.swiped { transform: translateX(0); }
     .rm2-prog { position: absolute; top: 36px; left: 14px; right: 58px; display: flex; gap: 5px; z-index: 2; pointer-events: none; }
+    .rm2-story-hdr { position: absolute; top: 58px; left: 14px; right: 58px; display: flex; align-items: center; gap: 9px; z-index: 2; pointer-events: none; }
+    .rm2-story-av { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,0.60); flex-shrink: 0; }
+    .rm2-story-name { height: 10px; border-radius: 5px; background: rgba(255,255,255,0.45); max-width: 90px; flex: 1; }
     .rm2-seg { flex: 1; height: 2.5px; border-radius: 2px; background: rgba(255,255,255,0.28); overflow: hidden; }
     .rm2-seg-fill { height: 100%; width: 0; background: rgba(255,255,255,0.88); border-radius: 2px; }
     .rm2-reply { position: absolute; bottom: 16px; left: 14px; right: 14px; display: flex; align-items: center; gap: 8px; z-index: 2; }
@@ -1209,6 +1212,10 @@ function landingPage(token, monthlyAmount) {
               <div class="rm2-prog">
                 <div class="rm2-seg"><div class="rm2-seg-fill" id="rm2Fill1"></div></div>
                 <div class="rm2-seg"><div class="rm2-seg-fill" id="rm2Fill2"></div></div>
+              </div>
+              <div class="rm2-story-hdr">
+                <div class="rm2-story-av"></div>
+                <div class="rm2-story-name"></div>
               </div>
               <div class="rm2-reply">
                 <div class="rm2-reply-pill"><span class="rm2-reply-typed" id="rm2ReplyTxt">Send message</span><span class="rm2-cursor" id="rm2Cursor"></span></div>
