@@ -591,7 +591,64 @@ function landingPage(token, monthlyAmount) {
 
     /* FEATURES */
     .features-wrap { background: var(--bg); border-bottom: 1px solid var(--border); }
-    .reel-wrap { display: flex; justify-content: center; margin-top: 44px; }
+    .reel-wrap { display: flex; justify-content: center; }
+    /* ── Feature section layout (cards + carousel) ── */
+    .feat-row { display: flex; align-items: center; justify-content: center; gap: 20px; margin-top: 44px; }
+    .feat-cards { display: flex; gap: 12px; }
+    .feat-card { width: 168px; height: 168px; border-radius: 22px; background: #0b0d12; box-shadow: 0 4px 28px rgba(0,0,0,0.30); position: relative; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 14px 14px; overflow: hidden; flex-shrink: 0; }
+    .fc-icon { width: 40px; height: 40px; border-radius: 12px; background: rgba(45,107,255,0.14); display: flex; align-items: center; justify-content: center; position: absolute; top: 14px; left: 14px; }
+    .fc-title { font-size: 13px; font-weight: 800; color: #fff; margin-bottom: 4px; line-height: 1.3; }
+    .fc-desc { font-size: 10.5px; color: rgba(255,255,255,0.46); line-height: 1.5; }
+    /* Card 1 — Calendar */
+    .fc-cal-inner { display: flex; flex-direction: column; align-items: center; gap: 2px; opacity: 0; }
+    .fc-cal-grid { display: grid; grid-template-columns: repeat(3,8px); gap: 2px; }
+    .fc-cal-cell { width: 8px; height: 8px; border-radius: 2px; background: rgba(255,255,255,0.10); }
+    .fc-cal-pick { transition: background 0.3s, box-shadow 0.3s; }
+    .fc-cal-confirm { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.85); opacity: 0; }
+    .feat-card.fc-visible .fc-cal-inner { animation: fcCalFade 4s ease infinite; }
+    .feat-card.fc-visible .fc-cal-pick { animation: fcCalPick 4s ease infinite; }
+    .feat-card.fc-visible .fc-cal-confirm { animation: fcCalConfirm 4s ease infinite; }
+    @keyframes fcCalFade { 0%,6%{opacity:0} 14%,84%{opacity:1} 94%,100%{opacity:0} }
+    @keyframes fcCalPick { 0%,26%{background:rgba(255,255,255,0.10);box-shadow:none} 40%,80%{background:rgba(45,107,255,0.55);box-shadow:0 0 6px rgba(45,107,255,0.4)} 93%,100%{background:rgba(255,255,255,0.10);box-shadow:none} }
+    @keyframes fcCalConfirm { 0%,40%{opacity:0;transform:scale(0.8)} 52%{opacity:1;transform:scale(1.1)} 58%,80%{opacity:1;transform:scale(1)} 93%,100%{opacity:0} }
+    /* Card 2 — Clock */
+    .fc-clk-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; opacity: 0; }
+    .fc-clock { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.22); position: relative; flex-shrink: 0; }
+    .fc-clock::before { content:''; position:absolute; top:2px; left:50%; width:1.5px; height:3px; background:rgba(255,255,255,0.28); transform:translateX(-50%); border-radius:1px; }
+    .fc-clock::after { content:''; position:absolute; bottom:2px; left:50%; width:1.5px; height:3px; background:rgba(255,255,255,0.28); transform:translateX(-50%); border-radius:1px; }
+    .fc-ch { position:absolute; bottom:50%; left:50%; transform-origin:50% 100%; border-radius:1px; background:rgba(255,255,255,0.8); }
+    .fc-ch-hr { width:1.5px; height:7px; margin-left:-0.75px; }
+    .fc-ch-mn { width:1px; height:10px; margin-left:-0.5px; }
+    .fc-clock-ctr { position:absolute; top:50%; left:50%; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,0.9); transform:translate(-50%,-50%); z-index:1; }
+    .fc-clock-bubble { width:12px; height:9px; border-radius:3px 3px 3px 0; background:rgba(45,107,255,0.75); opacity:0; flex-shrink:0; }
+    .feat-card.fc-visible .fc-clk-wrap { animation: fcClkFace 3.5s ease infinite; }
+    .feat-card.fc-visible .fc-ch-hr { animation: fcClkSweep 3.2s linear infinite; }
+    .feat-card.fc-visible .fc-ch-mn { animation: fcClkSweep 0.85s linear infinite; }
+    .feat-card.fc-visible .fc-clock-bubble { animation: fcClkBubble 3.5s ease infinite; }
+    @keyframes fcClkFace { 0%,6%{opacity:0} 14%,84%{opacity:1} 94%,100%{opacity:0} }
+    @keyframes fcClkSweep { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+    @keyframes fcClkBubble { 0%,46%{opacity:0;transform:scale(0.5)} 56%,80%{opacity:1;transform:scale(1)} 92%,100%{opacity:0} }
+    /* Card 3 — Funnel */
+    .fc-funnel-wrap { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+    .fc-funnel { position: relative; width: 32px; height: 28px; flex-shrink: 0; }
+    .fc-funnel-svg { display: block; opacity: 0; }
+    .fc-fdot { position:absolute; top:2px; width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.65); opacity:0; }
+    .fc-fd1 { left:3px; }
+    .fc-fd2 { left:24px; }
+    .fc-fd3 { left:13px; }
+    .fc-fd4 { left:13px; background:rgba(45,107,255,0.9); }
+    .fc-fcheck { font-size:10px; font-weight:700; color:rgba(255,255,255,0.85); opacity:0; }
+    .feat-card.fc-visible .fc-funnel-svg { animation: fcFShow 4s ease infinite; }
+    .feat-card.fc-visible .fc-fd1 { animation: fcFOut 4s ease 0.1s infinite; }
+    .feat-card.fc-visible .fc-fd2 { animation: fcFOut 4s ease 0.3s infinite; }
+    .feat-card.fc-visible .fc-fd3 { animation: fcFOut 4s ease 0s infinite; }
+    .feat-card.fc-visible .fc-fd4 { animation: fcFThru 4s ease 0.15s infinite; }
+    .feat-card.fc-visible .fc-fcheck { animation: fcFCheck 4s ease infinite; }
+    @keyframes fcFShow { 0%,5%{opacity:0} 12%,84%{opacity:0.7} 94%,100%{opacity:0} }
+    @keyframes fcFOut { 0%,8%{opacity:0;transform:translateY(0)} 16%{opacity:0.8;transform:translateY(0)} 42%{opacity:0;transform:translateY(14px)} 100%{opacity:0;transform:translateY(14px)} }
+    @keyframes fcFThru { 0%,8%{opacity:0;transform:translateY(0)} 16%{opacity:1;transform:translateY(0)} 50%{opacity:1;transform:translateY(24px)} 58%,100%{opacity:0;transform:translateY(24px)} }
+    @keyframes fcFCheck { 0%,54%{opacity:0;transform:scale(0.6)} 64%{opacity:1;transform:scale(1.2)} 70%,84%{opacity:1;transform:scale(1)} 94%,100%{opacity:0} }
+    @media (max-width: 820px) { .feat-row { flex-direction: column-reverse; } .feat-cards { flex-wrap: wrap; justify-content: center; } }
     .reel-card { position: relative; width: 300px; height: 534px; border-radius: 28px; background: #0b0d12; overflow: hidden; flex-shrink: 0; }
     .reel-home-ind { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); width: 103px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.82); box-shadow: 0 0 0 0.5px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.22); opacity: 0; transition: opacity 175ms ease; pointer-events: none; z-index: 10; }
     @media (hover: hover) { .reel-card:hover .reel-home-ind { opacity: 1; } }
@@ -990,13 +1047,57 @@ function landingPage(token, monthlyAmount) {
     <div class="section-intro reveal">
       <div class="section-heading">Features</div>
     </div>
-    <div class="reel-wrap reveal">
+    <div class="feat-row reveal">
+      <div class="feat-cards">
+        <!-- Card 1: Books calls for you -->
+        <div class="feat-card" id="fc1">
+          <div class="fc-icon">
+            <div class="fc-cal-inner">
+              <div class="fc-cal-grid">
+                <div class="fc-cal-cell"></div><div class="fc-cal-cell"></div><div class="fc-cal-cell"></div>
+                <div class="fc-cal-cell fc-cal-pick"></div><div class="fc-cal-cell"></div><div class="fc-cal-cell"></div>
+                <div class="fc-cal-cell"></div><div class="fc-cal-cell"></div><div class="fc-cal-cell"></div>
+              </div>
+              <div class="fc-cal-confirm">&#10003;</div>
+            </div>
+          </div>
+          <div><div class="fc-title">Books calls for you</div><div class="fc-desc">Handles objections, builds trust, and drives every warm lead to your booking link.</div></div>
+        </div>
+        <!-- Card 2: 24/7 response time -->
+        <div class="feat-card" id="fc2">
+          <div class="fc-icon">
+            <div class="fc-clk-wrap">
+              <div class="fc-clock">
+                <div class="fc-ch fc-ch-hr"></div>
+                <div class="fc-ch fc-ch-mn"></div>
+                <div class="fc-clock-ctr"></div>
+              </div>
+              <div class="fc-clock-bubble"></div>
+            </div>
+          </div>
+          <div><div class="fc-title">24/7 response time</div><div class="fc-desc">Replies in seconds at any hour. No more leads going cold because you were busy.</div></div>
+        </div>
+        <!-- Card 3: Lead qualification -->
+        <div class="feat-card" id="fc3">
+          <div class="fc-icon">
+            <div class="fc-funnel-wrap">
+              <div class="fc-funnel">
+                <svg class="fc-funnel-svg" viewBox="0 0 36 32" width="32" height="28" fill="none"><path d="M2 2L34 2L24 22L24 30L12 30L12 22Z" stroke="rgba(255,255,255,0.25)" stroke-width="1.5" stroke-linejoin="round" fill="rgba(255,255,255,0.04)"/></svg>
+                <div class="fc-fdot fc-fd1"></div>
+                <div class="fc-fdot fc-fd2"></div>
+                <div class="fc-fdot fc-fd3"></div>
+                <div class="fc-fdot fc-fd4"></div>
+              </div>
+              <div class="fc-fcheck">&#10003;</div>
+            </div>
+          </div>
+          <div><div class="fc-title">Lead qualification built in</div><div class="fc-desc">Asks the right questions to filter tyre-kickers and push only serious leads to a call.</div></div>
+        </div>
+      </div>
+      <div class="reel-wrap">
       <div class="reel-card">
         <div class="reel-progress" id="reelProgress">
           <div class="reel-prog-seg active"></div>
-          <div class="reel-prog-seg"></div>
-          <div class="reel-prog-seg"></div>
-          <div class="reel-prog-seg"></div>
           <div class="reel-prog-seg"></div>
           <div class="reel-prog-seg"></div>
         </div>
@@ -1187,55 +1288,6 @@ function landingPage(token, monthlyAmount) {
               <div class="reel-desc">Comment a keyword on your post and get an instant comment reply and DM, perfect for lead magnets.</div>
             </div>
           </div>
-          <!-- S4: Calendar -->
-          <div class="reel-slide">
-            <div class="reel-glow" style="background:rgba(255,154,60,0.4);top:15%;left:25%;"></div>
-            <div class="reel-mock rm-cal">
-              <div class="rm-cal-grid">
-                <div class="rm-cal-cell"></div><div class="rm-cal-cell"></div><div class="rm-cal-cell"></div><div class="rm-cal-cell"></div>
-                <div class="rm-cal-cell rm-cal-pick"></div><div class="rm-cal-cell"></div><div class="rm-cal-cell"></div><div class="rm-cal-cell"></div>
-              </div>
-              <div class="rm-cal-confirm">&#10003;&#160;booked</div>
-            </div>
-            <div class="reel-content">
-              <div class="reel-title">Books calls for you</div>
-              <div class="reel-desc">Handles objections, builds trust, and drives every warm lead to your booking link.</div>
-            </div>
-          </div>
-          <!-- S5: Clock -->
-          <div class="reel-slide">
-            <div class="reel-glow" style="background:rgba(45,107,255,0.45);top:8%;left:40%;"></div>
-            <div class="reel-mock rm-clock-wrap">
-              <div class="rm-clock-face">
-                <div class="rm-ch rm-ch-hr"></div>
-                <div class="rm-ch rm-ch-mn"></div>
-                <div class="rm-clock-ctr"></div>
-              </div>
-              <div class="rm-clock-msg">replied instantly</div>
-            </div>
-            <div class="reel-content">
-              <div class="reel-title">24/7 response time</div>
-              <div class="reel-desc">Replies in seconds at any hour. No more leads going cold because you were busy.</div>
-            </div>
-          </div>
-          <!-- S6: Funnel -->
-          <div class="reel-slide">
-            <div class="reel-glow" style="background:rgba(220,60,120,0.4);top:18%;left:15%;"></div>
-            <div class="reel-mock rm-funnel-wrap">
-              <div class="rm-funnel-body">
-                <svg class="rm-funnel-svg" viewBox="0 0 80 70" width="80" height="70" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 4 L76 4 L52 50 L52 66 L28 66 L28 50 Z" stroke="rgba(255,255,255,0.22)" stroke-width="1.5" stroke-linejoin="round" fill="rgba(255,255,255,0.04)"/></svg>
-                <div class="rm-fdot rm-fd1"></div>
-                <div class="rm-fdot rm-fd2"></div>
-                <div class="rm-fdot rm-fd3"></div>
-                <div class="rm-fdot rm-fd4"></div>
-              </div>
-              <div class="rm-funnel-check">&#10003;</div>
-            </div>
-            <div class="reel-content">
-              <div class="reel-title">Lead qualification built in</div>
-              <div class="reel-desc">Asks the right questions to filter tyre-kickers and push only serious leads to a call.</div>
-            </div>
-          </div>
         </div>
         <div class="reel-rail">
           <button class="reel-rail-btn" onclick="startTrial(event)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
@@ -1243,6 +1295,7 @@ function landingPage(token, monthlyAmount) {
           <button class="reel-rail-btn" onclick="startTrial(event)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
           <button class="reel-rail-btn" onclick="startTrial(event)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
         </div>
+      </div>
       </div>
     </div>
   </div>
@@ -1594,6 +1647,21 @@ function landingPage(token, monthlyAmount) {
       revealEls.forEach(function (el) { revealObs.observe(el); });
     }
   } catch (e) { console.warn('[looped] reveal error:', e); }
+
+  // ── Feat-card animation gating (IntersectionObserver) ─────────────────
+  try {
+    var fcEls = document.querySelectorAll('.feat-card');
+    if (fcEls.length && typeof IntersectionObserver !== 'undefined') {
+      var fcObs = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          entry.target.classList.toggle('fc-visible', entry.isIntersecting);
+        });
+      }, { threshold: 0.15 });
+      fcEls.forEach(function (el) { fcObs.observe(el); });
+    } else {
+      fcEls.forEach(function (el) { el.classList.add('fc-visible'); });
+    }
+  } catch (e) { console.warn('[looped] feat-card observer error:', e); }
 
   // ── 6. HOW IT WORKS STEP SWITCHER + PANEL ANIMATIONS ───────────────────────
   try {
