@@ -677,11 +677,12 @@ function landingPage(token, monthlyAmount) {
     .rm3-bg { position: absolute; inset: 0; background: #efefef; overflow: hidden; }
     .rm3-feed-wrap { position: absolute; top: 0; left: 0; right: 0; }
     .rm3-post { background: #fff; border-bottom: 1px solid rgba(0,0,0,0.07); display: flex; flex-direction: column; min-height: 534px; }
-    .rm3-post-hdr { display: flex; align-items: center; gap: 9px; padding: 9px 12px; flex-shrink: 0; }
+    .rm3-post-hdr { display: flex; align-items: center; gap: 9px; padding: 22px 12px 9px; flex-shrink: 0; }
     .rm3-post-av { width: 30px; height: 30px; border-radius: 50%; background: rgba(0,0,0,0.13); flex-shrink: 0; }
     .rm3-post-name { height: 10px; flex: 1; border-radius: 5px; background: rgba(0,0,0,0.12); max-width: 90px; }
     .rm3-post-dots { font-size: 14px; color: rgba(0,0,0,0.3); font-weight: 900; letter-spacing: 2px; line-height: 1; }
-    .rm3-post-media { flex: 1; min-height: 200px; }
+    .rm3-post-media { flex: 1; min-height: 200px; position: relative; }
+    .rm3-media-callout { position: absolute; top: 28%; left: 0; right: 0; text-align: center; font-size: 14px; font-weight: 900; color: #ffb340; letter-spacing: 0.2px; text-shadow: 0 1px 5px rgba(0,0,0,0.28); pointer-events: none; }
     .rm3-post-actions { display: flex; align-items: center; padding: 9px 12px 5px; gap: 14px; flex-shrink: 0; color: #1a1a2e; }
     .rm3-post-spacer { flex: 1; }
     .rm3-post-caption { padding: 2px 12px 16px; font-size: 9.5px; line-height: 1.5; color: #1a1a2e; flex-shrink: 0; }
@@ -699,7 +700,7 @@ function landingPage(token, monthlyAmount) {
     .rm3-looped-text { font-size: 9px; color: #555; line-height: 1.4; }
     .rm3-sheet-input { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-top: 1px solid rgba(0,0,0,0.08); flex-shrink: 0; }
     .rm3-input-av { width: 22px; height: 22px; border-radius: 50%; background: rgba(0,0,0,0.12); flex-shrink: 0; }
-    .rm3-input-field { flex: 1; background: rgba(0,0,0,0.05); border-radius: 18px; padding: 6px 11px; font-size: 9.5px; color: rgba(0,0,0,0.35); display: flex; align-items: center; min-width: 0; }
+    .rm3-input-field { flex: 1; background: rgba(0,0,0,0.05); border-radius: 18px; padding: 6px 11px; font-size: 9.5px; color: rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: flex-start; min-width: 0; }
     .rm3-input-ph { white-space: nowrap; overflow: hidden; }
     .rm3-input-typed { color: #1a1a2e; font-weight: 600; white-space: nowrap; }
     .rm3-input-cursor { display: inline-block; width: 1.5px; height: 9px; background: #1a1a2e; vertical-align: middle; margin-left: 1px; opacity: 0; }
@@ -1129,7 +1130,7 @@ function landingPage(token, monthlyAmount) {
                     <div class="rm3-post-name"></div>
                     <div class="rm3-post-dots">&#xB7;&#xB7;&#xB7;</div>
                   </div>
-                  <div class="rm3-post-media" style="background:#c0507a"></div>
+                  <div class="rm3-post-media" style="background:#c0507a"><div class="rm3-media-callout">Comment INFO below</div></div>
                   <div class="rm3-post-actions">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -2189,7 +2190,7 @@ function landingPage(token, monthlyAmount) {
         notif.classList.remove('visible');
         void notif.offsetWidth;
         notif.style.transition = '';
-        inputPh.style.opacity = '';
+        inputPh.style.display = '';
         typed.textContent = '';
         cursor.classList.remove('blinking');
         msgs.innerHTML = '';
@@ -2226,7 +2227,7 @@ function landingPage(token, monthlyAmount) {
 
         // Phase 4: type "INFO" in the comment field
         rm3Delay(sess, 8000, function () {
-          inputPh.style.opacity = '0';
+          inputPh.style.display = 'none';
           cursor.classList.add('blinking');
           var word = 'INFO';
           var i = 0;
