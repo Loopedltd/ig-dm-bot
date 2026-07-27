@@ -673,25 +673,49 @@ function landingPage(token, monthlyAmount) {
     .rm2-slide .reel-content { margin-bottom: 28px; }
     @keyframes rm2Blink { 0%,100%{opacity:1} 50%{opacity:0} }
 
-    /* S3 — Comment Keyword */
-    .rm-comment { flex-direction: column; align-items: center; gap: 10px; }
-    .rm-c-field { display: inline-flex; align-items: center; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 6px 10px; font-size: 11px; color: rgba(255,255,255,0.6); gap: 2px; }
-    .rm-c-label { color: rgba(255,255,255,0.3); }
-    .rm-c-word { overflow: hidden; white-space: nowrap; display: inline-block; width: 0; color: rgba(255,255,255,0.85); font-weight: 700; letter-spacing: 0.5px; }
-    .rm-c-cur { display: inline-block; width: 1.5px; height: 0.85em; background: rgba(255,255,255,0.7); margin-left: 1px; vertical-align: text-bottom; opacity: 0; }
-    .rm-c-notif { font-size: 11px; padding: 5px 10px; background: rgba(45,107,255,0.22); border: 1px solid rgba(45,107,255,0.28); border-radius: 10px; color: rgba(255,255,255,0.75); white-space: nowrap; }
-    .reel-slide .rm-c-field { opacity: 0; animation: none; }
-    .reel-slide .rm-c-word { width: 0; animation: none; }
-    .reel-slide .rm-c-cur { opacity: 0; animation: none; }
-    .reel-slide .rm-c-notif { opacity: 0; animation: none; }
-    .reel-slide.is-active .rm-c-field { animation: rmCField 5.5s ease infinite; }
-    .reel-slide.is-active .rm-c-word { animation: rmCWord 5.5s linear infinite; }
-    .reel-slide.is-active .rm-c-cur { animation: rmCCur 5.5s step-end infinite; }
-    .reel-slide.is-active .rm-c-notif { animation: rmCNotif 5.5s ease infinite; }
-    @keyframes rmCField { 0%,5%{opacity:0} 12%,88%{opacity:1} 96%,100%{opacity:0} }
-    @keyframes rmCWord { 0%,10%{width:0} 36%{width:2.5em} 80%{width:2.5em} 92%,100%{width:0} }
-    @keyframes rmCCur { 0%,9%{opacity:1} 10%{opacity:0} 11%{opacity:1} 12%{opacity:0} 13%{opacity:1} 14%{opacity:0} 15%{opacity:1} 16%{opacity:0} 17%{opacity:1} 18%{opacity:0} 19%{opacity:1} 20%{opacity:0} 21%{opacity:1} 22%{opacity:0} 23%{opacity:1} 24%{opacity:0} 25%{opacity:1} 26%{opacity:0} 27%{opacity:1} 28%{opacity:0} 29%{opacity:1} 30%{opacity:0} 31%{opacity:1} 32%{opacity:0} 33%{opacity:1} 34%{opacity:0} 35%{opacity:1} 36%{opacity:0} 37%,100%{opacity:0} }
-    @keyframes rmCNotif { 0%,44%{opacity:0;transform:translateY(7px)} 54%,80%{opacity:1;transform:translateY(0)} 92%,100%{opacity:0} }
+    /* S3 — Comment Keyword (JS-driven) */
+    .rm3-bg { position: absolute; inset: 0; background: #efefef; overflow: hidden; }
+    .rm3-feed-wrap { position: absolute; top: 0; left: 0; right: 0; }
+    .rm3-post { background: #fff; border-bottom: 1px solid rgba(0,0,0,0.07); display: flex; flex-direction: column; min-height: 534px; }
+    .rm3-post-hdr { display: flex; align-items: center; gap: 9px; padding: 9px 12px; flex-shrink: 0; }
+    .rm3-post-av { width: 30px; height: 30px; border-radius: 50%; background: rgba(0,0,0,0.13); flex-shrink: 0; }
+    .rm3-post-name { height: 10px; flex: 1; border-radius: 5px; background: rgba(0,0,0,0.12); max-width: 90px; }
+    .rm3-post-dots { font-size: 14px; color: rgba(0,0,0,0.3); font-weight: 900; letter-spacing: 2px; line-height: 1; }
+    .rm3-post-media { flex: 1; min-height: 200px; }
+    .rm3-post-actions { display: flex; align-items: center; padding: 9px 12px 5px; gap: 14px; flex-shrink: 0; color: #1a1a2e; }
+    .rm3-post-spacer { flex: 1; }
+    .rm3-post-caption { padding: 2px 12px 16px; font-size: 9.5px; line-height: 1.5; color: #1a1a2e; flex-shrink: 0; }
+    .rm3-kw { color: #d4640a; font-weight: 700; }
+    .rm3-sheet { position: absolute; bottom: 0; left: 0; right: 0; height: 78%; background: #fff; border-radius: 16px 16px 0 0; transform: translateY(100%); transition: transform 0.42s cubic-bezier(0.22,1,0.36,1); display: flex; flex-direction: column; z-index: 2; box-shadow: 0 -4px 24px rgba(0,0,0,0.10); }
+    .rm3-sheet.open { transform: translateY(0); }
+    .rm3-sheet-handle { width: 36px; height: 4px; border-radius: 2px; background: rgba(0,0,0,0.14); align-self: center; margin: 10px 0 6px; flex-shrink: 0; }
+    .rm3-sheet-title { font-size: 12px; font-weight: 700; color: #1a1a2e; text-align: center; padding-bottom: 10px; border-bottom: 1px solid rgba(0,0,0,0.08); flex-shrink: 0; }
+    .rm3-sheet-list { flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 6px 0; }
+    .rm3-cmt { padding: 5px 12px 2px; }
+    .rm3-cmt-user { font-size: 9px; font-weight: 700; color: #1a1a2e; margin-bottom: 2px; }
+    .rm3-cmt-text { font-size: 9.5px; color: #444; line-height: 1.4; }
+    .rm3-looped-reply { margin: 2px 12px 6px 26px; padding-left: 7px; border-left: 2px solid #2d6bff; }
+    .rm3-looped-name { font-size: 8.5px; font-weight: 700; color: #2d6bff; margin-bottom: 1px; }
+    .rm3-looped-text { font-size: 9px; color: #555; line-height: 1.4; }
+    .rm3-sheet-input { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-top: 1px solid rgba(0,0,0,0.08); flex-shrink: 0; }
+    .rm3-input-av { width: 22px; height: 22px; border-radius: 50%; background: rgba(0,0,0,0.12); flex-shrink: 0; }
+    .rm3-input-field { flex: 1; background: rgba(0,0,0,0.05); border-radius: 18px; padding: 6px 11px; font-size: 9.5px; color: rgba(0,0,0,0.35); display: flex; align-items: center; min-width: 0; }
+    .rm3-input-ph { white-space: nowrap; overflow: hidden; }
+    .rm3-input-typed { color: #1a1a2e; font-weight: 600; white-space: nowrap; }
+    .rm3-input-cursor { display: inline-block; width: 1.5px; height: 9px; background: #1a1a2e; vertical-align: middle; margin-left: 1px; opacity: 0; }
+    .rm3-input-cursor.blinking { animation: rm3Blink 0.85s step-end infinite; opacity: 1; }
+    .rm3-input-send { color: #2d6bff; flex-shrink: 0; }
+    @keyframes rm3Blink { 0%,100%{opacity:1} 50%{opacity:0} }
+    .rm3-chat { position: absolute; inset: 0; background: #f2f2f4; overflow-y: scroll; scrollbar-width: none; display: flex; flex-direction: column; opacity: 0; padding-bottom: 80px; }
+    .rm3-chat::-webkit-scrollbar { display: none; }
+    .rm3-post-thumb { width: 74px; height: 74px; border-radius: 8px; background: #c0507a; align-self: flex-start; flex-shrink: 0; margin: 6px 0 2px 4px; }
+    .rm3-attachment { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.06); border-radius: 10px; padding: 8px 10px; margin: 3px 4px 0; align-self: flex-start; max-width: 82%; flex-shrink: 0; }
+    .rm3-attach-icon { width: 28px; height: 34px; background: #e53935; border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 7px; font-weight: 800; color: #fff; letter-spacing: 0.2px; position: relative; overflow: hidden; }
+    .rm3-attach-icon::before { content: ''; position: absolute; top: 0; right: 0; width: 0; height: 0; border-style: solid; border-width: 0 8px 8px 0; border-color: transparent #f2f2f4 transparent transparent; }
+    .rm3-attach-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .rm3-attach-name { font-size: 9.5px; font-weight: 700; color: #1a1a2e; line-height: 1.2; white-space: nowrap; }
+    .rm3-attach-size { font-size: 8.5px; color: rgba(0,0,0,0.4); }
+    .rm3-slide .reel-content { margin-bottom: 28px; }
 
     /* S4 — Calendar */
     .rm-cal { flex-direction: column; align-items: center; gap: 10px; }
@@ -1077,16 +1101,88 @@ function landingPage(token, monthlyAmount) {
               <div class="reel-desc">Someone replies to your story? Looped responds and books the call.</div>
             </div>
           </div>
-          <!-- S3: Comment keyword -->
-          <div class="reel-slide">
-            <div class="reel-glow" style="background:rgba(0,200,150,0.4);top:20%;left:10%;"></div>
-            <div class="reel-mock rm-comment">
-              <div class="rm-c-field"><span class="rm-c-label">reply&#8202;</span><span class="rm-c-word">INFO</span><span class="rm-c-cur"></span></div>
-              <div class="rm-c-notif">DM sent</div>
+          <!-- S3: Comment keyword (full-bleed JS-driven) -->
+          <div class="reel-slide rm3-slide">
+            <div class="rm3-bg" id="rm3Bg">
+              <div class="rm3-feed-wrap" id="rm3FeedWrap">
+                <!-- Post 1: green, no keyword -->
+                <div class="rm3-post">
+                  <div class="rm3-post-hdr">
+                    <div class="rm3-post-av"></div>
+                    <div class="rm3-post-name"></div>
+                    <div class="rm3-post-dots">&#xB7;&#xB7;&#xB7;</div>
+                  </div>
+                  <div class="rm3-post-media" style="background:#4a9d5c"></div>
+                  <div class="rm3-post-actions">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    <div class="rm3-post-spacer"></div>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                  </div>
+                  <div class="rm3-post-caption"><strong>youraccount</strong> just dropped something you don't want to miss, stay tuned for more</div>
+                </div>
+                <!-- Post 2: rose, keyword caption -->
+                <div class="rm3-post">
+                  <div class="rm3-post-hdr">
+                    <div class="rm3-post-av"></div>
+                    <div class="rm3-post-name"></div>
+                    <div class="rm3-post-dots">&#xB7;&#xB7;&#xB7;</div>
+                  </div>
+                  <div class="rm3-post-media" style="background:#c0507a"></div>
+                  <div class="rm3-post-actions">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    <div class="rm3-post-spacer"></div>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                  </div>
+                  <div class="rm3-post-caption"><strong>youraccount</strong> Comment <span class="rm3-kw">INFO</span> below and I will send it straight to your DMs.</div>
+                </div>
+              </div>
+              <!-- Comment sheet -->
+              <div class="rm3-sheet" id="rm3Sheet">
+                <div class="rm3-sheet-handle"></div>
+                <div class="rm3-sheet-title">Comments</div>
+                <div class="rm3-sheet-list" id="rm3SheetList">
+                  <div class="rm3-cmt"><div class="rm3-cmt-user">sarah_m</div><div class="rm3-cmt-text">INFO</div></div>
+                  <div class="rm3-looped-reply"><div class="rm3-looped-name">Looped</div><div class="rm3-looped-text">Sent, check your DMs</div></div>
+                  <div class="rm3-cmt"><div class="rm3-cmt-user">jordan_k</div><div class="rm3-cmt-text">INFO</div></div>
+                  <div class="rm3-looped-reply"><div class="rm3-looped-name">Looped</div><div class="rm3-looped-text">Sent, check your DMs</div></div>
+                </div>
+                <div class="rm3-sheet-input">
+                  <div class="rm3-input-av"></div>
+                  <div class="rm3-input-field">
+                    <span class="rm3-input-ph" id="rm3InputPh">Add a comment...</span><span class="rm3-input-typed" id="rm3InputTyped"></span><span class="rm3-input-cursor" id="rm3Cursor"></span>
+                  </div>
+                  <div class="rm3-input-send"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+                </div>
+              </div>
+              <!-- Notification banner (reuses rm1-notif styles) -->
+              <div class="rm1-notif" id="rm3Notif" style="z-index:4">
+                <div class="rm1-notif-icon"></div>
+                <div class="rm1-notif-body">
+                  <div class="rm1-notif-title">Looped</div>
+                  <div class="rm1-notif-preview">sent you a message</div>
+                </div>
+                <div class="rm1-notif-time">now</div>
+              </div>
             </div>
+            <!-- Chat phase -->
+            <div class="rm3-chat" id="rm3Chat">
+              <div class="rm1-chat-header">
+                <div class="rm1-chat-avatar"></div>
+                <div>
+                  <div class="rm1-chat-name">Looped</div>
+                  <div class="rm1-chat-status">Active now</div>
+                </div>
+              </div>
+              <div class="rm1-msgs" id="rm3Msgs"></div>
+            </div>
+            <div class="rm1-bottom-grad"></div>
             <div class="reel-content">
               <div class="reel-title">Comment keyword DMs</div>
-              <div class="reel-desc">Comment a keyword on your post and get an instant DM. Perfect for lead magnets.</div>
+              <div class="reel-desc">Comment a keyword on your post and get an instant DM, perfect for lead magnets.</div>
             </div>
           </div>
           <!-- S4: Calendar -->
@@ -2055,6 +2151,204 @@ function landingPage(token, monthlyAmount) {
       }
       // ── End slide 2 ──────────────────────────────────────────────────────
 
+      // ── Slide 3: Comment keyword ──────────────────────────────────────────
+      var rm3Timers = [];
+      var rm3Session = 0;
+
+      function rm3Delay(sess, ms, fn) {
+        var id = setTimeout(function () { if (rm3Session === sess) fn(); }, ms);
+        rm3Timers.push(id);
+      }
+
+      function rm3Stop() {
+        rm3Session++;
+        rm3Timers.forEach(clearTimeout);
+        rm3Timers = [];
+        var bg      = document.getElementById('rm3Bg');
+        var feed    = document.getElementById('rm3FeedWrap');
+        var sheet   = document.getElementById('rm3Sheet');
+        var notif   = document.getElementById('rm3Notif');
+        var chat    = document.getElementById('rm3Chat');
+        var msgs    = document.getElementById('rm3Msgs');
+        var inputPh = document.getElementById('rm3InputPh');
+        var typed   = document.getElementById('rm3InputTyped');
+        var cursor  = document.getElementById('rm3Cursor');
+        var list    = document.getElementById('rm3SheetList');
+        if (!bg) return;
+        bg.style.transition   = 'none';
+        bg.style.opacity      = '1';
+        chat.style.transition = 'none';
+        chat.style.opacity    = '0';
+        feed.style.transition = 'none';
+        feed.style.transform  = 'translateY(0)';
+        sheet.style.transition = 'none';
+        sheet.classList.remove('open');
+        void sheet.offsetWidth;
+        sheet.style.transition = '';
+        notif.style.transition = 'none';
+        notif.classList.remove('visible');
+        void notif.offsetWidth;
+        notif.style.transition = '';
+        inputPh.style.opacity = '';
+        typed.textContent = '';
+        cursor.classList.remove('blinking');
+        msgs.innerHTML = '';
+        // Remove dynamically added comment rows
+        list.querySelectorAll('.rm3-dynamic').forEach(function (el) { el.remove(); });
+      }
+
+      function rm3Play() {
+        rm3Stop();
+        var sess = rm3Session;
+        var bg      = document.getElementById('rm3Bg');
+        var feed    = document.getElementById('rm3FeedWrap');
+        var sheet   = document.getElementById('rm3Sheet');
+        var notif   = document.getElementById('rm3Notif');
+        var chat    = document.getElementById('rm3Chat');
+        var msgs    = document.getElementById('rm3Msgs');
+        var inputPh = document.getElementById('rm3InputPh');
+        var typed   = document.getElementById('rm3InputTyped');
+        var cursor  = document.getElementById('rm3Cursor');
+        var list    = document.getElementById('rm3SheetList');
+        if (!bg) return;
+
+        // Phase 1: hold on post 1 (green, 2.5 s)
+        // Phase 2: scroll to post 2 (rose, 0.5 s transition + 2.5 s hold)
+        rm3Delay(sess, 2500, function () {
+          feed.style.transition = 'transform 0.5s cubic-bezier(0.22,1,0.36,1)';
+          feed.style.transform  = 'translateY(-534px)';
+        });
+
+        // Phase 3: comment sheet slides up
+        rm3Delay(sess, 5500, function () {
+          sheet.classList.add('open');
+        });
+
+        // Phase 4: type "INFO" in the comment field
+        rm3Delay(sess, 8000, function () {
+          inputPh.style.opacity = '0';
+          cursor.classList.add('blinking');
+          var word = 'INFO';
+          var i = 0;
+          var iv = setInterval(function () {
+            if (rm3Session !== sess) { clearInterval(iv); return; }
+            if (i < word.length) {
+              typed.textContent = word.slice(0, ++i);
+            } else {
+              clearInterval(iv);
+              cursor.classList.remove('blinking');
+            }
+          }, 150);
+        });
+
+        // Phase 5: "you" comment + Looped public reply appear in list
+        rm3Delay(sess, 9500, function () {
+          var cmt = document.createElement('div');
+          cmt.className = 'rm3-cmt rm3-dynamic';
+          cmt.innerHTML = '<div class="rm3-cmt-user">you</div><div class="rm3-cmt-text">INFO</div>';
+          list.appendChild(cmt);
+          rm3Delay(sess, 550, function () {
+            var reply = document.createElement('div');
+            reply.className = 'rm3-looped-reply rm3-dynamic';
+            reply.innerHTML = '<div class="rm3-looped-name">Looped</div><div class="rm3-looped-text">Sent, check your DMs</div>';
+            list.appendChild(reply);
+          });
+        });
+
+        // Phase 6: sheet dismisses, DM notification slides in
+        rm3Delay(sess, 11200, function () {
+          sheet.classList.remove('open');
+          rm3Delay(sess, 500, function () { notif.classList.add('visible'); });
+        });
+        rm3Delay(sess, 13200, function () { notif.classList.remove('visible'); });
+
+        // Phase 7: crossfade to chat — pre-populate first exchange instantly
+        rm3Delay(sess, 13700, function () {
+          var thumb = document.createElement('div');
+          thumb.className = 'rm3-post-thumb';
+          msgs.appendChild(thumb);
+
+          var b1 = document.createElement('div');
+          b1.className = 'rm1-bubble rm1-in';
+          b1.textContent = "Hey, thanks for commenting INFO, here's what's included";
+          msgs.appendChild(b1);
+
+          var att = document.createElement('div');
+          att.className = 'rm3-attachment';
+          att.innerHTML = '<div class="rm3-attach-icon">PDF</div><div class="rm3-attach-meta"><div class="rm3-attach-name">Coaching Info Pack.pdf</div><div class="rm3-attach-size">240 KB</div></div>';
+          msgs.appendChild(att);
+
+          chat.scrollTop = chat.scrollHeight;
+
+          bg.style.transition   = 'opacity 0.65s ease';
+          bg.style.opacity      = '0';
+          chat.style.transition = 'opacity 0.65s ease';
+          chat.style.opacity    = '1';
+        });
+
+        // Continuing conversation with typing indicators
+        var TYPING = 1100;
+        var GAP    = 1600;
+        var t = 14500;
+
+        // Visitor (right/blue) with typing indicator
+        rm3Delay(sess, t, function () {
+          var typ = document.createElement('div');
+          typ.className = 'rm1-typing out';
+          typ.innerHTML = '<div class="rm1-dot"></div><div class="rm1-dot"></div><div class="rm1-dot"></div>';
+          msgs.appendChild(typ);
+          chat.scrollTop = chat.scrollHeight;
+          rm3Delay(sess, TYPING, function () {
+            if (typ.parentNode) typ.remove();
+            var b = document.createElement('div');
+            b.className = 'rm1-bubble rm1-out';
+            b.textContent = 'okay this is exactly what I needed';
+            msgs.appendChild(b);
+            chat.scrollTop = chat.scrollHeight;
+          });
+        });
+        t += TYPING + GAP;
+
+        // Looped (left/grey) with typing indicator + link pill
+        rm3Delay(sess, t, function () {
+          var typ = document.createElement('div');
+          typ.className = 'rm1-typing in';
+          typ.innerHTML = '<div class="rm1-dot"></div><div class="rm1-dot"></div><div class="rm1-dot"></div>';
+          msgs.appendChild(typ);
+          chat.scrollTop = chat.scrollHeight;
+          rm3Delay(sess, TYPING, function () {
+            if (typ.parentNode) typ.remove();
+            var b = document.createElement('div');
+            b.className = 'rm1-bubble rm1-in';
+            b.textContent = "Glad it's useful, here's the link to get started";
+            msgs.appendChild(b);
+            chat.scrollTop = chat.scrollHeight;
+            rm3Delay(sess, 350, function () {
+              var lnk = document.createElement('div');
+              lnk.className = 'rm1-link';
+              lnk.style.alignSelf = 'flex-start';
+              lnk.textContent = 'app.looped.ltd/start \u2192';
+              msgs.appendChild(lnk);
+              chat.scrollTop = chat.scrollHeight;
+            });
+          });
+        });
+        t += TYPING + 2000 + 350;
+
+        // Hold 2 s then fade back and loop
+        rm3Delay(sess, t, function () {
+          bg.style.transition   = 'opacity 0.7s ease';
+          bg.style.opacity      = '1';
+          chat.style.transition = 'opacity 0.7s ease';
+          chat.style.opacity    = '0';
+          rm3Delay(sess, 900, function () {
+            msgs.innerHTML = '';
+            rm3Play();
+          });
+        });
+      }
+      // ── End slide 3 ──────────────────────────────────────────────────────
+
       function updateReelProgress() {
         var idx = Math.min(Math.round(reelScroller.scrollTop / REEL_SLIDE_H), reelSegs.length - 1);
         reelSegs.forEach(function (seg, i) { seg.classList.toggle('active', i <= idx); });
@@ -2066,6 +2360,8 @@ function landingPage(token, monthlyAmount) {
           if (idx === 0) rm1Play();
           if (prev === 1) rm2Stop();
           if (idx === 1) rm2Play();
+          if (prev === 2) rm3Stop();
+          if (idx === 2) rm3Play();
         }
       }
       reelScroller.addEventListener('scroll', updateReelProgress, { passive: true });
