@@ -666,7 +666,7 @@ function landingPage(token, monthlyAmount) {
     .rm2-reply-heart { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.36); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: rgba(255,255,255,0.62); }
     .rm2-notif { position: absolute; top: -80px; left: 10px; right: 10px; background: rgba(28,32,44,0.96); border-radius: 16px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; z-index: 5; transition: top 0.45s cubic-bezier(0.22,1,0.36,1); }
     .rm2-notif.visible { top: 24px; }
-    .rm2-chat { position: absolute; inset: 0; background: #f2f2f4; overflow-y: scroll; scrollbar-width: none; display: flex; flex-direction: column; opacity: 0; padding-bottom: 80px; z-index: 3; }
+    .rm2-chat { position: absolute; inset: 0; background: #f2f2f4; overflow-y: scroll; scrollbar-width: none; display: flex; flex-direction: column; opacity: 0; padding-bottom: 80px; }
     .rm2-chat::-webkit-scrollbar { display: none; }
     .rm2-story-thumb { width: 74px; height: 100px; border-radius: 10px; background: #3f7dc0; align-self: flex-start; flex-shrink: 0; margin: 6px 0 2px 4px; }
     .rm2-bottom-grad { position: absolute; bottom: 0; left: 0; right: 0; height: 180px; background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.52) 55%, rgba(0,0,0,0.76) 100%); pointer-events: none; z-index: 1; }
@@ -1058,6 +1058,7 @@ function landingPage(token, monthlyAmount) {
                 </div>
                 <div class="rm1-notif-time">now</div>
               </div>
+              <div class="rm2-bottom-grad"></div>
             </div>
             <div class="rm2-chat" id="rm2Chat">
               <div class="rm1-chat-header">
@@ -1069,7 +1070,6 @@ function landingPage(token, monthlyAmount) {
               </div>
               <div class="rm1-msgs" id="rm2Msgs"></div>
             </div>
-            <div class="rm2-bottom-grad"></div>
             <div class="reel-content">
               <div class="reel-title">Story reply automation</div>
               <div class="reel-desc">Someone replies to your story? Looped responds automatically.</div>
