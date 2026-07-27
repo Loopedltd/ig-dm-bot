@@ -1183,7 +1183,7 @@ function landingPage(token, monthlyAmount) {
             <div class="rm1-bottom-grad"></div>
             <div class="reel-content">
               <div class="reel-title">Comment keyword DMs</div>
-              <div class="reel-desc">Comment a keyword on your post and get an instant DM, perfect for lead magnets.</div>
+              <div class="reel-desc">Comment a keyword on your post and get an instant comment reply and DM, perfect for lead magnets.</div>
             </div>
           </div>
           <!-- S4: Calendar -->
