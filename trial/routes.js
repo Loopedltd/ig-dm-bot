@@ -600,19 +600,21 @@ function landingPage(token, monthlyAmount) {
     .features-wrap { background: var(--bg); border-bottom: 1px solid var(--border); }
     .reel-wrap { display: flex; justify-content: center; }
     /* ── Feature section layout (cards + carousel) ── */
-    .feat-row { display: flex; align-items: center; justify-content: center; gap: 20px; margin-top: 44px; }
-    .feat-cards { display: grid; grid-template-columns: repeat(2, 200px); grid-template-rows: repeat(2, 200px); gap: 12px; }
-    .feat-card { width: 200px; height: 200px; border-radius: 22px; background: #fff; border: 1px solid rgba(15,23,42,0.06); box-shadow: 0 4px 14px rgba(15,23,42,0.04); position: relative; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 14px 14px; overflow: hidden; flex-shrink: 0; transition: box-shadow 200ms ease, transform 200ms ease; }
+    .feat-layout { display: flex; align-items: flex-start; gap: 36px; }
+    .feat-left { display: flex; flex-direction: column; gap: 24px; }
+    .feat-left .section-heading { margin-bottom: 0; }
+    .feat-cards { display: grid; grid-template-columns: repeat(2, 260px); grid-template-rows: repeat(2, 260px); gap: 16px; }
+    .feat-card { width: 260px; height: 260px; border-radius: 28px; background: #fff; border: 1px solid rgba(15,23,42,0.06); box-shadow: 0 4px 14px rgba(15,23,42,0.04); position: relative; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 18px 18px; overflow: hidden; flex-shrink: 0; transition: box-shadow 200ms ease, transform 200ms ease; }
     @media (hover: hover) { .feat-card:hover { box-shadow: 0 20px 44px rgba(15,23,42,0.14); transform: translateY(-3px); } }
-    .fc-icon { width: 40px; height: 40px; border-radius: 12px; background: rgba(45,107,255,0.08); border: 1px solid rgba(45,107,255,0.16); display: flex; align-items: center; justify-content: center; position: absolute; top: 14px; left: 14px; }
-    .fc-title { font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 4px; line-height: 1.3; }
-    .fc-desc { font-size: 10.5px; color: rgba(15,23,42,0.55); line-height: 1.5; }
+    .fc-icon { width: 52px; height: 52px; border-radius: 15px; background: rgba(45,107,255,0.08); border: 1px solid rgba(45,107,255,0.16); display: flex; align-items: center; justify-content: center; position: absolute; top: 18px; left: 18px; }
+    .fc-title { font-size: 16px; font-weight: 800; color: #0f172a; margin-bottom: 5px; line-height: 1.3; }
+    .fc-desc { font-size: 13px; color: rgba(15,23,42,0.55); line-height: 1.5; }
     /* Card 1 — Calendar */
-    .fc-cal-inner { display: flex; flex-direction: column; align-items: center; gap: 2px; opacity: 0; }
-    .fc-cal-grid { display: grid; grid-template-columns: repeat(3,8px); gap: 2px; }
-    .fc-cal-cell { width: 8px; height: 8px; border-radius: 2px; background: rgba(15,23,42,0.07); }
+    .fc-cal-inner { display: flex; flex-direction: column; align-items: center; gap: 3px; opacity: 0; }
+    .fc-cal-grid { display: grid; grid-template-columns: repeat(3,10px); gap: 3px; }
+    .fc-cal-cell { width: 10px; height: 10px; border-radius: 2px; background: rgba(15,23,42,0.07); }
     .fc-cal-pick { transition: background 0.3s, box-shadow 0.3s; }
-    .fc-cal-confirm { font-size: 10px; font-weight: 700; color: #0f172a; opacity: 0; }
+    .fc-cal-confirm { font-size: 13px; font-weight: 700; color: #0f172a; opacity: 0; }
     .feat-card.fc-visible .fc-cal-inner { animation: fcCalFade 4s ease infinite; }
     .feat-card.fc-visible .fc-cal-pick { animation: fcCalPick 4s ease infinite; }
     .feat-card.fc-visible .fc-cal-confirm { animation: fcCalConfirm 4s ease infinite; }
@@ -621,14 +623,14 @@ function landingPage(token, monthlyAmount) {
     @keyframes fcCalConfirm { 0%,40%{opacity:0;transform:scale(0.8)} 52%{opacity:1;transform:scale(1.1)} 58%,80%{opacity:1;transform:scale(1)} 93%,100%{opacity:0} }
     /* Card 2 — Clock */
     .fc-clk-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; opacity: 0; }
-    .fc-clock { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid rgba(15,23,42,0.22); position: relative; flex-shrink: 0; }
-    .fc-clock::before { content:''; position:absolute; top:2px; left:50%; width:1.5px; height:3px; background:rgba(15,23,42,0.28); transform:translateX(-50%); border-radius:1px; }
-    .fc-clock::after { content:''; position:absolute; bottom:2px; left:50%; width:1.5px; height:3px; background:rgba(15,23,42,0.28); transform:translateX(-50%); border-radius:1px; }
+    .fc-clock { width: 31px; height: 31px; border-radius: 50%; border: 1.5px solid rgba(15,23,42,0.22); position: relative; flex-shrink: 0; }
+    .fc-clock::before { content:''; position:absolute; top:2px; left:50%; width:1.5px; height:4px; background:rgba(15,23,42,0.28); transform:translateX(-50%); border-radius:1px; }
+    .fc-clock::after { content:''; position:absolute; bottom:2px; left:50%; width:1.5px; height:4px; background:rgba(15,23,42,0.28); transform:translateX(-50%); border-radius:1px; }
     .fc-ch { position:absolute; bottom:50%; left:50%; transform-origin:50% 100%; border-radius:1px; background:rgba(15,23,42,0.7); }
-    .fc-ch-hr { width:1.5px; height:7px; margin-left:-0.75px; }
-    .fc-ch-mn { width:1px; height:10px; margin-left:-0.5px; }
-    .fc-clock-ctr { position:absolute; top:50%; left:50%; width:3px; height:3px; border-radius:50%; background:#0f172a; transform:translate(-50%,-50%); z-index:1; }
-    .fc-clock-bubble { width:12px; height:9px; border-radius:3px 3px 3px 0; background:rgba(45,107,255,0.75); opacity:0; flex-shrink:0; }
+    .fc-ch-hr { width:1.5px; height:9px; margin-left:-0.75px; }
+    .fc-ch-mn { width:1px; height:13px; margin-left:-0.5px; }
+    .fc-clock-ctr { position:absolute; top:50%; left:50%; width:4px; height:4px; border-radius:50%; background:#0f172a; transform:translate(-50%,-50%); z-index:1; }
+    .fc-clock-bubble { width:15px; height:11px; border-radius:4px 4px 4px 0; background:rgba(45,107,255,0.75); opacity:0; flex-shrink:0; }
     .feat-card.fc-visible .fc-clk-wrap { animation: fcClkFace 3.5s ease infinite; }
     .feat-card.fc-visible .fc-ch-hr { animation: fcClkSweep 3.2s linear infinite; }
     .feat-card.fc-visible .fc-ch-mn { animation: fcClkSweep 0.85s linear infinite; }
@@ -638,13 +640,13 @@ function landingPage(token, monthlyAmount) {
     @keyframes fcClkBubble { 0%,46%{opacity:0;transform:scale(0.5)} 56%,80%{opacity:1;transform:scale(1)} 92%,100%{opacity:0} }
     /* Card 3 — Funnel */
     .fc-funnel-wrap { display: flex; flex-direction: column; align-items: center; gap: 1px; }
-    .fc-funnel { position: relative; width: 32px; height: 28px; flex-shrink: 0; }
+    .fc-funnel { position: relative; width: 42px; height: 36px; flex-shrink: 0; }
     .fc-funnel-svg { display: block; opacity: 0; }
-    .fc-fdot { position:absolute; top:2px; width:4px; height:4px; border-radius:50%; background:rgba(15,23,42,0.45); opacity:0; }
-    .fc-fd1 { left:3px; }
-    .fc-fd2 { left:24px; }
-    .fc-fd3 { left:13px; }
-    .fc-fd4 { left:13px; background:rgba(45,107,255,0.9); }
+    .fc-fdot { position:absolute; top:2px; width:5px; height:5px; border-radius:50%; background:rgba(15,23,42,0.45); opacity:0; }
+    .fc-fd1 { left:4px; }
+    .fc-fd2 { left:31px; }
+    .fc-fd3 { left:17px; }
+    .fc-fd4 { left:17px; background:rgba(45,107,255,0.9); }
     .fc-fcheck { font-size:10px; font-weight:700; color:#0f172a; opacity:0; }
     .feat-card.fc-visible .fc-funnel-svg { animation: fcFShow 4s ease infinite; }
     .feat-card.fc-visible .fc-fd1 { animation: fcFOut 4s ease 0.1s infinite; }
@@ -653,22 +655,22 @@ function landingPage(token, monthlyAmount) {
     .feat-card.fc-visible .fc-fd4 { animation: fcFThru 4s ease 0.15s infinite; }
     .feat-card.fc-visible .fc-fcheck { animation: fcFCheck 4s ease infinite; }
     @keyframes fcFShow { 0%,5%{opacity:0} 12%,84%{opacity:0.7} 94%,100%{opacity:0} }
-    @keyframes fcFOut { 0%,8%{opacity:0;transform:translateY(0)} 16%{opacity:0.8;transform:translateY(0)} 42%{opacity:0;transform:translateY(14px)} 100%{opacity:0;transform:translateY(14px)} }
-    @keyframes fcFThru { 0%,8%{opacity:0;transform:translateY(0)} 16%{opacity:1;transform:translateY(0)} 50%{opacity:1;transform:translateY(24px)} 58%,100%{opacity:0;transform:translateY(24px)} }
+    @keyframes fcFOut { 0%,8%{opacity:0;transform:translateY(0)} 16%{opacity:0.8;transform:translateY(0)} 42%{opacity:0;transform:translateY(18px)} 100%{opacity:0;transform:translateY(18px)} }
+    @keyframes fcFThru { 0%,8%{opacity:0;transform:translateY(0)} 16%{opacity:1;transform:translateY(0)} 50%{opacity:1;transform:translateY(31px)} 58%,100%{opacity:0;transform:translateY(31px)} }
     @keyframes fcFCheck { 0%,54%{opacity:0;transform:scale(0.6)} 64%{opacity:1;transform:scale(1.2)} 70%,84%{opacity:1;transform:scale(1)} 94%,100%{opacity:0} }
     /* Card 4 — Dashboard */
-    .fc-dash-bars { display: flex; align-items: flex-end; gap: 4px; height: 22px; opacity: 0; }
-    .fc-dash-b { border-radius: 2px 2px 0 0; background: rgba(45,107,255,0.40); transform-origin: bottom; transform: scaleY(0); }
-    .fc-db1 { width: 7px; height: 10px; }
-    .fc-db2 { width: 7px; height: 18px; }
-    .fc-db3 { width: 7px; height: 14px; }
+    .fc-dash-bars { display: flex; align-items: flex-end; gap: 5px; height: 29px; opacity: 0; }
+    .fc-dash-b { border-radius: 3px 3px 0 0; background: rgba(45,107,255,0.40); transform-origin: bottom; transform: scaleY(0); }
+    .fc-db1 { width: 9px; height: 13px; }
+    .fc-db2 { width: 9px; height: 23px; }
+    .fc-db3 { width: 9px; height: 18px; }
     .feat-card.fc-visible .fc-dash-bars { animation: fcDashFade 4s ease infinite; }
     .feat-card.fc-visible .fc-db1 { animation: fcDashGrow 4s ease 0.1s infinite; }
     .feat-card.fc-visible .fc-db2 { animation: fcDashGrow 4s ease 0s infinite; }
     .feat-card.fc-visible .fc-db3 { animation: fcDashGrow 4s ease 0.18s infinite; }
     @keyframes fcDashFade { 0%,6%{opacity:0} 14%,84%{opacity:1} 94%,100%{opacity:0} }
     @keyframes fcDashGrow { 0%,12%{transform:scaleY(0)} 36%,80%{transform:scaleY(1)} 93%,100%{transform:scaleY(0)} }
-    @media (max-width: 820px) { .feat-row { flex-direction: column-reverse; align-items: center; } .feat-cards { grid-template-columns: repeat(2, 200px); } }
+    @media (max-width: 960px) { .feat-layout { flex-direction: column-reverse; align-items: center; } .feat-left .section-heading { text-align: center; } }
     .reel-card { position: relative; width: 345px; height: 614px; border-radius: 32px; background: #0b0d12; overflow: hidden; flex-shrink: 0; }
     .reel-home-ind { position: absolute; bottom: 7px; left: 50%; transform: translateX(-50%); width: 118px; height: 5px; border-radius: 2.5px; background: rgba(255,255,255,0.82); box-shadow: 0 0 0 0.5px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.22); opacity: 0; transition: opacity 175ms ease; pointer-events: none; z-index: 10; }
     @media (hover: hover) { .reel-card:hover .reel-home-ind { opacity: 1; } }
@@ -1069,11 +1071,10 @@ function landingPage(token, monthlyAmount) {
 <!-- FEATURES -->
 <div class="section features-wrap">
   <div class="section-inner">
-    <div class="section-intro reveal">
-      <div class="section-heading">Features</div>
-    </div>
-    <div class="feat-row reveal">
-      <div class="feat-cards">
+    <div class="feat-layout reveal">
+      <div class="feat-left">
+        <div class="section-heading">Features</div>
+        <div class="feat-cards">
         <!-- Card 1: Books calls for you -->
         <div class="feat-card" id="fc1">
           <div class="fc-icon">
@@ -1107,7 +1108,7 @@ function landingPage(token, monthlyAmount) {
           <div class="fc-icon">
             <div class="fc-funnel-wrap">
               <div class="fc-funnel">
-                <svg class="fc-funnel-svg" viewBox="0 0 36 32" width="32" height="28" fill="none"><path d="M2 2L34 2L24 22L24 30L12 30L12 22Z" stroke="rgba(15,23,42,0.25)" stroke-width="1.5" stroke-linejoin="round" fill="rgba(15,23,42,0.04)"/></svg>
+                <svg class="fc-funnel-svg" viewBox="0 0 36 32" width="42" height="36" fill="none"><path d="M2 2L34 2L24 22L24 30L12 30L12 22Z" stroke="rgba(15,23,42,0.25)" stroke-width="1.5" stroke-linejoin="round" fill="rgba(15,23,42,0.04)"/></svg>
                 <div class="fc-fdot fc-fd1"></div>
                 <div class="fc-fdot fc-fd2"></div>
                 <div class="fc-fdot fc-fd3"></div>
@@ -1129,6 +1130,7 @@ function landingPage(token, monthlyAmount) {
           </div>
           <div><div class="fc-title">Custom dashboard</div><div class="fc-desc">See every lead, conversation, and booking in one place, built around how you work.</div></div>
         </div>
+      </div>
       </div>
       <div class="reel-wrap">
       <div class="reel-card">
