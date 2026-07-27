@@ -1071,6 +1071,7 @@ function landingPage(token, monthlyAmount) {
               </div>
               <div class="rm1-msgs" id="rm2Msgs"></div>
             </div>
+            <div class="rm1-bottom-grad"></div>
             <div class="reel-content">
               <div class="reel-title">Story reply automation</div>
               <div class="reel-desc">Someone replies to your story? Looped responds and books the call.</div>
@@ -1998,9 +1999,23 @@ function landingPage(token, monthlyAmount) {
 
         var t = 9400;
 
-        // Visitor (right/blue, direct — no typing indicator)
-        addBub('rm1-out', "okay that's actually really useful", t);
-        t += GAP;
+        // Visitor typing indicator (right/blue), then message
+        rm2Delay(sess, t, function () {
+          var typ = document.createElement('div');
+          typ.className = 'rm1-typing out';
+          typ.innerHTML = '<div class="rm1-dot"></div><div class="rm1-dot"></div><div class="rm1-dot"></div>';
+          msgs.appendChild(typ);
+          chat.scrollTop = chat.scrollHeight;
+          rm2Delay(sess, TYPING, function () {
+            if (typ.parentNode) typ.remove();
+            var b = document.createElement('div');
+            b.className = 'rm1-bubble rm1-out';
+            b.textContent = "okay that's actually really useful";
+            msgs.appendChild(b);
+            chat.scrollTop = chat.scrollHeight;
+          });
+        });
+        t += TYPING + GAP;
 
         // Looped (left/grey, preceded by typing indicator) + link pill
         addTyping(t, function () {
