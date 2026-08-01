@@ -1389,7 +1389,7 @@ function landingHomePage() {
             return;
           }
           typed.textContent += text[i++];
-          if (window.innerWidth < 960) { area.scrollTop = area.scrollHeight; }
+          if (window.innerWidth < 960) { area.scrollTop = area.scrollHeight - area.clientHeight - 20; }
           hiwDelay(CHAR_MS, tick);
         }
         tick();
@@ -1403,6 +1403,7 @@ function landingHomePage() {
           pl.onclick = function (e) { if (typeof startTrial === 'function') startTrial(e); };
           pl.textContent = '+ Paste more examples here...';
           area.appendChild(pl);
+          if (window.innerWidth < 960) { area.scrollTop = area.scrollHeight - area.clientHeight - 20; }
           return;
         }
         var item = VOICE_DATA[lineIdx++];
