@@ -1759,7 +1759,12 @@ function landingPage(token, monthlyAmount) {
       var lineIdx = 0;
       var CHAR_MS = 28;  // ms per character — same rhythm as hero demo
 
+      function voiceScroll() {
+        if (window.innerWidth < 960) { area.scrollTop = area.scrollHeight - area.clientHeight - 20; }
+      }
+
       function addFollower(text, onDone) {
+        voiceScroll();  // scroll ahead to make room for incoming line
         var sp = document.createElement('span');
         sp.className = 'hiw-voice-speaker';
         sp.textContent = 'Follower:';
@@ -1770,6 +1775,7 @@ function landingPage(token, monthlyAmount) {
       }
 
       function addMe(text, onDone) {
+        voiceScroll();  // scroll ahead before typing starts so cursor appears in view
         var sp = document.createElement('span');
         sp.className = 'hiw-voice-me';
         sp.textContent = 'Me:';
@@ -1795,7 +1801,7 @@ function landingPage(token, monthlyAmount) {
             return;
           }
           typed.textContent += text[i++];
-          if (window.innerWidth < 960) { area.scrollTop = area.scrollHeight - area.clientHeight - 20; }
+          voiceScroll();  // keep bottom of growing text visible as it types
           hiwDelay(CHAR_MS, tick);
         }
         tick();
@@ -1809,7 +1815,7 @@ function landingPage(token, monthlyAmount) {
           pl.onclick = function (e) { if (typeof startTrial === 'function') startTrial(e); };
           pl.textContent = '+ Paste more examples here...';
           area.appendChild(pl);
-          if (window.innerWidth < 960) { area.scrollTop = area.scrollHeight - area.clientHeight - 20; }
+          voiceScroll();  // settle with placeholder fully visible + 20px gap
           return;
         }
         var item = VOICE_DATA[lineIdx++];
