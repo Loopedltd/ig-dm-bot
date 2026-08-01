@@ -328,6 +328,25 @@ function buildStructuredCoachContext({
   function wireTopbarButtons() {
     const refreshBtn = qs("#refreshBtn");
     const logoutBtn = qs("#logoutBtn");
+    const billingPortalBtn = qs("#billingPortalBtn");
+
+    if (billingPortalBtn && !billingPortalBtn.__wired) {
+      billingPortalBtn.__wired = true;
+      billingPortalBtn.addEventListener("click", async () => {
+        const orig = billingPortalBtn.textContent;
+        try {
+          billingPortalBtn.disabled = true;
+          billingPortalBtn.textContent = "Opening\u2026";
+          const data = await apiFetch(`${API}/billing-portal`, { method: "POST" });
+          if (!data?.url) throw new Error("No portal URL returned");
+          window.location.href = data.url;
+        } catch (e) {
+          setErr(String(e.message || e));
+          billingPortalBtn.disabled = false;
+          billingPortalBtn.textContent = orig;
+        }
+      });
+    }
 
     if (logoutBtn && !logoutBtn.__wired) {
       logoutBtn.__wired = true;
