@@ -690,7 +690,7 @@ function landingPage(token, monthlyAmount) {
     .feat-card.fc-visible .fc-db3 { animation: fcDashGrow 4s ease 0.18s infinite; }
     @keyframes fcDashFade { 0%,6%{opacity:0} 14%,84%{opacity:1} 94%,100%{opacity:0} }
     @keyframes fcDashGrow { 0%,12%{transform:scaleY(0)} 36%,80%{transform:scaleY(1)} 93%,100%{transform:scaleY(0)} }
-    @media (max-width: 960px) { .feat-layout { flex-direction: column; align-items: center; } .feat-left { width: 100%; } .feat-left .section-heading { text-align: center; } .reel-wrap { margin-left: 0; width: 100%; } .reel-card { width: 100%; max-width: 345px; } .feat-cards { grid-template-columns: 1fr; grid-template-rows: auto; } .feat-card { width: 100%; height: 120px; border-radius: 16px; } .fc-icon { width: 36px; height: 36px; border-radius: 10px; } .fc-title { font-size: 13px; } .fc-desc { font-size: 10px; } }
+    @media (max-width: 960px) { .feat-layout { flex-direction: column; align-items: center; } .feat-left { width: 100%; } .feat-left .section-heading { text-align: center; } .reel-wrap { margin-left: 0; width: 100%; padding: 0 16px; box-sizing: border-box; } .reel-card { width: 100%; max-width: 345px; } .feat-cards { grid-template-columns: 1fr; grid-template-rows: auto; } .feat-card { width: 100%; height: 120px; border-radius: 16px; } .fc-icon { width: 36px; height: 36px; border-radius: 10px; } .fc-title { font-size: 13px; } .fc-desc { font-size: 10px; } .hiw-voice-area { overflow-y: auto; } }
     .reel-card { position: relative; width: 345px; height: 614px; border-radius: 32px; background: #0b0d12; overflow: hidden; flex-shrink: 0; }
     .reel-home-ind { position: absolute; bottom: 7px; left: 50%; transform: translateX(-50%); width: 118px; height: 5px; border-radius: 2.5px; background: rgba(255,255,255,0.82); box-shadow: 0 0 0 0.5px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.22); opacity: 0; transition: opacity 175ms ease; pointer-events: none; z-index: 10; }
     @media (hover: hover) { .reel-card:hover .reel-home-ind { opacity: 1; } }
@@ -1794,6 +1794,7 @@ function landingPage(token, monthlyAmount) {
             return;
           }
           typed.textContent += text[i++];
+          if (window.innerWidth < 960) { area.scrollTop = area.scrollHeight; }
           hiwDelay(CHAR_MS, tick);
         }
         tick();
