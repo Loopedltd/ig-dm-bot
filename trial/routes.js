@@ -614,7 +614,7 @@ function landingPage(token, monthlyAmount) {
     @media (max-width: 820px) {
       .hiw-layout { grid-template-columns: 1fr; }
       .hiw-preview { min-height: 300px; height: 300px; }
-      .hiw-voice-area { overflow-y: auto; max-height: 200px; padding-bottom: 20px; }
+      .hiw-voice-area { overflow-y: auto; padding-bottom: 20px; }
     }
 
     /* FEATURES */
