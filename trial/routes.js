@@ -1206,7 +1206,7 @@ function landingPage(token, monthlyAmount) {
             </div>
             <div class="reel-content">
               <div class="reel-title">DM replies in your voice</div>
-              <div class="reel-desc">GPT-4o trained on your real messages. Sounds like you, not like a bot.</div>
+              <div class="reel-desc">GPT-4o trained on your real messages. Sounds completely like you.</div>
             </div>
           </div>
           <!-- S2: Story reply (full-bleed JS-driven) -->
