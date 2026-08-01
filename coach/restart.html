@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Restart subscription — Looped</title>
+
+    <style>
+      :root {
+        --bg: #f7f8fb;
+        --panel: #ffffff;
+        --border: rgba(15,23,42,0.10);
+        --border2: rgba(15,23,42,0.14);
+        --text: #0f172a;
+        --muted: rgba(15,23,42,0.62);
+        --primary: #2d6bff;
+        --shadow: 0 10px 30px rgba(15,23,42,0.06);
+        --ring: rgba(45,107,255,0.22);
+      }
+
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 18px;
+        box-sizing: border-box;
+      }
+
+      .card {
+        width: 100%;
+        max-width: 420px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 32px 26px 26px;
+        box-shadow: var(--shadow);
+        text-align: center;
+      }
+
+      .icon {
+        width: 52px;
+        height: 52px;
+        border-radius: 16px;
+        background: rgba(45,107,255,0.08);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 22px;
+        font-weight: 900;
+        letter-spacing: -0.2px;
+      }
+
+      .sub {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.55;
+        margin-bottom: 28px;
+      }
+
+      button {
+        width: 100%;
+        padding: 13px;
+        border-radius: 14px;
+        border: 1px solid rgba(45,107,255,0.35);
+        background: var(--primary);
+        color: #fff;
+        font-weight: 800;
+        font-size: 15px;
+        cursor: pointer;
+        box-shadow: 0 8px 18px rgba(45,107,255,0.22);
+        transition: filter .12s;
+      }
+
+      button:hover { filter: brightness(1.04); }
+      button:active { transform: translateY(1px); }
+      button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+      .logout-link {
+        display: block;
+        margin-top: 16px;
+        font-size: 13px;
+        color: var(--muted);
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      .logout-link:hover { color: var(--text); }
+
+      .err {
+        color: #c0262d;
+        margin-top: 14px;
+        font-size: 13px;
+        display: none;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="card">
+      <div class="icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2d6bff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+      </div>
+
+      <h1>Restart your subscription</h1>
+      <p class="sub">Your subscription has been cancelled and your Instagram connection has been removed. Restart to get back up and running.</p>
+
+      <button id="restartBtn">Restart subscription</button>
+
+      <a class="logout-link" id="logoutLink">Log out</a>
+
+      <div class="err" id="error"></div>
+    </div>
+
+    <script>
+      (function () {
+        var token = localStorage.getItem("coach_token");
+        // If no token at all, send to login
+        if (!token) {
+          window.location.href = "/login";
+          return;
+        }
+
+        var btn = document.getElementById("restartBtn");
+        var errEl = document.getElementById("error");
+        var logoutLink = document.getElementById("logoutLink");
+
+        logoutLink.addEventListener("click", function () {
+          localStorage.removeItem("coach_token");
+          window.location.href = "/login";
+        });
+
+        btn.addEventListener("click", function () {
+          btn.disabled = true;
+          btn.textContent = "Loading\u2026";
+          if (errEl) errEl.style.display = "none";
+
+          fetch("/coach/api/restart-subscription", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + token,
+            },
+          })
+            .then(function (r) {
+              return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+            })
+            .then(function (res) {
+              if (!res.ok || !res.j.url) {
+                throw new Error(res.j.error || "Failed to create checkout session");
+              }
+              window.location.href = res.j.url;
+            })
+            .catch(function (e) {
+              if (errEl) { errEl.textContent = String(e.message || e); errEl.style.display = "block"; }
+              btn.disabled = false;
+              btn.textContent = "Restart subscription";
+            });
+        });
+      })();
+    </script>
+  </body>
+</html>

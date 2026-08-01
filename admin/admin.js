@@ -522,10 +522,12 @@ const AdminDashboard = {
     try {
       const data = await apiFetch(`/admin/api/clients/${clientId}/login-token`, { method: "POST" });
       const coachToken = data.token;
+      // SECURITY: use sessionStorage (tab-scoped) so the impersonation token does
+      // not leak into other open tabs sharing the same origin's localStorage.
       const win = window.open("/dashboard", "_blank");
       if (!win) { alert("Pop-up blocked. Please allow pop-ups for this site."); return; }
       win.addEventListener("load", () => {
-        try { win.localStorage.setItem("coach_token", coachToken); win.location.reload(); } catch (e) { console.warn("Could not inject token:", e); }
+        try { win.sessionStorage.setItem("coach_token", coachToken); win.location.reload(); } catch (e) { console.warn("Could not inject token:", e); }
       }, { once: true });
       setTimeout(() => {
         try { win.postMessage({ type: "admin_inject_token", coach_token: coachToken }, window.location.origin); } catch {}

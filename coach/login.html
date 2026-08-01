@@ -259,6 +259,9 @@
       } else if (params.get("cancelled") === "1") {
         notice.className = "notice warn";
         notice.textContent = "Payment was cancelled. Complete payment first to access the dashboard.";
+      } else if (params.get("error") === "session_mismatch") {
+        notice.className = "notice warn";
+        notice.textContent = "Your session could not be verified. Please log in again.";
       }
     }
 
@@ -293,6 +296,10 @@
             return;
           }
           localStorage.setItem("coach_token", res.j.token);
+          if (res.j.subscription_canceled) {
+            window.location.href = "/restart";
+            return;
+          }
           window.location.href = res.j.setup_complete ? "/dashboard" : "/settings";
         })
         .catch(function () {

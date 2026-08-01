@@ -146,6 +146,10 @@ app.get("/login", (req, res) => {
   return res.sendFile(path.join(__dirname, "coach", "login.html"));
 });
 
+app.get("/restart", (req, res) => {
+  return res.sendFile(path.join(__dirname, "coach", "restart.html"));
+});
+
 app.get("/dashboard", (req, res) => {
   return res.sendFile(path.join(__dirname, "coach", "dashboard.html"));
 });
@@ -3046,6 +3050,26 @@ async function getClientConfig(clientId) {
   return data; // null if no config row exists
 }
 
+async function deactivateClientInstagram(clientId) {
+  try {
+    const { data: igAccounts } = await supabase
+      .from("ig_accounts")
+      .select("id")
+      .eq("client_id", clientId)
+      .eq("is_active", true);
+
+    for (const acc of igAccounts || []) {
+      await supabase
+        .from("ig_accounts")
+        .update({ is_active: false, page_access_token: null })
+        .eq("id", acc.id);
+    }
+    log("ig_deactivated_on_cancel", { clientId, count: (igAccounts || []).length });
+  } catch (e) {
+    console.warn("[deactivateClientInstagram] failed for", clientId, e?.message);
+  }
+}
+
 function signInstagramState(clientId) {
   return jwt.sign(
     {
@@ -4544,9 +4568,9 @@ app.post("/admin/api/clients/:clientId/reactivate", requireAdmin, async (req, re
  * ===========================
  */
 
-function signCoachToken(client_id) {
+function signCoachToken(client_id, extra = {}) {
   if (!COACH_JWT_SECRET) return null;
-  return jwt.sign({ role: "coach", client_id }, COACH_JWT_SECRET, {
+  return jwt.sign({ role: "coach", client_id, ...extra }, COACH_JWT_SECRET, {
     expiresIn: "14d",
   });
 }
@@ -4590,6 +4614,36 @@ async function requireCoach(req, res, next) {
     return next();
   } catch (e) {
     console.error("[requireCoach] config load error:", e?.message);
+    return safeJson(res, 500, { error: "Failed to load coach config" });
+  }
+}
+
+// Like requireCoach but skips the subscription gate — used for restart flow
+async function requireAuthCoach(req, res, next) {
+  const hdr = req.headers.authorization || "";
+  const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
+
+  if (!token) return safeJson(res, 401, { error: "missing token" });
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, COACH_JWT_SECRET);
+  } catch (e) {
+    const msg = e?.name === "TokenExpiredError" ? "token expired" : "invalid token";
+    return safeJson(res, 401, { error: msg });
+  }
+
+  if (!decoded || decoded.role !== "coach" || !decoded.client_id) {
+    return safeJson(res, 403, { error: "forbidden" });
+  }
+
+  try {
+    const cfg = await getClientConfig(decoded.client_id);
+    req.coach = decoded;
+    req.coachConfig = cfg;
+    return next();
+  } catch (e) {
+    console.error("[requireAuthCoach] config load error:", e?.message);
     return safeJson(res, 500, { error: "Failed to load coach config" });
   }
 }
@@ -4721,6 +4775,12 @@ app.post("/coach/api/login", async (req, res) => {
 
     const cfg = await getClientConfig(user.client_id);
     const status = cfg?.stripe_subscription_status || null;
+
+    // Canceled coaches get a restricted token so they can reach the restart screen
+    if (String(status).toLowerCase() === "canceled") {
+      const token = signCoachToken(user.client_id, { subscription_canceled: true });
+      return safeJson(res, 200, { ok: true, token, subscription_canceled: true });
+    }
 
     // 🔒 block login unless paid
     if (!isAllowedStripeStatus(status)) {
@@ -6354,9 +6414,10 @@ app.post("/coach/api/billing-portal", requireCoach, async (req, res) => {
       return safeJson(res, 400, { error: "missing stripe customer id" });
     }
 
+    const clientId = req.coach.client_id;
     const portal = await stripe.billingPortal.sessions.create({
       customer: String(customerId),
-return_url: `${APP_PUBLIC_URL}/dashboard`,
+      return_url: `${APP_PUBLIC_URL}/dashboard?return_uid=${encodeURIComponent(clientId)}`,
     });
 
     return safeJson(res, 200, {
@@ -6686,6 +6747,62 @@ if (existingUsersErr) {
       }
     }
 
+/**
+ * ===========================
+ * RESTART SUBSCRIPTION (post-cancellation, no trial)
+ * ===========================
+ */
+
+app.post("/coach/api/restart-subscription", requireAuthCoach, async (req, res) => {
+  try {
+    assertStripeConfigured();
+
+    const clientId = req.coach.client_id;
+    const customerId = req.coachConfig?.stripe_customer_id;
+    if (!customerId) {
+      return safeJson(res, 400, { error: "No Stripe customer on file" });
+    }
+
+    // Get client-specific monthly price; fall back to env default price
+    const { data: client } = await supabase
+      .from("clients")
+      .select("monthly_retainer")
+      .eq("id", clientId)
+      .single();
+
+    const monthlyPence = Number(client?.monthly_retainer) || 0;
+
+    let lineItems;
+    if (monthlyPence > 0) {
+      const monthlyPrice = await stripe.prices.create({
+        currency: "gbp",
+        unit_amount: monthlyPence,
+        recurring: { interval: "month" },
+        product_data: { name: "Monthly retainer" },
+      });
+      lineItems = [{ price: monthlyPrice.id, quantity: 1 }];
+    } else {
+      if (!process.env.STRIPE_PRICE_MONTHLY) {
+        return safeJson(res, 500, { error: "No price configured" });
+      }
+      lineItems = [{ price: process.env.STRIPE_PRICE_MONTHLY, quantity: 1 }];
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer: String(customerId),
+      line_items: lineItems,
+      // No trial_period_days — paid restart
+      success_url: `${APP_PUBLIC_URL}/dashboard`,
+      cancel_url: `${APP_PUBLIC_URL}/restart`,
+    });
+
+    return safeJson(res, 200, { ok: true, url: session.url });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
     if (event.type === "customer.subscription.updated") {
       const sub = event.data.object;
 
@@ -6700,6 +6817,10 @@ if (existingUsersErr) {
             sub.current_period_end * 1000
           ).toISOString(),
         });
+
+        if (sub.status === "canceled") {
+          await deactivateClientInstagram(clientId);
+        }
       }
     }
 
@@ -6714,6 +6835,7 @@ if (existingUsersErr) {
         await updateClientStripeStatus(clientId, {
           stripe_subscription_status: "canceled",
         });
+        await deactivateClientInstagram(clientId);
       }
     }
 

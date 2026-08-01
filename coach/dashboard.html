@@ -1284,7 +1284,9 @@ Hey, just checking in. If you're still thinking about it, happy to answer any qu
     window.addEventListener("message", function(e) {
       if (e.origin !== window.location.origin) return;
       if (e.data && e.data.type === "admin_inject_token" && e.data.coach_token) {
-        localStorage.setItem("coach_token", e.data.coach_token);
+        // SECURITY: use sessionStorage (tab-scoped) so admin impersonation does not
+        // contaminate the localStorage shared by other open tabs on this origin.
+        sessionStorage.setItem("coach_token", e.data.coach_token);
         window.location.reload();
       }
     });

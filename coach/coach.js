@@ -135,8 +135,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const show = (el) => (el.style.display = "block");
   const hide = (el) => (el.style.display = "none");
 
+  // Admin impersonation uses sessionStorage (tab-scoped) so it cannot contaminate
+  // other open tabs. Normal login uses localStorage as before.
   function getToken() {
-    return localStorage.getItem(TOKEN_KEY);
+    return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
   }
 
   function setToken(t) {
@@ -145,6 +147,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function clearToken() {
     localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+  }
+
+  // Decode JWT payload without verifying signature (server always verifies).
+  // Used client-side only for identity checks before making requests.
+  function decodeJwtPayload(token) {
+    try {
+      const parts = String(token || "").split(".");
+      if (parts.length !== 3) return null;
+      const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+      const json = atob(padded.padEnd(Math.ceil(padded.length / 4) * 4, "="));
+      return JSON.parse(json);
+    } catch { return null; }
   }
 
   function setErr(msg) {
@@ -1849,13 +1864,44 @@ function wireQueueRefreshButton() {
   if (!isAuthPage) {
     // If redirected here from Instagram OAuth signup, the token arrives as ?token=...
     // Store it before loadDashboard checks for it, then clean the URL.
+    // SECURITY: only overwrite an existing session if the new token is for the same
+    // coach, or there is no existing session. A mismatch means something has gone
+    // wrong (e.g. a stale signup URL being visited in a logged-in browser) — in that
+    // case discard the URL token and keep the existing session.
     const _oauthParams = new URLSearchParams(window.location.search);
     const _oauthToken = _oauthParams.get("token");
     if (_oauthToken) {
-      setToken(_oauthToken);
+      const existing = getToken();
+      const existingPayload = existing ? decodeJwtPayload(existing) : null;
+      const newPayload = decodeJwtPayload(_oauthToken);
+      const isSameCoach = !existingPayload?.client_id || !newPayload?.client_id
+        || existingPayload.client_id === newPayload.client_id;
+
+      if (isSameCoach) {
+        setToken(_oauthToken);
+      }
+      // Always clean the token from the URL regardless
       _oauthParams.delete("token");
       const _newSearch = _oauthParams.toString();
       window.history.replaceState({}, "", window.location.pathname + (_newSearch ? "?" + _newSearch : ""));
+    }
+
+    // SECURITY: if returning from Stripe billing portal, verify the current token's
+    // client_id matches the return_uid embedded in the return URL. A mismatch means
+    // a different coach's token is in localStorage — force re-login.
+    const _returnParams = new URLSearchParams(window.location.search);
+    const _returnUid = _returnParams.get("return_uid");
+    if (_returnUid) {
+      _returnParams.delete("return_uid");
+      const _cleanSearch = _returnParams.toString();
+      window.history.replaceState({}, "", window.location.pathname + (_cleanSearch ? "?" + _cleanSearch : ""));
+
+      const currentToken = getToken();
+      const currentPayload = currentToken ? decodeJwtPayload(currentToken) : null;
+      if (!currentPayload || currentPayload.client_id !== _returnUid) {
+        clearToken();
+        window.location.href = "/login?error=session_mismatch";
+      }
     }
 
     wireTopbarButtons();
