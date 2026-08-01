@@ -614,7 +614,8 @@ function landingPage(token, monthlyAmount) {
     @media (max-width: 820px) {
       .hiw-layout { grid-template-columns: 1fr; }
       .hiw-preview { min-height: 300px; height: 300px; }
-      .hiw-voice-area { overflow-y: auto; padding-bottom: 20px; }
+      .hiw-voice-body { overflow-y: auto; }
+      .hiw-voice-area { flex: none; overflow: hidden; padding-bottom: 20px; }
     }
 
     /* FEATURES */
@@ -1016,7 +1017,7 @@ function landingPage(token, monthlyAmount) {
         <!-- Panel 2: Train on your voice -->
         <div class="hiw-panel" id="hiw-panel-1">
           <div class="hiw-panel-header">Voice training</div>
-          <div class="hiw-voice-body">
+          <div class="hiw-voice-body" id="hiw-voice-body">
             <div class="hiw-voice-label">Your example DMs</div>
             <div class="hiw-voice-sub">Paste a few real conversations to train your tone</div>
             <div class="hiw-voice-area" id="hiw-voice-area">
@@ -1753,6 +1754,7 @@ function landingPage(token, monthlyAmount) {
 
     function initVoiceAnim() {
       var area = document.getElementById('hiw-voice-area');
+      var voiceBody = document.getElementById('hiw-voice-body');
       if (!area) return;
       area.innerHTML = '';  // reset to empty before each run
 
@@ -1760,7 +1762,12 @@ function landingPage(token, monthlyAmount) {
       var CHAR_MS = 28;  // ms per character — same rhythm as hero demo
 
       function voiceScroll() {
-        if (window.innerWidth < 960) { area.scrollTop = area.scrollHeight - area.clientHeight - 20; }
+        // Scroll the frame (voice-body) so the bottom of the growing grey card stays visible.
+        // Standard bottom scroll: scrollHeight - clientHeight shows the last full frame of content
+        // including the grey card's bottom border and the voice-body's own padding beneath it.
+        if (window.innerWidth < 960 && voiceBody) {
+          voiceBody.scrollTop = voiceBody.scrollHeight - voiceBody.clientHeight;
+        }
       }
 
       function addFollower(text, onDone) {
