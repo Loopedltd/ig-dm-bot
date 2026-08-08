@@ -503,6 +503,28 @@ function landingHomePage() {
       .stat-item { border-right: none; border-bottom: 1px solid var(--border); }
       .stat-item:last-child { border-bottom: none; }
     }
+
+    /* HOW IT WORKS — nav button (desktop only) */
+    .nav-hiw { font-size: 14px; font-weight: 600; color: var(--text); background: none; border: none; padding: 6px 4px; cursor: pointer; font-family: inherit; transition: color 0.15s; }
+    .nav-hiw:hover { color: var(--primary); }
+
+    /* HOW IT WORKS — floating button (mobile only, hidden on desktop) */
+    .hiw-fab { display: none; position: fixed; bottom: 20px; right: 20px; width: 52px; height: 52px; border-radius: 50%; background: var(--primary); color: #fff; border: none; cursor: pointer; font-size: 22px; font-weight: 700; font-family: inherit; align-items: center; justify-content: center; box-shadow: 0 4px 18px rgba(45,107,255,0.40), 0 1px 4px rgba(15,23,42,0.18); z-index: 50; transition: background 0.15s, box-shadow 0.15s; }
+    .hiw-fab:hover { background: var(--primary-dark); box-shadow: 0 6px 24px rgba(45,107,255,0.50); }
+
+    /* HOW IT WORKS — modal */
+    .hiw-overlay { display: none; position: fixed; inset: 0; background: rgba(11,13,18,0.60); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
+    .hiw-overlay.open { display: flex; }
+    .hiw-modal { background: #fff; border-radius: 20px; padding: 28px 26px 22px; max-width: 420px; width: 100%; box-shadow: 0 24px 60px rgba(15,23,42,0.18); position: relative; }
+    .hiw-modal-heading { font-size: 19px; font-weight: 800; color: var(--text); letter-spacing: -0.2px; margin-bottom: 14px; }
+    .hiw-modal-body { font-size: 14px; color: var(--muted); line-height: 1.7; margin-bottom: 22px; }
+    .hiw-modal-close { display: block; width: 100%; background: var(--primary); color: #fff; border: none; border-radius: 12px; padding: 13px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; transition: background 0.15s; }
+    .hiw-modal-close:hover { background: var(--primary-dark); }
+
+    @media (max-width: 600px) {
+      .nav-hiw { display: none; }
+      .hiw-fab { display: flex; }
+    }
   </style>
 </head>
 <body>
@@ -510,10 +532,21 @@ function landingHomePage() {
 <nav id="mainNav">
   <div class="logo">Looped</div>
   <div class="nav-actions">
+    <button class="nav-hiw" onclick="openHowItWorks()">How it works</button>
     <a href="/login" class="nav-signin">Sign in</a>
     <button class="nav-cta" onclick="startTrial(event)">Get Started</button>
   </div>
 </nav>
+
+<button class="hiw-fab" onclick="openHowItWorks()" aria-label="How it works">?</button>
+
+<div class="hiw-overlay" id="hiwOverlay" onclick="closeHowItWorksOutside(event)">
+  <div class="hiw-modal" role="dialog" aria-modal="true" aria-labelledby="hiwHeading">
+    <div class="hiw-modal-heading" id="hiwHeading">How Looped works</div>
+    <div class="hiw-modal-body">You connect your Instagram account. When someone messages you, replies to your story, or comments a keyword on your post, Looped's AI replies for them in your own voice, the same way you'd naturally respond. It asks the right questions to figure out if they're a good fit, and if they are, it books them straight onto your calendar. You just show up to the call.</div>
+    <button class="hiw-modal-close" onclick="closeHowItWorks()">Got it</button>
+  </div>
+</div>
 
 <!-- HERO -->
 <div class="hero-section">
@@ -951,7 +984,7 @@ function landingHomePage() {
     <h2>Ready to stop leaving DMs on read?</h2>
     <div class="cta-wrap">
       <button class="cta-btn" onclick="startTrial(event)">Start your free trial now</button>
-      <p class="hero-meta">Cancel any time</p>
+      <p class="hero-meta">Cancel any time. £100/month after trial.</p>
     </div>
   </div>
   <p class="cta-footer">&copy; ${new Date().getFullYear()} Looped &middot; Looped.ltd</p>
@@ -2152,6 +2185,18 @@ document.addEventListener('visibilitychange', function () {
     }
   }
 });
+
+function openHowItWorks() {
+  document.getElementById('hiwOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeHowItWorks() {
+  document.getElementById('hiwOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function closeHowItWorksOutside(e) {
+  if (e.target === document.getElementById('hiwOverlay')) closeHowItWorks();
+}
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════════

@@ -138,6 +138,47 @@ app.get("/success", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "success.html"));
 });
 
+// ── Subscribe (dashboard paywall) success — server-side session verification
+// Same structure as /home/success and /trial/success: retrieve session from
+// Stripe, confirm status === "complete", read payment_token from metadata
+// (never from the URL), then redirect to the shared /set-password flow.
+app.get("/subscribe/success", async (req, res) => {
+  const { session_id } = req.query;
+  if (!session_id) return res.status(400).send("Missing session_id");
+
+  if (!stripe) {
+    console.error("[subscribe/success] Stripe not configured");
+    return res.status(503).send(
+      "Payment verification is unavailable. Contact " +
+      '<a href="mailto:james@looped.ltd" style="color:#2d6bff;">james@looped.ltd</a>.'
+    );
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(String(session_id));
+
+    if (session.status !== "complete") {
+      console.warn("[subscribe/success] session not complete:", session.status, session_id);
+      return res.status(400).send("Payment not completed.");
+    }
+
+    const setupToken = session.metadata?.payment_token;
+    if (!setupToken) {
+      console.error("[subscribe/success] no payment_token in metadata", session_id);
+      return res.status(500).send(
+        "Setup token missing. Contact " +
+        '<a href="mailto:james@looped.ltd" style="color:#2d6bff;">james@looped.ltd</a>.'
+      );
+    }
+
+    console.log("[subscribe/success] verified, redirecting to set-password", { session_id });
+    return res.redirect(302, `/set-password?token=${encodeURIComponent(setupToken)}`);
+  } catch (e) {
+    console.error("[subscribe/success] error:", e?.message || e);
+    return res.status(500).send("Something went wrong. Contact james@looped.ltd.");
+  }
+});
+
 app.get("/cancel", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "cancel.html"));
 });
@@ -3133,7 +3174,7 @@ app.get("/coach/api/instagram/connect-url", requireCoach, async (req, res) => {
 
     const state = signInstagramState(req.coach.client_id);
 
-    const authUrl = new URL("https://www.instagram.com/oauth/authorize");
+    const authUrl = new URL("https://api.instagram.com/oauth/authorize");
     authUrl.searchParams.set("client_id", INSTAGRAM_APP_ID);
     authUrl.searchParams.set("redirect_uri", META_REDIRECT_URI);
     authUrl.searchParams.set("response_type", "code");
@@ -6409,12 +6450,44 @@ app.post("/coach/api/billing-portal", requireCoach, async (req, res) => {
   try {
     assertStripeConfigured();
 
+    const clientId = req.coach.client_id;
     const customerId = req.coachConfig?.stripe_customer_id;
+
+    // ── Demo accounts: no Stripe customer yet → create a Checkout session so
+    //    Stripe collects email + payment method from scratch.
+    //    Do NOT set customer or customer_email — Stripe always asks for both.
     if (!customerId) {
-      return safeJson(res, 400, { error: "missing stripe customer id" });
+      if (!STRIPE_PRICE_MONTHLY) {
+        return safeJson(res, 500, { error: "No price configured" });
+      }
+
+      // Create a payment_links row so /set-password works as normal after checkout
+      const setupToken = crypto.randomBytes(24).toString("hex");
+      const { error: tokenErr } = await supabase.from("payment_links").insert({
+        token: setupToken,
+        client_id: clientId,
+        email: null, // Stripe will collect the real email; webhook saves it via coach_users
+      });
+      if (tokenErr) {
+        console.error("[billing-portal/subscribe] payment_links insert failed:", tokenErr?.message);
+        return safeJson(res, 500, { error: "Failed to prepare checkout" });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        line_items: [{ price: STRIPE_PRICE_MONTHLY, quantity: 1 }],
+        // No customer / customer_email — Stripe always prompts for email
+        automatic_tax: { enabled: true },
+        billing_address_collection: "required",
+        metadata: { client_id: String(clientId), payment_token: setupToken },
+        success_url: `${APP_PUBLIC_URL}/subscribe/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${APP_PUBLIC_URL}/dashboard`,
+      });
+
+      return safeJson(res, 200, { ok: true, url: session.url });
     }
 
-    const clientId = req.coach.client_id;
+    // ── Paying accounts: open Stripe Billing Portal to manage their subscription
     const portal = await stripe.billingPortal.sessions.create({
       customer: String(customerId),
       return_url: `${APP_PUBLIC_URL}/dashboard?return_uid=${encodeURIComponent(clientId)}`,
@@ -8777,7 +8850,7 @@ app.get("/auth/instagram/start", (req, res) => {
       return res.redirect("/coach/login.html?instagram_error=Instagram+app+not+configured");
     }
     const state = jwt.sign({ type: "instagram_signup" }, COACH_JWT_SECRET, { expiresIn: "15m" });
-    const authUrl = new URL("https://www.instagram.com/oauth/authorize");
+    const authUrl = new URL("https://api.instagram.com/oauth/authorize");
     authUrl.searchParams.set("client_id", INSTAGRAM_APP_ID);
     authUrl.searchParams.set("redirect_uri", META_REDIRECT_URI);
     authUrl.searchParams.set("response_type", "code");
