@@ -4403,16 +4403,6 @@ app.post("/admin/api/clients/:clientId/mute-alerts", requireAdmin, async (req, r
   }
 });
 
-// ── TEMP: manually trigger trial conversion job — REMOVE AFTER TESTING ────────
-app.post("/admin/api/run-trial-conversion", requireAdmin, async (req, res) => {
-  try {
-    await runTrialConversionJob();
-    return safeJson(res, 200, { ok: true, message: "runTrialConversionJob completed — check server logs" });
-  } catch (e) {
-    return safeJson(res, 500, { error: String(e?.message || e) });
-  }
-});
-
 // ── Pause / resume automated trial-conversion payment reminder email ──────────
 app.post("/admin/api/clients/:clientId/pause-payment-reminder", requireAdmin, async (req, res) => {
   try {

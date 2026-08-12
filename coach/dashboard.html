@@ -1258,6 +1258,19 @@ Hey, just checking in. If you're still thinking about it, happy to answer any qu
         </div>
       </div>
     </div>
+    <!-- Trial-ended gate — shown in real time when any API call returns 402 trial_expired -->
+    <div id="trialEndedGate" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.62);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:500;align-items:center;justify-content:center;padding:20px;">
+      <div style="width:100%;max-width:420px;background:#fff;border-radius:20px;padding:32px 26px 26px;box-shadow:0 24px 60px rgba(15,23,42,0.18);text-align:center;">
+        <div style="width:52px;height:52px;border-radius:16px;background:rgba(45,107,255,0.08);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2d6bff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <h2 style="margin:0 0 8px;font-size:22px;font-weight:900;letter-spacing:-0.2px;color:#0f172a;">Your free trial has ended</h2>
+        <p style="color:rgba(15,23,42,0.62);font-size:14px;line-height:1.55;margin-bottom:28px;">Add your payment details to keep Looped running, replying to DMs, qualifying leads, and booking calls for you.</p>
+        <button id="trialGatePayBtn" style="width:100%;padding:13px;border-radius:14px;border:1px solid rgba(45,107,255,0.35);background:#2d6bff;color:#fff;font-weight:800;font-size:15px;cursor:pointer;box-shadow:0 8px 18px rgba(45,107,255,0.22);font-family:inherit;">Add payment details</button>
+        <div id="trialGateErr" style="color:#c0262d;margin-top:12px;font-size:13px;display:none;"></div>
+      </div>
+    </div>
+
     <!-- Conversation Inbox Panel -->
     <div id="inboxOverlay" class="inboxOverlay" style="display:none;"></div>
     <div id="inboxPanel" class="inboxPanel" style="display:none;">

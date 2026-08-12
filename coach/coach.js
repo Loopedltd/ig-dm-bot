@@ -303,6 +303,48 @@ function buildStructuredCoachContext({
 
   return sections.join("\n\n");
 }
+  // ── Trial-ended gate ──────────────────────────────────────────────────────
+  // Shown immediately when any API call returns 402 with stripe_status=trial_expired.
+  // Wired once; idempotent — safe to call multiple times.
+  let _trialGateShown = false;
+  function showTrialEndedGate() {
+    if (_trialGateShown) return;
+    _trialGateShown = true;
+
+    const gate = document.getElementById("trialEndedGate");
+    const btn  = document.getElementById("trialGatePayBtn");
+    const err  = document.getElementById("trialGateErr");
+    if (!gate) return;
+
+    gate.style.display = "flex";
+
+    if (btn && !btn.__wired) {
+      btn.__wired = true;
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "Loading\u2026";
+        if (err) err.style.display = "none";
+
+        try {
+          const data = await fetch(`${API}/trial-subscribe`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${getToken()}`,
+            },
+          }).then((r) => r.json());
+
+          if (!data?.url) throw new Error(data?.error || "No checkout URL returned");
+          window.location.href = data.url;
+        } catch (e) {
+          if (err) { err.textContent = String(e.message || e); err.style.display = "block"; }
+          btn.disabled = false;
+          btn.textContent = "Add payment details";
+        }
+      });
+    }
+  }
+
   async function apiFetch(path, opts = {}) {
     const token = getToken();
 
@@ -325,6 +367,12 @@ function buildStructuredCoachContext({
     }
 
     if (!res.ok) {
+      // 402 with trial_expired: show the in-dashboard gate overlay immediately.
+      // The gate covers the whole viewport, so per-caller error UI is irrelevant.
+      if (res.status === 402 && json?.stripe_status === "trial_expired") {
+        showTrialEndedGate();
+      }
+
       const msg =
         json?.error ||
         json?.message ||
