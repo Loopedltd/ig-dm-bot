@@ -114,10 +114,10 @@
         </svg>
       </div>
 
-      <h1>Your trial has ended</h1>
-      <p class="sub">Subscribe to keep your Instagram automations running. Your settings and Instagram connection are saved and will be active immediately on payment.</p>
+      <h1>Your free trial has ended</h1>
+      <p class="sub">Add your payment details to keep Looped running, replying to DMs, qualifying leads, and booking calls for you.</p>
 
-      <button id="subscribeBtn">Subscribe to Looped</button>
+      <button id="subscribeBtn">Add payment details</button>
 
       <a class="logout-link" id="logoutLink">Log out</a>
 
@@ -165,7 +165,7 @@
             .catch(function (e) {
               if (errEl) { errEl.textContent = String(e.message || e); errEl.style.display = "block"; }
               btn.disabled = false;
-              btn.textContent = "Subscribe to Looped";
+              btn.textContent = "Add payment details";
             });
         });
       })();

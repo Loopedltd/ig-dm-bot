@@ -4403,6 +4403,22 @@ app.post("/admin/api/clients/:clientId/mute-alerts", requireAdmin, async (req, r
   }
 });
 
+// ── Pause / resume automated trial-conversion payment reminder email ──────────
+app.post("/admin/api/clients/:clientId/pause-payment-reminder", requireAdmin, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { paused } = req.body || {};
+    const { error } = await supabase
+      .from("clients")
+      .update({ payment_reminder_paused: !!paused })
+      .eq("id", clientId);
+    if (error) return safeJson(res, 500, { error: error.message });
+    return safeJson(res, 200, { ok: true, payment_reminder_paused: !!paused });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
 // ── Health issues log ─────────────────────────────────────────────────────────
 app.get("/admin/api/health-issues", requireAdmin, async (req, res) => {
   try {
@@ -6837,6 +6853,37 @@ app.get("/trial-ended", (req, res) => {
   res.sendFile(path.join(__dirname, "coach", "trial-ended.html"));
 });
 
+// ── Shared helper: create a Stripe Checkout for a no-card trial conversion ────
+// Used by both POST /coach/api/trial-subscribe (button on trial-ended page) and
+// runTrialConversionJob (day-7 email), so the session parameters are never out
+// of sync between the two paths.
+//   priceAmount   — integer pence (e.g. 5000 = £50)
+//   clientId      — string/number, written into session metadata for the webhook
+//   customerEmail — optional; pass when creating the session on behalf of a coach
+//                   (day-7 job). Omit when the coach is actively on-screen (button).
+async function createTrialCheckoutSession({ priceAmount, clientId, customerEmail }) {
+  const stripePrice = await stripe.prices.create({
+    currency: "gbp",
+    unit_amount: priceAmount,
+    recurring: { interval: "month" },
+    product_data: { name: "Looped — Instagram DM Automation" },
+  });
+
+  const sessionParams = {
+    mode: "subscription",
+    payment_method_collection: "always",
+    line_items: [{ price: stripePrice.id, quantity: 1 }],
+    metadata: { client_id: String(clientId) },
+    success_url: `${APP_PUBLIC_URL}/login?paid=1`,
+    cancel_url: `${APP_PUBLIC_URL}/trial-ended`,
+    billing_address_collection: "required",
+    automatic_tax: { enabled: true },
+  };
+  if (customerEmail) sessionParams.customer_email = customerEmail;
+
+  return stripe.checkout.sessions.create(sessionParams);
+}
+
 // ── POST /coach/api/trial-subscribe — creates Stripe checkout for expired trials ─
 // Uses requireAuthCoach (not requireCoach) so trial_expired coaches can call it.
 app.post("/coach/api/trial-subscribe", requireAuthCoach, async (req, res) => {
@@ -6849,24 +6896,7 @@ app.post("/coach/api/trial-subscribe", requireAuthCoach, async (req, res) => {
       return safeJson(res, 400, { error: "No price on file for this trial account. Contact james@looped.ltd." });
     }
 
-    const stripePrice = await stripe.prices.create({
-      currency: "gbp",
-      unit_amount: priceAmount,
-      recurring: { interval: "month" },
-      product_data: { name: "Looped — Instagram DM Automation" },
-    });
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      payment_method_collection: "always",
-      line_items: [{ price: stripePrice.id, quantity: 1 }],
-      metadata: { client_id: String(clientId) },
-      success_url: `${APP_PUBLIC_URL}/login?paid=1`,
-      cancel_url: `${APP_PUBLIC_URL}/trial-ended`,
-      billing_address_collection: "required",
-      automatic_tax: { enabled: true },
-    });
-
+    const session = await createTrialCheckoutSession({ priceAmount, clientId });
     return safeJson(res, 200, { ok: true, url: session.url });
   } catch (e) {
     return safeJson(res, 500, { error: String(e?.message || e) });
@@ -10730,7 +10760,9 @@ async function runTrialConversionJob() {
 
   for (const cfg of expired) {
     try {
-      // Flip status first — prevents any concurrent run from double-processing
+      // Flip status first — prevents any concurrent run from double-processing.
+      // This happens regardless of payment_reminder_paused so the dashboard gate
+      // always engages on time, even when the email is suppressed.
       await supabase
         .from("client_configs")
         .update({ stripe_subscription_status: "trial_expired" })
@@ -10739,6 +10771,18 @@ async function runTrialConversionJob() {
       const priceAmount = cfg.trial_price_amount;
       if (!priceAmount) {
         console.error("[trial_conversion] no trial_price_amount for client_id:", cfg.client_id);
+        continue;
+      }
+
+      // Check whether the admin has paused the payment reminder email for this client
+      const { data: clientRow } = await supabase
+        .from("clients")
+        .select("payment_reminder_paused")
+        .eq("id", cfg.client_id)
+        .maybeSingle();
+
+      if (clientRow?.payment_reminder_paused) {
+        console.log("[trial_conversion] payment reminder paused for client_id", cfg.client_id, "— skipping email");
         continue;
       }
 
@@ -10755,29 +10799,16 @@ async function runTrialConversionJob() {
         continue;
       }
 
-      // Create Stripe Checkout at their original custom price (no trial, card required)
       if (!stripe) {
         console.warn("[trial_conversion] Stripe not configured, skipping checkout for", cfg.client_id);
         continue;
       }
 
-      const stripePrice = await stripe.prices.create({
-        currency: "gbp",
-        unit_amount: priceAmount,
-        recurring: { interval: "month" },
-        product_data: { name: "Looped — Instagram DM Automation" },
-      });
-
-      const session = await stripe.checkout.sessions.create({
-        mode: "subscription",
-        payment_method_collection: "always",
-        line_items: [{ price: stripePrice.id, quantity: 1 }],
-        customer_email: email,
-        metadata: { client_id: String(cfg.client_id) },
-        success_url: `${APP_PUBLIC_URL}/login?paid=1`,
-        cancel_url: `${APP_PUBLIC_URL}/trial-ended`,
-        billing_address_collection: "required",
-        automatic_tax: { enabled: true },
+      // Use shared helper — same params as the button on the trial-ended page
+      const session = await createTrialCheckoutSession({
+        priceAmount,
+        clientId: cfg.client_id,
+        customerEmail: email,
       });
 
       // Send conversion email
@@ -10788,9 +10819,9 @@ async function runTrialConversionJob() {
           subject: "Your Looped trial has ended — here's your link to continue",
           html: `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;color:#0f172a;">
 <p style="font-size:15px;">Hi,</p>
-<p style="font-size:15px;line-height:1.6;">Your 7-day Looped trial has ended. To keep your Instagram automations running, subscribe using the button below — your settings and Instagram connection are saved and will be active immediately on payment.</p>
+<p style="font-size:15px;line-height:1.6;">Your 7-day Looped trial has ended. To keep your Instagram automations running, add your payment details using the button below — your settings and Instagram connection are saved and will be active immediately on payment.</p>
 <p style="margin:28px 0;">
-  <a href="${session.url}" style="display:inline-block;background:#2d6bff;color:#fff;padding:13px 28px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;">Subscribe to Looped &rarr;</a>
+  <a href="${session.url}" style="display:inline-block;background:#2d6bff;color:#fff;padding:13px 28px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;">Add payment details &rarr;</a>
 </p>
 <p style="font-size:13px;color:#64748b;">Questions? Reply to this email or contact <a href="mailto:james@looped.ltd" style="color:#2d6bff;">james@looped.ltd</a>.</p>
 </div>`,

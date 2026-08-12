@@ -199,6 +199,7 @@ const AdminDashboard = {
       const badgeCls = status === "active" || status === "trialing" || status === "demo" ? "ok" : status === "past_due" ? "warn" : "off";
       const niche = cfg.niche || "generic";
       const muted = !!c.alerts_muted;
+      const reminderPaused = !!c.payment_reminder_paused;
       const offboarded = !!c.offboarded_at || c.is_active === false;
       return `<tr>
         <td style="font-weight:700;">
@@ -222,6 +223,7 @@ const AdminDashboard = {
             <button class="btn sm" onclick="AdminDashboard.openCredsModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Show credentials</button>
             <button class="btn sm danger" onclick="AdminDashboard.openResetPwModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Reset password</button>
             <button class="btn sm${muted ? " muted-on" : ""}" onclick="AdminDashboard.toggleMute('${escHtml(c.id)}', ${muted})">${muted ? "Unmute alerts" : "Mute alerts"}</button>
+            <button class="btn sm${reminderPaused ? " muted-on" : ""}" onclick="AdminDashboard.togglePaymentReminderPause('${escHtml(c.id)}', ${reminderPaused})">${reminderPaused ? "Resume follow-up email" : "Pause follow-up email"}</button>
             <button class="btn sm danger" onclick="AdminDashboard.openOffboardModal('${escHtml(c.id)}', '${escHtml(c.name || "")}')">Offboard</button>
             `}
           </div>
@@ -245,6 +247,24 @@ const AdminDashboard = {
       }
     } catch (e) {
       alert("Failed to toggle mute: " + (e.message || e));
+    }
+  },
+
+  // ── Pause / resume trial payment reminder email ────────────────────────────
+
+  async togglePaymentReminderPause(clientId, currentlyPaused) {
+    try {
+      await apiFetch(`/admin/api/clients/${clientId}/pause-payment-reminder`, {
+        method: "POST",
+        body: JSON.stringify({ paused: !currentlyPaused }),
+      });
+      const client = this._clients.find((c) => c.id === clientId);
+      if (client) {
+        client.payment_reminder_paused = !currentlyPaused;
+        this.renderClientTable();
+      }
+    } catch (e) {
+      alert("Failed to toggle payment reminder: " + (e.message || e));
     }
   },
 
