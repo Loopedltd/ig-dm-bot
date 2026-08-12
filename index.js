@@ -7499,8 +7499,17 @@ async function processDmQueue() {
 
     console.log(`processDmQueue: processing ${pendingItems.length} pending item(s)`);
 
+    // Build allowed-client set once per run — skip trial_expired / canceled accounts.
+    const { data: allowedCfgsDm } = await supabase
+      .from("client_configs")
+      .select("client_id")
+      .in("stripe_subscription_status", ["active", "trialing", "demo", "trialing_no_card"]);
+    const allowedClientIdsDm = new Set((allowedCfgsDm || []).map(c => String(c.client_id)));
+
     for (const item of pendingItems) {
       try {
+        if (!allowedClientIdsDm.has(String(item.client_id))) continue;
+
         // Check rate limit per account
         let tracker = dmQueueRateTracker.get(item.client_id);
         const now = Date.now();
@@ -9644,7 +9653,16 @@ async function runRebootRecoveryJob() {
     return;
   }
 
+  // Build allowed-client set once — skip trial_expired / canceled accounts.
+  const { data: allowedCfgsRr } = await supabase
+    .from("client_configs")
+    .select("client_id")
+    .in("stripe_subscription_status", ["active", "trialing", "demo", "trialing_no_card"]);
+  const allowedClientIdsRr = new Set((allowedCfgsRr || []).map(c => String(c.client_id)));
+
   for (const lead of leads || []) {
+    if (!allowedClientIdsRr.has(String(lead.client_id))) continue;
+
     const inboundMs  = lead.last_inbound_at  ? new Date(lead.last_inbound_at).getTime()  : 0;
     const outboundMs = lead.last_outbound_at ? new Date(lead.last_outbound_at).getTime() : -1;
     // Only recover if there's an unanswered inbound (inbound strictly newer than last outbound)
@@ -9728,7 +9746,16 @@ async function runFollowUpJob() {
     return;
   }
 
+  // Build allowed-client set once — skip trial_expired / canceled accounts.
+  const { data: allowedCfgsFu } = await supabase
+    .from("client_configs")
+    .select("client_id")
+    .in("stripe_subscription_status", ["active", "trialing", "demo", "trialing_no_card"]);
+  const allowedClientIdsFu = new Set((allowedCfgsFu || []).map(c => String(c.client_id)));
+
   for (const lead of leads || []) {
+    if (!allowedClientIdsFu.has(String(lead.client_id))) continue;
+
     // Skip if they replied after the bot's last message
     if (
       lead.last_inbound_at &&
@@ -10861,6 +10888,11 @@ async function runTrialConversionJob() {
         .from("client_configs")
         .update({ stripe_subscription_status: "trial_expired" })
         .eq("client_id", cfg.client_id);
+
+      // Disconnect Instagram immediately after the status flip so background
+      // jobs (DM queue, follow-up, reboot recovery) stop processing this
+      // account right away. Mirrors the cancellation flow exactly.
+      await deactivateClientInstagram(cfg.client_id);
 
       const priceAmount = cfg.trial_price_amount;
       if (!priceAmount) {
