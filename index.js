@@ -3704,6 +3704,15 @@ app.post("/admin/api/flush-dm-queue", requireAdmin, async (req, res) => {
   }
 });
 
+app.post("/admin/api/run-trial-conversion", requireAdmin, async (req, res) => {
+  try {
+    await runTrialConversionJob();
+    res.json({ ok: true, message: "Trial conversion job completed" });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
+});
+
 app.get("/admin/api/stats", requireAdmin, async (req, res) => {
   try {
     const { count: clientsCount, error: cErr } = await supabase
@@ -6869,7 +6878,52 @@ if (existingUsersErr) {
     .limit(1);
 
   if (emailConflict && emailConflict.length > 0) {
-    console.warn("[checkout.session.completed] email already registered, skipping coach_users insert:", webhookEmail, "client_id:", clientId);
+    // Email is already registered to a different client_id.
+    // Auto-attach the new subscription to the existing account so the coach
+    // isn't left in a paid-but-locked state.
+    const existingClientId = emailConflict[0].client_id;
+
+    try {
+      await updateClientStripeStatus(existingClientId, {
+        stripe_customer_id: customerId,
+        stripe_subscription_id: subscriptionId,
+        stripe_subscription_status: status,
+        stripe_current_period_end: currentPeriodEnd,
+      });
+    } catch (attachErr) {
+      console.error("[checkout.session.completed] failed to attach subscription to existing client:", attachErr);
+    }
+
+    // Alert admin with enough detail to investigate manually.
+    try {
+      const amountGbp = session.amount_total != null
+        ? "£" + (session.amount_total / 100).toFixed(2)
+        : "unknown";
+
+      if (resend) {
+        await resend.emails.send({
+          from: ALERT_FROM,
+          to: ALERT_EMAIL,
+          subject: "[Looped] Payment conflict: email already registered",
+          html: `
+            <p><strong>A checkout completed for an email already registered to a different client.</strong></p>
+            <p>The new subscription has been auto-attached to the existing account. Please verify manually.</p>
+            <table>
+              <tr><td><strong>Email</strong></td><td>${webhookEmail}</td></tr>
+              <tr><td><strong>Stripe session</strong></td><td>${session.id}</td></tr>
+              <tr><td><strong>Stripe customer</strong></td><td>${customerId}</td></tr>
+              <tr><td><strong>Amount charged</strong></td><td>${amountGbp}</td></tr>
+              <tr><td><strong>New (orphaned) client_id</strong></td><td>${clientId}</td></tr>
+              <tr><td><strong>Existing client_id (subscription attached here)</strong></td><td>${existingClientId}</td></tr>
+            </table>
+          `,
+        });
+      }
+    } catch (alertErr) {
+      console.error("[checkout.session.completed] failed to send conflict alert email:", alertErr);
+    }
+
+    console.warn("[checkout.session.completed] email conflict resolved: subscription attached to existing client_id:", existingClientId, "(new client_id:", clientId, ")");
   } else {
     await supabase.from("coach_users").insert({
       email: webhookEmail,
