@@ -4767,12 +4767,18 @@ app.post("/coach/api/set-password", async (req, res) => {
     if (existingUsers && existingUsers.length > 0) {
       const existingUser = existingUsers[0];
 
+      // If the existing coach_users row belongs to a DIFFERENT client, this email
+      // is already registered on another account — block rather than silently
+      // reassigning the client_id (which would hijack an existing account).
+      if (String(existingUser.client_id) !== String(link.client_id)) {
+        return safeJson(res, 409, { error: "This email is already in use." });
+      }
+
+      // Same client_id — legitimate password update (e.g. coach is resetting their
+      // password via a fresh payment link for their own account).
       const { error: updateErr } = await supabase
         .from("coach_users")
-        .update({
-          password_hash,
-          client_id: link.client_id,
-        })
+        .update({ password_hash })
         .eq("id", existingUser.id);
 
       if (updateErr) {
@@ -6475,10 +6481,29 @@ app.post("/coach/api/billing-portal", requireCoach, async (req, res) => {
     const clientId = req.coach.client_id;
     const customerId = req.coachConfig?.stripe_customer_id;
 
-    // ── Demo accounts: no Stripe customer yet → create a Checkout session so
-    //    Stripe collects email + payment method from scratch.
-    //    Do NOT set customer or customer_email — Stripe always asks for both.
     if (!customerId) {
+      const status = String(req.coachConfig?.stripe_subscription_status || "").toLowerCase();
+
+      // ── trialing_no_card: coach has a password already (set during trial signup)
+      //    and a stored custom price. Use createTrialCheckoutSession() — same helper
+      //    as the trial-ended page button and the day-7 email job — so the price is
+      //    always sourced from trial_price_amount, never from STRIPE_PRICE_MONTHLY.
+      //    No payment_links row needed; the coach skips set-password and goes to /login.
+      if (status === "trialing_no_card") {
+        const priceAmount = req.coachConfig?.trial_price_amount;
+        if (!priceAmount) {
+          return safeJson(res, 400, { error: "No price on file for this trial account. Contact james@looped.ltd." });
+        }
+        const session = await createTrialCheckoutSession({
+          priceAmount,
+          clientId,
+          cancelUrl: `${APP_PUBLIC_URL}/dashboard`,
+        });
+        return safeJson(res, 200, { ok: true, url: session.url });
+      }
+
+      // ── Demo / Instagram-OAuth accounts: no custom price, Stripe collects email
+      //    + payment method from scratch. Use the default monthly price.
       if (!STRIPE_PRICE_MONTHLY) {
         return safeJson(res, 500, { error: "No price configured" });
       }
@@ -6833,11 +6858,25 @@ const { data: existingUsers, error: existingUsersErr } = await supabase
 if (existingUsersErr) {
   console.error("coach_users lookup error:", existingUsersErr);
 } else if ((!existingUsers || existingUsers.length === 0) && session.customer_details?.email) {
-  await supabase.from("coach_users").insert({
-    email: String(session.customer_details.email).toLowerCase(),
-    password_hash: "",
-    client_id: clientId,
-  });
+  const webhookEmail = String(session.customer_details.email).toLowerCase();
+
+  // Guard against duplicate emails — if this email is already registered on
+  // another client_id, skip the insert rather than create a conflicting row.
+  const { data: emailConflict } = await supabase
+    .from("coach_users")
+    .select("client_id")
+    .eq("email", webhookEmail)
+    .limit(1);
+
+  if (emailConflict && emailConflict.length > 0) {
+    console.warn("[checkout.session.completed] email already registered, skipping coach_users insert:", webhookEmail, "client_id:", clientId);
+  } else {
+    await supabase.from("coach_users").insert({
+      email: webhookEmail,
+      password_hash: "",
+      client_id: clientId,
+    });
+  }
 }
       }
     }
@@ -6854,14 +6893,15 @@ app.get("/trial-ended", (req, res) => {
 });
 
 // ── Shared helper: create a Stripe Checkout for a no-card trial conversion ────
-// Used by both POST /coach/api/trial-subscribe (button on trial-ended page) and
-// runTrialConversionJob (day-7 email), so the session parameters are never out
-// of sync between the two paths.
+// Used by POST /coach/api/trial-subscribe, POST /coach/api/billing-portal
+// (trialing_no_card branch), and runTrialConversionJob — session parameters
+// are never out of sync between these three paths.
 //   priceAmount   — integer pence (e.g. 5000 = £50)
 //   clientId      — string/number, written into session metadata for the webhook
-//   customerEmail — optional; pass when creating the session on behalf of a coach
-//                   (day-7 job). Omit when the coach is actively on-screen (button).
-async function createTrialCheckoutSession({ priceAmount, clientId, customerEmail }) {
+//   customerEmail — optional; pass when creating on behalf of a coach (day-7 job)
+//   cancelUrl     — optional; defaults to /trial-ended (override to /dashboard
+//                   when coach is actively on the dashboard)
+async function createTrialCheckoutSession({ priceAmount, clientId, customerEmail, cancelUrl }) {
   const stripePrice = await stripe.prices.create({
     currency: "gbp",
     unit_amount: priceAmount,
@@ -6875,7 +6915,7 @@ async function createTrialCheckoutSession({ priceAmount, clientId, customerEmail
     line_items: [{ price: stripePrice.id, quantity: 1 }],
     metadata: { client_id: String(clientId) },
     success_url: `${APP_PUBLIC_URL}/login?paid=1`,
-    cancel_url: `${APP_PUBLIC_URL}/trial-ended`,
+    cancel_url: cancelUrl || `${APP_PUBLIC_URL}/trial-ended`,
     billing_address_collection: "required",
     automatic_tax: { enabled: true },
   };

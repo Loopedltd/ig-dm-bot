@@ -348,11 +348,12 @@ function buildStructuredCoachContext({
     if (billingPortalBtn && !billingPortalBtn.__wired) {
       billingPortalBtn.__wired = true;
 
-      // Update button label based on subscription status: "Subscribe" for demo
-      // accounts (no Stripe customer), "Manage subscription" for paying accounts.
+      // Update button label based on subscription status:
+      //   "Subscribe" — demo / trialing_no_card / unknown (no real Stripe subscription yet)
+      //   "Manage subscription" — active / trialing (real Stripe subscription exists)
       apiFetch(`${API}/config`).then((data) => {
         const status = data?.config?.stripe_subscription_status || null;
-        if (status === "demo" || !status) {
+        if (status === "demo" || status === "trialing_no_card" || !status) {
           billingPortalBtn.textContent = "Subscribe";
         }
       }).catch(() => {}); // non-critical — label stays as default
