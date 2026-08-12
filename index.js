@@ -349,7 +349,7 @@ function randomInt(min, max) {
 
 function isAllowedStripeStatus(status) {
   const s = String(status || "").toLowerCase();
-  return s === "active" || s === "trialing" || s === "demo";
+  return s === "active" || s === "trialing" || s === "demo" || s === "trialing_no_card";
 }
 
 function getHost(req) {
@@ -4823,6 +4823,12 @@ app.post("/coach/api/login", async (req, res) => {
       return safeJson(res, 200, { ok: true, token, subscription_canceled: true });
     }
 
+    // Trial-ended coaches get a restricted token so they can reach the trial-ended screen
+    if (String(status).toLowerCase() === "trial_expired") {
+      const token = signCoachToken(user.client_id, { trial_ended: true });
+      return safeJson(res, 200, { ok: true, token, trial_ended: true });
+    }
+
     // 🔒 block login unless paid
     if (!isAllowedStripeStatus(status)) {
       return safeJson(res, 402, {
@@ -6825,6 +6831,47 @@ if (existingUsersErr) {
  * RESTART SUBSCRIPTION (post-cancellation, no trial)
  * ===========================
  */
+
+// ── GET /trial-ended — standalone page for expired no-card trials ──────────────
+app.get("/trial-ended", (req, res) => {
+  res.sendFile(path.join(__dirname, "coach", "trial-ended.html"));
+});
+
+// ── POST /coach/api/trial-subscribe — creates Stripe checkout for expired trials ─
+// Uses requireAuthCoach (not requireCoach) so trial_expired coaches can call it.
+app.post("/coach/api/trial-subscribe", requireAuthCoach, async (req, res) => {
+  try {
+    assertStripeConfigured();
+    const clientId = req.coach.client_id;
+    const priceAmount = req.coachConfig?.trial_price_amount;
+
+    if (!priceAmount) {
+      return safeJson(res, 400, { error: "No price on file for this trial account. Contact james@looped.ltd." });
+    }
+
+    const stripePrice = await stripe.prices.create({
+      currency: "gbp",
+      unit_amount: priceAmount,
+      recurring: { interval: "month" },
+      product_data: { name: "Looped — Instagram DM Automation" },
+    });
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      payment_method_collection: "always",
+      line_items: [{ price: stripePrice.id, quantity: 1 }],
+      metadata: { client_id: String(clientId) },
+      success_url: `${APP_PUBLIC_URL}/login?paid=1`,
+      cancel_url: `${APP_PUBLIC_URL}/trial-ended`,
+      billing_address_collection: "required",
+      automatic_tax: { enabled: true },
+    });
+
+    return safeJson(res, 200, { ok: true, url: session.url });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
 
 app.post("/coach/api/restart-subscription", requireAuthCoach, async (req, res) => {
   try {
@@ -10661,6 +10708,103 @@ async function pollAccountComments(acc) {
   console.log(`[comment_poll] ${acc.ig_username || igUserId}: poll complete — ${newCommentsFound} new comment(s) dispatched`);
 }
 
+// ── Trial conversion job ───────────────────────────────────────────────────────
+// Runs daily. Finds accounts whose no-card trial has expired, emails them a
+// Stripe Checkout link at their stored custom price, and marks them trial_expired
+// so the email is never sent twice.
+async function runTrialConversionJob() {
+  const now = new Date().toISOString();
+  const { data: expired, error } = await supabase
+    .from("client_configs")
+    .select("client_id, trial_price_amount")
+    .eq("stripe_subscription_status", "trialing_no_card")
+    .lt("trial_end", now);
+
+  if (error) {
+    console.error("[trial_conversion] query failed:", error.message);
+    return;
+  }
+  if (!expired?.length) return;
+
+  console.log(`[trial_conversion] processing ${expired.length} expired trial(s)`);
+
+  for (const cfg of expired) {
+    try {
+      // Flip status first — prevents any concurrent run from double-processing
+      await supabase
+        .from("client_configs")
+        .update({ stripe_subscription_status: "trial_expired" })
+        .eq("client_id", cfg.client_id);
+
+      const priceAmount = cfg.trial_price_amount;
+      if (!priceAmount) {
+        console.error("[trial_conversion] no trial_price_amount for client_id:", cfg.client_id);
+        continue;
+      }
+
+      // Get coach email
+      const { data: users } = await supabase
+        .from("coach_users")
+        .select("email")
+        .eq("client_id", cfg.client_id)
+        .limit(1);
+
+      const email = users?.[0]?.email;
+      if (!email) {
+        console.warn("[trial_conversion] no email for client_id:", cfg.client_id);
+        continue;
+      }
+
+      // Create Stripe Checkout at their original custom price (no trial, card required)
+      if (!stripe) {
+        console.warn("[trial_conversion] Stripe not configured, skipping checkout for", cfg.client_id);
+        continue;
+      }
+
+      const stripePrice = await stripe.prices.create({
+        currency: "gbp",
+        unit_amount: priceAmount,
+        recurring: { interval: "month" },
+        product_data: { name: "Looped — Instagram DM Automation" },
+      });
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        payment_method_collection: "always",
+        line_items: [{ price: stripePrice.id, quantity: 1 }],
+        customer_email: email,
+        metadata: { client_id: String(cfg.client_id) },
+        success_url: `${APP_PUBLIC_URL}/login?paid=1`,
+        cancel_url: `${APP_PUBLIC_URL}/trial-ended`,
+        billing_address_collection: "required",
+        automatic_tax: { enabled: true },
+      });
+
+      // Send conversion email
+      if (resend) {
+        await resend.emails.send({
+          from: "Looped <hello@looped.ltd>",
+          to: email,
+          subject: "Your Looped trial has ended — here's your link to continue",
+          html: `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;color:#0f172a;">
+<p style="font-size:15px;">Hi,</p>
+<p style="font-size:15px;line-height:1.6;">Your 7-day Looped trial has ended. To keep your Instagram automations running, subscribe using the button below — your settings and Instagram connection are saved and will be active immediately on payment.</p>
+<p style="margin:28px 0;">
+  <a href="${session.url}" style="display:inline-block;background:#2d6bff;color:#fff;padding:13px 28px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;">Subscribe to Looped &rarr;</a>
+</p>
+<p style="font-size:13px;color:#64748b;">Questions? Reply to this email or contact <a href="mailto:james@looped.ltd" style="color:#2d6bff;">james@looped.ltd</a>.</p>
+</div>`,
+        });
+        console.log("[trial_conversion] conversion email sent to", email, "for client_id", cfg.client_id);
+      } else {
+        console.warn("[trial_conversion] Resend not configured — skipping email for client_id", cfg.client_id);
+      }
+    } catch (e) {
+      console.error("[trial_conversion] error for client_id", cfg.client_id, ":", e?.message || e);
+    }
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 
@@ -10749,6 +10893,16 @@ app.listen(PORT, () => {
   }, 5 * 60 * 1000);
   setInterval(() => {
     runClientDeletionJob().catch((e) => console.error("client_deletion_job: error", e?.message || e));
+  }, 24 * 60 * 60 * 1000);
+
+  // Trial conversion job — finds expired no-card trials, emails a payment link,
+  // marks them trial_expired so the email is never sent twice. First run after
+  // 5 min (let the server settle), then every 24 hours.
+  setTimeout(() => {
+    runTrialConversionJob().catch((e) => console.error("[trial_conversion] startup run failed:", e?.message || e));
+  }, 5 * 60 * 1000);
+  setInterval(() => {
+    runTrialConversionJob().catch((e) => console.error("[trial_conversion] error:", e?.message || e));
   }, 24 * 60 * 60 * 1000);
 
   // Comment poll job — temporary fallback while pages_manage_metadata is pending

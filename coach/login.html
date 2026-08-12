@@ -303,6 +303,10 @@
             window.location.href = "/restart";
             return;
           }
+          if (res.j.trial_ended) {
+            window.location.href = "/trial-ended";
+            return;
+          }
           window.location.href = res.j.setup_complete ? "/dashboard" : "/settings";
         })
         .catch(function () {

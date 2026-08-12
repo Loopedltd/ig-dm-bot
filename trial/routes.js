@@ -158,17 +158,14 @@ router.get("/start/:token", async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CHECKOUT — POST /api/trial/checkout/:token
-// Creates a payment_links row then redirects to Stripe checkout
+// TRIAL SIGNUP — POST /api/trial/checkout/:token
+// No-card trial: creates the account immediately (no Stripe interaction),
+// sets a 7-day trial window, then redirects straight to /set-password.
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/api/trial/checkout/:token", async (req, res) => {
   const { token } = req.params;
 
   try {
-    if (!stripe) {
-      return res.status(500).json({ error: "Stripe not configured on this server" });
-    }
-
     // 1. Validate trial link
     const { data: trialLink, error: tlErr } = await supabase
       .from("trial_links")
@@ -191,7 +188,7 @@ router.post("/api/trial/checkout/:token", async (req, res) => {
     }
 
     // 3. Create a setup token in payment_links so the existing /set-password
-    //    flow works exactly as it does for manually-created clients
+    //    flow works exactly as it does for every other signup path.
     const setupToken = randomToken(24); // 48-char hex
     const { error: plErr } = await supabase.from("payment_links").insert({
       token: setupToken,
@@ -204,55 +201,39 @@ router.post("/api/trial/checkout/:token", async (req, res) => {
       return res.status(500).json({ error: "Failed to prepare onboarding" });
     }
 
-    // 4. Create Stripe Checkout Session
-    const monthlyPrice = trialLink.price_amount;
-    const monthlyLabel = `£${(monthlyPrice / 100).toFixed(0)}/month after trial`;
+    // 4. Activate the trial on client_configs — no Stripe interaction at all.
+    //    trial_price_amount is stored so the day-7 conversion job can create a
+    //    checkout at the correct custom price without needing the trial_links row.
+    const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { error: cfgErr } = await supabase
+      .from("client_configs")
+      .update({
+        stripe_subscription_status: "trialing_no_card",
+        trial_end: trialEnd,
+        trial_price_amount: trialLink.price_amount,
+      })
+      .eq("client_id", clientId);
 
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      payment_method_collection: "always",
-      line_items: [
-        {
-          price_data: {
-            currency: "gbp",
-            product_data: {
-              name: "Looped — Instagram DM Automation",
-              description: `7-day free trial, then ${monthlyLabel}`,
-            },
-            unit_amount: monthlyPrice,
-            recurring: { interval: "month" },
-          },
-          quantity: 1,
-        },
-      ],
-      subscription_data: {
-        trial_period_days: 7,
-      },
-      // metadata must match what the existing /webhook/stripe handler expects
-      metadata: {
-        client_id: String(clientId),
-        payment_token: setupToken,
-        trial_token: token,
-      },
-      // {CHECKOUT_SESSION_ID} is a Stripe placeholder — it's substituted with the real
-      // session ID before the redirect, so /trial/success can verify the session via API.
-      // payment_token is NOT in the URL — we read it from verified session metadata instead.
-      success_url: `${APP_PUBLIC_URL}/trial/success?session_id={CHECKOUT_SESSION_ID}&trial_token=${encodeURIComponent(token)}`,
-      cancel_url: `${APP_BASE_URL}/start/${token}`,
-      billing_address_collection: "required",
-      automatic_tax: { enabled: true },
-    });
+    if (cfgErr) {
+      console.error("[trial] failed to update client_configs:", cfgErr?.message);
+      // Roll back payment_links so the link can be retried
+      await supabase.from("payment_links").delete().eq("token", setupToken);
+      return res.status(500).json({ error: "Failed to activate trial" });
+    }
 
-    console.log("[trial] Stripe session created", { clientId, sessionId: session.id, token });
+    // 5. Mark trial link as completed so it can't be used again
+    await supabase
+      .from("trial_links")
+      .update({ status: "completed" })
+      .eq("token", token);
 
-    // 5. Return the Stripe Checkout URL as JSON.
-    // The client does window.location.href = data.url — we don't use a server-side
-    // redirect because fetch() follows cross-origin redirects and hits a CORS block
-    // when it tries to load stripe.com, which prevents the navigation from happening.
-    return res.json({ url: session.url });
+    console.log("[trial] no-card trial activated", { clientId, trialEnd, price: trialLink.price_amount });
+
+    // 6. Return the set-password URL directly — no Stripe session needed.
+    return res.json({ url: `/set-password?token=${encodeURIComponent(setupToken)}` });
   } catch (e) {
-    console.error("[trial] checkout error:", e?.message || e);
-    return res.status(500).json({ error: "Checkout failed — please try again" });
+    console.error("[trial] signup error:", e?.message || e);
+    return res.status(500).json({ error: "Signup failed — please try again" });
   }
 });
 
