@@ -6806,6 +6806,118 @@ cancel_url: `${PAY_PUBLIC_URL}/cancel?cancelled=1`,
 });
 /**
  * ===========================
+ * RESTART SUBSCRIPTION (post-cancellation, no trial)
+ * ===========================
+ */
+
+// ── GET /trial-ended — standalone page for expired no-card trials ──────────────
+app.get("/trial-ended", (req, res) => {
+  res.sendFile(path.join(__dirname, "coach", "trial-ended.html"));
+});
+
+// ── Shared helper: create a Stripe Checkout for a no-card trial conversion ────
+// Used by POST /coach/api/trial-subscribe, POST /coach/api/billing-portal
+// (trialing_no_card branch), and runTrialConversionJob — session parameters
+// are never out of sync between these three paths.
+//   priceAmount   — integer pence (e.g. 5000 = £50)
+//   clientId      — string/number, written into session metadata for the webhook
+//   customerEmail — optional; pass when creating on behalf of a coach (day-7 job)
+//   cancelUrl     — optional; defaults to /trial-ended (override to /dashboard
+//                   when coach is actively on the dashboard)
+async function createTrialCheckoutSession({ priceAmount, clientId, customerEmail, cancelUrl }) {
+  const stripePrice = await stripe.prices.create({
+    currency: "gbp",
+    unit_amount: priceAmount,
+    recurring: { interval: "month" },
+    product_data: { name: "Looped — Instagram DM Automation" },
+  });
+
+  const sessionParams = {
+    mode: "subscription",
+    payment_method_collection: "always",
+    line_items: [{ price: stripePrice.id, quantity: 1 }],
+    metadata: { client_id: String(clientId) },
+    success_url: `${APP_PUBLIC_URL}/login?paid=1`,
+    cancel_url: cancelUrl || `${APP_PUBLIC_URL}/trial-ended`,
+    billing_address_collection: "required",
+    automatic_tax: { enabled: true },
+  };
+  if (customerEmail) sessionParams.customer_email = customerEmail;
+
+  return stripe.checkout.sessions.create(sessionParams);
+}
+
+// ── POST /coach/api/trial-subscribe — creates Stripe checkout for expired trials ─
+// Uses requireAuthCoach (not requireCoach) so trial_expired coaches can call it.
+app.post("/coach/api/trial-subscribe", requireAuthCoach, async (req, res) => {
+  try {
+    assertStripeConfigured();
+    const clientId = req.coach.client_id;
+    const priceAmount = req.coachConfig?.trial_price_amount;
+
+    if (!priceAmount) {
+      return safeJson(res, 400, { error: "No price on file for this trial account. Contact james@looped.ltd." });
+    }
+
+    const session = await createTrialCheckoutSession({ priceAmount, clientId });
+    return safeJson(res, 200, { ok: true, url: session.url });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+app.post("/coach/api/restart-subscription", requireAuthCoach, async (req, res) => {
+  try {
+    assertStripeConfigured();
+
+    const clientId = req.coach.client_id;
+    const customerId = req.coachConfig?.stripe_customer_id;
+    if (!customerId) {
+      return safeJson(res, 400, { error: "No Stripe customer on file" });
+    }
+
+    // Get client-specific monthly price; fall back to env default price
+    const { data: client } = await supabase
+      .from("clients")
+      .select("monthly_retainer")
+      .eq("id", clientId)
+      .single();
+
+    const monthlyPence = Number(client?.monthly_retainer) || 0;
+
+    let lineItems;
+    if (monthlyPence > 0) {
+      const monthlyPrice = await stripe.prices.create({
+        currency: "gbp",
+        unit_amount: monthlyPence,
+        recurring: { interval: "month" },
+        product_data: { name: "Monthly retainer" },
+      });
+      lineItems = [{ price: monthlyPrice.id, quantity: 1 }];
+    } else {
+      if (!process.env.STRIPE_PRICE_MONTHLY) {
+        return safeJson(res, 500, { error: "No price configured" });
+      }
+      lineItems = [{ price: process.env.STRIPE_PRICE_MONTHLY, quantity: 1 }];
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer: String(customerId),
+      line_items: lineItems,
+      // No trial_period_days — paid restart
+      success_url: `${APP_PUBLIC_URL}/dashboard`,
+      cancel_url: `${APP_PUBLIC_URL}/restart`,
+    });
+
+    return safeJson(res, 200, { ok: true, url: session.url });
+  } catch (e) {
+    return safeJson(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+/**
+ * ===========================
  * STRIPE WEBHOOK
  * ===========================
  */
@@ -6934,118 +7046,6 @@ if (existingUsersErr) {
 }
       }
     }
-
-/**
- * ===========================
- * RESTART SUBSCRIPTION (post-cancellation, no trial)
- * ===========================
- */
-
-// ── GET /trial-ended — standalone page for expired no-card trials ──────────────
-app.get("/trial-ended", (req, res) => {
-  res.sendFile(path.join(__dirname, "coach", "trial-ended.html"));
-});
-
-// ── Shared helper: create a Stripe Checkout for a no-card trial conversion ────
-// Used by POST /coach/api/trial-subscribe, POST /coach/api/billing-portal
-// (trialing_no_card branch), and runTrialConversionJob — session parameters
-// are never out of sync between these three paths.
-//   priceAmount   — integer pence (e.g. 5000 = £50)
-//   clientId      — string/number, written into session metadata for the webhook
-//   customerEmail — optional; pass when creating on behalf of a coach (day-7 job)
-//   cancelUrl     — optional; defaults to /trial-ended (override to /dashboard
-//                   when coach is actively on the dashboard)
-async function createTrialCheckoutSession({ priceAmount, clientId, customerEmail, cancelUrl }) {
-  const stripePrice = await stripe.prices.create({
-    currency: "gbp",
-    unit_amount: priceAmount,
-    recurring: { interval: "month" },
-    product_data: { name: "Looped — Instagram DM Automation" },
-  });
-
-  const sessionParams = {
-    mode: "subscription",
-    payment_method_collection: "always",
-    line_items: [{ price: stripePrice.id, quantity: 1 }],
-    metadata: { client_id: String(clientId) },
-    success_url: `${APP_PUBLIC_URL}/login?paid=1`,
-    cancel_url: cancelUrl || `${APP_PUBLIC_URL}/trial-ended`,
-    billing_address_collection: "required",
-    automatic_tax: { enabled: true },
-  };
-  if (customerEmail) sessionParams.customer_email = customerEmail;
-
-  return stripe.checkout.sessions.create(sessionParams);
-}
-
-// ── POST /coach/api/trial-subscribe — creates Stripe checkout for expired trials ─
-// Uses requireAuthCoach (not requireCoach) so trial_expired coaches can call it.
-app.post("/coach/api/trial-subscribe", requireAuthCoach, async (req, res) => {
-  try {
-    assertStripeConfigured();
-    const clientId = req.coach.client_id;
-    const priceAmount = req.coachConfig?.trial_price_amount;
-
-    if (!priceAmount) {
-      return safeJson(res, 400, { error: "No price on file for this trial account. Contact james@looped.ltd." });
-    }
-
-    const session = await createTrialCheckoutSession({ priceAmount, clientId });
-    return safeJson(res, 200, { ok: true, url: session.url });
-  } catch (e) {
-    return safeJson(res, 500, { error: String(e?.message || e) });
-  }
-});
-
-app.post("/coach/api/restart-subscription", requireAuthCoach, async (req, res) => {
-  try {
-    assertStripeConfigured();
-
-    const clientId = req.coach.client_id;
-    const customerId = req.coachConfig?.stripe_customer_id;
-    if (!customerId) {
-      return safeJson(res, 400, { error: "No Stripe customer on file" });
-    }
-
-    // Get client-specific monthly price; fall back to env default price
-    const { data: client } = await supabase
-      .from("clients")
-      .select("monthly_retainer")
-      .eq("id", clientId)
-      .single();
-
-    const monthlyPence = Number(client?.monthly_retainer) || 0;
-
-    let lineItems;
-    if (monthlyPence > 0) {
-      const monthlyPrice = await stripe.prices.create({
-        currency: "gbp",
-        unit_amount: monthlyPence,
-        recurring: { interval: "month" },
-        product_data: { name: "Monthly retainer" },
-      });
-      lineItems = [{ price: monthlyPrice.id, quantity: 1 }];
-    } else {
-      if (!process.env.STRIPE_PRICE_MONTHLY) {
-        return safeJson(res, 500, { error: "No price configured" });
-      }
-      lineItems = [{ price: process.env.STRIPE_PRICE_MONTHLY, quantity: 1 }];
-    }
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      customer: String(customerId),
-      line_items: lineItems,
-      // No trial_period_days — paid restart
-      success_url: `${APP_PUBLIC_URL}/dashboard`,
-      cancel_url: `${APP_PUBLIC_URL}/restart`,
-    });
-
-    return safeJson(res, 200, { ok: true, url: session.url });
-  } catch (e) {
-    return safeJson(res, 500, { error: String(e?.message || e) });
-  }
-});
 
     if (event.type === "customer.subscription.updated") {
       const sub = event.data.object;
