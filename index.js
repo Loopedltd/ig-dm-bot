@@ -8257,6 +8257,20 @@ async function processDmEvent(messaging, igAccount, overrideText) {
 
           if (insertIncomingError) {
             console.error("messages insert incoming failed:", JSON.stringify(insertIncomingError));
+            // Feed into health-monitor ring buffer — triggers admin email if 3+ failures in 30 min
+            recordWebhookError(
+              lead.client_id,
+              `inbound_insert_failed: ${String(insertIncomingError?.message || JSON.stringify(insertIncomingError)).slice(0, 200)}`
+            );
+            log("inbound_insert_failed", {
+              leadId: lead.id,
+              clientId: lead.client_id,
+              error: insertIncomingError?.message || null,
+              code: insertIncomingError?.code || null,
+              details: insertIncomingError?.details || null,
+              hint: insertIncomingError?.hint || null,
+              messageRowKeys: Object.keys(messageRow),
+            });
           }
 
           const prevLastInboundAt = lead.last_inbound_at;
@@ -8266,7 +8280,8 @@ async function processDmEvent(messaging, igAccount, overrideText) {
                 last_inbound_at: nowIso(),
               });
             } catch (e) {
-              console.warn("last_inbound_at update failed:", e?.message || e);
+              console.error("last_inbound_at update failed:", lead.id, e?.message || e);
+              recordWebhookError(lead.client_id, `last_inbound_at_update_failed: ${String(e?.message || e).slice(0, 200)}`);
             }
           }
 
