@@ -3123,9 +3123,29 @@ function signInstagramState(clientId) {
 }
 
 function verifyInstagramState(state) {
-  const decoded = jwt.verify(state, COACH_JWT_SECRET);
+  let decoded;
+  try {
+    decoded = jwt.verify(state, COACH_JWT_SECRET);
+  } catch (jwtErr) {
+    // Detect a common misconfiguration: if META_FB_REDIRECT_URI is set to the
+    // same URL as META_REDIRECT_URI, Facebook's callback lands here instead of
+    // /auth/facebook/callback, and the state JWT will have type "facebook_chain".
+    try {
+      const raw = jwt.decode(state);
+      if (raw?.type === "facebook_chain") {
+        console.error(
+          "[oauth] MISCONFIGURATION DETECTED: Instagram callback received a facebook_chain state. " +
+          "META_FB_REDIRECT_URI appears to be pointing to the Instagram callback URL instead of " +
+          "/auth/facebook/callback. Check META_FB_REDIRECT_URI env var on Render."
+        );
+      }
+    } catch {}
+    console.error("[oauth] verifyInstagramState JWT error:", jwtErr?.message, "state_length:", state?.length);
+    throw jwtErr;
+  }
   const validTypes = ["instagram_connect", "instagram_signup"];
   if (!decoded || !validTypes.includes(decoded.type)) {
+    console.error("[oauth] verifyInstagramState unexpected type:", decoded?.type);
     throw new Error("invalid state");
   }
   if (decoded.type === "instagram_connect" && !decoded.client_id) {
@@ -3139,7 +3159,7 @@ function signFbChainState({ clientId, isNew }) {
   return jwt.sign(
     { type: "facebook_chain", client_id: clientId, is_new: !!isNew },
     COACH_JWT_SECRET,
-    { expiresIn: "15m" }
+    { expiresIn: "30m" }
   );
 }
 
@@ -9029,7 +9049,7 @@ app.get("/auth/instagram/start", (req, res) => {
     if (!INSTAGRAM_APP_ID || !META_REDIRECT_URI) {
       return res.redirect("/coach/login.html?instagram_error=Instagram+app+not+configured");
     }
-    const state = jwt.sign({ type: "instagram_signup" }, COACH_JWT_SECRET, { expiresIn: "15m" });
+    const state = jwt.sign({ type: "instagram_signup" }, COACH_JWT_SECRET, { expiresIn: "30m" });
     const authUrl = new URL("https://api.instagram.com/oauth/authorize");
     authUrl.searchParams.set("client_id", INSTAGRAM_APP_ID);
     authUrl.searchParams.set("redirect_uri", META_REDIRECT_URI);
@@ -9419,12 +9439,18 @@ app.get("/auth/facebook/callback", async (req, res) => {
 
   try {
     const stateParam = String(req.query.state || "");
+    if (!stateParam) {
+      console.error("[oauth] fb_callback: state parameter missing entirely — Facebook did not return it. Check META_FB_REDIRECT_URI and Meta app configuration.");
+    }
     const decoded = verifyFbChainState(stateParam);
     clientId = decoded.client_id;
     isNew = !!decoded.is_new;
     errorDest = isNew ? "/coach/login.html" : "/settings";
-  } catch {
-    return res.redirect("/settings?facebook_error=Invalid+or+expired+state");
+  } catch (fbStateErr) {
+    console.error("[oauth] fb_callback: state verification failed:", fbStateErr?.message, "state_present:", !!req.query.state, "query_keys:", Object.keys(req.query));
+    // Default to login page — more useful than /settings for new signups who
+    // haven't set a password yet (and /settings requires auth anyway).
+    return res.redirect("/coach/login.html?facebook_error=Invalid+or+expired+state");
   }
 
   // Helper: redirect to final destination
