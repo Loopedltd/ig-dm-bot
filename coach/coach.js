@@ -318,6 +318,14 @@ function buildStructuredCoachContext({
 
     gate.style.display = "flex";
 
+    // Disable all dashboard interactivity as a second layer — the overlay's
+    // z-index blocks visible clicks, but pointer-events:none prevents any
+    // event from reaching controls underneath even if z-index stacking shifts.
+    const wrap = document.querySelector(".wrap");
+    if (wrap) wrap.style.pointerEvents = "none";
+    // Gate itself must remain interactive so its own buttons work.
+    gate.style.pointerEvents = "auto";
+
     if (btn && !btn.__wired) {
       btn.__wired = true;
       btn.addEventListener("click", async () => {
@@ -472,7 +480,9 @@ async function loadInstagramConnectionStatus() {
       badgeEl.className = "badge warn";
       badgeEl.textContent = "Not connected";
 
-      metaEl.textContent = "No Instagram account connected yet.";
+      metaEl.textContent = data?.had_connection
+        ? "Your previous Instagram connection couldn\u2019t be automatically restored. Reconnect to resume automation."
+        : "No Instagram account connected yet.";
 
       btn.textContent = "Connect Instagram";
       btn.disabled = false;
@@ -1847,6 +1857,15 @@ function wireQueueRefreshButton() {
       return;
     }
 
+    // Fire the trial-ended gate immediately — before any data loads — so there
+    // is no flash of interactive content for trial_expired accounts. Data still
+    // loads in the background (read endpoints now allow trial_expired through
+    // server-side), populating the dimmed content visible behind the overlay.
+    const claims = decodeJwtPayload(getToken());
+    if (claims?.trial_ended) {
+      showTrialEndedGate();
+    }
+
     wireTopbarButtons();
     wireInstagramConnectButton();
     wireGlobalPauseButton();
@@ -1874,6 +1893,45 @@ function wireQueueRefreshButton() {
       // Clean up the URL without reloading
       window.history.replaceState({}, "", window.location.pathname);
     }
+
+    // After OAuth: show no-assets error if Business Portfolio had no Page/IG account attached
+    if (new URLSearchParams(window.location.search).get("ig_error") === "no_assets") {
+      showNoAssetsError();
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }
+
+  // Called when /auth/facebook/callback returns ig_error=no_assets.
+  // Shows the pre-rendered amber error box inside #instagramConnectionCard and
+  // hides the normal "Connect Instagram" button so "Try again" is the only CTA.
+  function showNoAssetsError() {
+    const errBox = qs("#igNoAssetsError");
+    const connectRight = qs("#connectInstagramBtn")?.closest(".connectRight");
+    if (errBox) errBox.style.display = "block";
+    if (connectRight) connectRight.style.display = "none";
+
+    const tryAgainBtn = qs("#igNoAssetsTryAgainBtn");
+    if (!tryAgainBtn || tryAgainBtn.__wired) return;
+    tryAgainBtn.__wired = true;
+
+    tryAgainBtn.addEventListener("click", async () => {
+      const errEl = qs("#instagramConnectError");
+      if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+      const originalText = tryAgainBtn.textContent;
+      try {
+        tryAgainBtn.disabled = true;
+        tryAgainBtn.style.opacity = "0.75";
+        tryAgainBtn.textContent = "Opening Instagram\u2026";
+        const data = await apiFetch(`${API}/instagram/connect-url`, { method: "GET" });
+        if (!data?.url) throw new Error("Missing Instagram connect URL");
+        window.location.href = data.url;
+      } catch (e) {
+        tryAgainBtn.disabled = false;
+        tryAgainBtn.style.opacity = "1";
+        tryAgainBtn.textContent = originalText;
+        if (errEl) { errEl.textContent = String(e.message || e); errEl.style.display = "block"; }
+      }
+    });
   }
 
   function showIgConnectedBanner() {

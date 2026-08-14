@@ -304,7 +304,10 @@
             return;
           }
           if (res.j.trial_ended) {
-            window.location.href = "/trial-ended";
+            // Redirect to dashboard — reads are now allowed for trial_expired accounts
+            // so the dashboard loads real data. The overlay gate fires immediately from
+            // the trial_ended JWT claim, identical to the mid-session experience.
+            window.location.href = "/dashboard";
             return;
           }
           window.location.href = res.j.setup_complete ? "/dashboard" : "/settings";

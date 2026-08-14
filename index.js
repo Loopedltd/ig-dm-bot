@@ -290,6 +290,8 @@ async function sendWithRetry(fn, retries = 3) {
       return await fn();
     } catch (e) {
       lastError = e;
+      // Don't retry permanent failures (e.g. user deactivated/deleted on IG)
+      if (e?.permanent) throw e;
       await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
     }
   }
@@ -1235,7 +1237,12 @@ async function sendInstagramTextMessage({
     const sendData = await sendResp.json().catch(() => null);
 
     if (!sendResp.ok) {
-      throw new Error(`Failed to send IG message: ${JSON.stringify(sendData)}`);
+      const err = new Error(`Failed to send IG message: ${JSON.stringify(sendData)}`);
+      // Subcodes that indicate the recipient is permanently unreachable:
+      // 2534014 = "The requested user cannot be found" (deleted/deactivated)
+      const subcode = sendData?.error?.error_subcode;
+      if (subcode === 2534014) err.permanent = true;
+      throw err;
     }
 
     return { sendResp, sendData };
@@ -2537,6 +2544,7 @@ CORE RULES — follow every single one:
 - keep every reply to 2-3 sentences maximum, no exceptions
 - use casual, warm language — contractions, short sentences, like you’re texting a friend
 - never use emojis by default
+- don't use exclamation marks by default — use a period or comma instead; only use one when the message genuinely calls for it (an actual exclamation, not just enthusiasm); most replies should have zero exclamation marks
 - never use a dash as a pause or to break up a sentence (e.g. never write "okay - what’s holding you back" or "great - let’s do it") — hyphens in compound words like "check-ins" or "well-structured" are fine, sentence-breaking dashes are not
 - never sound corporate, scripted, or like a support bot
 - never give a generic response — every reply must be specific to what they just said
@@ -2663,6 +2671,14 @@ The person may phrase things awkwardly. Answer what they meant, not just what th
 - "how much" → give the price directly
 - "I’ll think about it" → validate, then ask what they need to make a decision
 
+DIRECT QUESTION RULE:
+When a lead asks a direct, specific question about the product, pricing, process, or how something works:
+- answer it properly using the real information available in the context (system_prompt, faq, products, booking_items, main_result, etc.) — do not deflect to "jump on a call" before you’ve actually answered
+- use reasonable depth: if the question deserves a multi-sentence answer, give one; don’t truncate a real answer just to rush toward a CTA
+- once you have genuinely answered the question, you may naturally move toward booking if interest is clear — but the answer comes first, always
+- CRITICALLY: never invent or guess specifics not present in the context — if the coach’s config does not include the answer to something specific (e.g. a price you don’t have, a feature you’re not sure about), say so honestly: "I don’t have that detail to hand — I’ll get [coach name] to follow up with you directly" — then set should_pause_for_coach: true
+- never make up numbers, timelines, guarantees, or outcomes that aren’t in the provided context
+
 PROACTIVE PRODUCT INTRODUCTION RULE:
 When the lead's message touches on a topic that is semantically related to a saved product or service — even if they don't use the exact product name:
 - match by topic, theme, and description — not just exact keywords: e.g. someone mentioning "blush" or "makeup" should connect to a beauty product; someone asking about "staying consistent" or "building a routine" should connect to a coaching programme; someone mentioning "losing weight" or "getting lean" should connect to a fitness product
@@ -2729,6 +2745,15 @@ NICHE RULE:
 - niche is "${niche}" (${getNicheLabel(niche)})
 - use terminology and framing natural for that niche — fitness coaches talk about training, results, body change; money coaches talk about clients, revenue, offers; mindset coaches talk about beliefs, patterns, clarity; nutrition coaches talk about food, diet, consistency; relationship coaches talk about communication, patterns, connection; career coaches talk about direction, opportunities, progression; life coaches talk about goals, habits, clarity; sales coaches talk about pipeline, conversion, close rate; marketing coaches talk about messaging, content, attracting clients; leadership coaches talk about team, decisions, culture
 - match the language to what someone in that niche would actually say
+
+MESSAGE SPLITTING RULE:
+When a reply contains multiple genuinely distinct thoughts — e.g. an answer to a question followed by a separate question back, or two separate points that wouldn't naturally run together in one sentence — split them using a blank line (double newline) between each part.
+The system will send each part as a separate DM, the way a real person texts in bursts.
+- only split when it genuinely reads better as separate messages; don't artificially break short replies
+- maximum 3 parts; most replies are 1 part
+- never split a single flowing sentence across two parts
+- example of a natural split: "Yeah that's a 12-week programme, fully online.\n\nWhat's your current training like at the moment?"
+- a short reply that reads fine as one message should stay as one message
 
 Return ONLY valid JSON in this exact shape:
 {
@@ -3102,12 +3127,69 @@ async function deactivateClientInstagram(clientId) {
     for (const acc of igAccounts || []) {
       await supabase
         .from("ig_accounts")
-        .update({ is_active: false, page_access_token: null })
+        // Token is intentionally preserved (not nulled) so that automatic
+        // reactivation can be attempted if the coach re-subscribes. is_active=false
+        // is sufficient to stop all background jobs from processing this account.
+        .update({ is_active: false })
         .eq("id", acc.id);
     }
     log("ig_deactivated_on_cancel", { clientId, count: (igAccounts || []).length });
   } catch (e) {
     console.warn("[deactivateClientInstagram] failed for", clientId, e?.message);
+  }
+}
+
+// Attempt to silently restore a previously deactivated IG account after
+// successful payment. Called fire-and-forget from the Stripe webhook handler.
+async function attemptIgReactivation(clientId) {
+  const { data: igAcc } = await supabase
+    .from("ig_accounts")
+    .select("id, ig_user_id, ig_username, page_id, page_access_token")
+    .eq("client_id", clientId)
+    .eq("is_active", false)
+    .not("page_access_token", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!igAcc) {
+    console.log("[ig_reactivate] no deactivated IG account with preserved token for client", clientId, "— nothing to reactivate");
+    return;
+  }
+
+  // Lightweight token validation — use graph.instagram.com for Instagram Login
+  // accounts (page_id is null) and graph.facebook.com for Facebook Login accounts.
+  const useIgApi = !igAcc.page_id;
+  const token = encodeURIComponent(igAcc.page_access_token);
+  const validationUrl = useIgApi
+    ? `https://graph.instagram.com/v21.0/me?fields=id&access_token=${token}`
+    : `https://graph.facebook.com/v21.0/me?fields=id&access_token=${token}`;
+
+  try {
+    const resp = await fetch(validationUrl);
+    const body = await resp.json().catch(() => null);
+
+    if (!resp.ok || body?.error) {
+      console.warn("[ig_reactivate] token rejected by Meta for client", clientId, {
+        igAccountId: igAcc.id,
+        username: igAcc.ig_username || "unknown",
+        error: body?.error?.message || `HTTP ${resp.status}`,
+      });
+      console.log("[ig_reactivate] fallback to manual reconnect for client", clientId);
+      return;
+    }
+
+    await supabase
+      .from("ig_accounts")
+      .update({ is_active: true })
+      .eq("id", igAcc.id);
+
+    console.log("[ig_reactivate] SUCCESS: automatically reactivated Instagram for client", clientId, {
+      igAccountId: igAcc.id,
+      username: igAcc.ig_username || "unknown",
+    });
+  } catch (e) {
+    console.warn("[ig_reactivate] Meta API request failed for client", clientId, e?.message, "— falling back to manual reconnect");
   }
 }
 
@@ -3186,7 +3268,7 @@ function buildFacebookOAuthUrl(state) {
   return url.toString();
 }
 
-app.get("/coach/api/instagram/connect-url", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     if (!INSTAGRAM_APP_ID || !META_REDIRECT_URI) {
       return safeJson(res, 500, { error: "Instagram app env vars not configured" });
@@ -3345,7 +3427,7 @@ app.post("/coach/api/instagram/resubscribe", requireCoach, async (req, res) => {
 // Diagnostic: returns the raw Instagram API response for the subscribed_apps call
 // and also checks what the current subscription looks like.
 // Call: GET /coach/api/instagram/subscription-debug
-app.get("/coach/api/instagram/subscription-debug", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const { data: rows } = await supabase
       .from("ig_accounts")
@@ -3383,7 +3465,7 @@ app.get("/coach/api/instagram/subscription-debug", requireCoach, async (req, res
 // Runs the same two-stage lookup (User Profile API → Conversations API) used for new leads.
 // Safe to call multiple times — skips leads that already have a resolved name.
 // Single-lead fetch — used by the dashboard to poll until ig_name resolves from 'Loading...'
-app.get("/coach/api/leads/:leadId", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const { data: lead, error } = await supabase
       .from("leads")
@@ -3484,7 +3566,7 @@ app.post("/coach/api/leads/backfill-names", requireCoach, async (req, res) => {
   }
 });
 
-app.get("/coach/api/instagram/status", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("ig_accounts")
@@ -3496,7 +3578,16 @@ app.get("/coach/api/instagram/status", requireCoach, async (req, res) => {
       .maybeSingle();
 
     if (error || !data) {
-      return safeJson(res, 200, { connected: false });
+      // Check for a previously connected (now deactivated) account so the dashboard
+      // can show "reconnect to resume" rather than "never connected before."
+      const { data: deactivated } = await supabase
+        .from("ig_accounts")
+        .select("id")
+        .eq("client_id", req.coach.client_id)
+        .eq("is_active", false)
+        .limit(1)
+        .maybeSingle();
+      return safeJson(res, 200, { connected: false, had_connection: !!deactivated });
     }
 
     // A row existing is not enough — the account is only connected if it has
@@ -3543,7 +3634,7 @@ app.get("/coach/api/instagram/status", requireCoach, async (req, res) => {
   }
 });
 
-app.get("/coach/api/instagram/profile", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const { data: igAcc } = await supabase
       .from("ig_accounts")
@@ -3597,7 +3688,7 @@ app.get("/coach/api/instagram/profile", requireCoach, async (req, res) => {
   }
 });
 
-app.get("/coach/api/comment-activity", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("comment_activity_log")
@@ -4099,7 +4190,7 @@ if (
       allowed.bot_paused_reason = patch.bot_paused_reason;
 
     // Admin can adjust subscription status directly
-    const validStripeStatuses = ["active", "trialing", "demo", "past_due", "canceled", "incomplete", null];
+    const validStripeStatuses = ["active", "trialing", "trialing_no_card", "demo", "past_due", "canceled", "incomplete", null];
     if (patch.stripe_subscription_status !== undefined) {
       const s = patch.stripe_subscription_status === null ? null : String(patch.stripe_subscription_status);
       if (validStripeStatuses.includes(s)) allowed.stripe_subscription_status = s;
@@ -4704,6 +4795,51 @@ async function requireCoach(req, res, next) {
   }
 }
 
+// Like requireCoach but also allows trial_expired accounts through.
+// Used on GET (read-only) endpoints so a trial-expired coach can still see their
+// dashboard data behind the overlay. Writes stay on requireCoach so a direct
+// curl/devtools call to a mutating endpoint is still rejected server-side.
+async function requireCoachRead(req, res, next) {
+  const hdr = req.headers.authorization || "";
+  const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
+
+  if (!token) return safeJson(res, 401, { error: "missing token" });
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, COACH_JWT_SECRET);
+  } catch (e) {
+    const msg = e?.name === "TokenExpiredError" ? "token expired" : "invalid token";
+    return safeJson(res, 401, { error: msg });
+  }
+
+  if (!decoded || decoded.role !== "coach" || !decoded.client_id) {
+    return safeJson(res, 403, { error: "forbidden" });
+  }
+
+  try {
+    const cfg = await getClientConfig(decoded.client_id);
+    const status = cfg?.stripe_subscription_status || null;
+    const isExpiredTrial = String(status || "").toLowerCase() === "trial_expired";
+
+    if (!isAllowedStripeStatus(status) && !isExpiredTrial) {
+      return safeJson(res, 402, {
+        error: "subscription_inactive",
+        message: "Subscription inactive. Please complete payment to access the dashboard.",
+        stripe_status: status,
+      });
+    }
+
+    req.coach = decoded;
+    req.coachConfig = cfg;
+    if (isExpiredTrial) req.trialExpired = true;
+    return next();
+  } catch (e) {
+    console.error("[requireCoachRead] config load error:", e?.message);
+    return safeJson(res, 500, { error: "Failed to load coach config" });
+  }
+}
+
 // Like requireCoach but skips the subscription gate — used for restart flow
 async function requireAuthCoach(req, res, next) {
   const hdr = req.headers.authorization || "";
@@ -4874,7 +5010,8 @@ app.post("/coach/api/login", async (req, res) => {
       return safeJson(res, 200, { ok: true, token, subscription_canceled: true });
     }
 
-    // Trial-ended coaches get a restricted token so they can reach the trial-ended screen
+    // Trial-ended coaches get a restricted token; login.html redirects them to the dashboard
+    // (reads now succeed for trial_expired), where the overlay gate fires immediately.
     if (String(status).toLowerCase() === "trial_expired") {
       const token = signCoachToken(user.client_id, { trial_ended: true });
       return safeJson(res, 200, { ok: true, token, trial_ended: true });
@@ -5001,7 +5138,7 @@ app.post("/demo/register", async (req, res) => {
  * ===========================
  */
 
-app.get("/coach/api/me", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("clients")
@@ -5023,7 +5160,7 @@ app.get("/coach/api/me", requireCoach, async (req, res) => {
  * ===========================
  */
 
-app.get("/coach/api/config", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const clientId = req.coach.client_id;
     const { data, error } = await supabase
@@ -5043,7 +5180,7 @@ app.get("/coach/api/config", requireCoach, async (req, res) => {
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
 });
-app.get("/coach/api/prompt-usage", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const today = new Date().toISOString().slice(0, 10);
 
@@ -5419,7 +5556,7 @@ app.get("/coach/api/activity-stream", async (req, res) => {
   });
 });
 
-app.get("/coach/api/bot-paused", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("client_configs")
@@ -5561,7 +5698,7 @@ app.post("/coach/api/leads/:leadId/resume", requireCoach, async (req, res) => {
   }
 });
 
-app.get("/coach/api/leads/:leadId/messages", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const leadId = req.params.leadId;
     const clientId = req.coach.client_id;
@@ -5594,7 +5731,7 @@ app.get("/coach/api/leads/:leadId/messages", requireCoach, async (req, res) => {
 // On-demand story media fetch — called by the inbox when story_media_url is null.
 // Uses the coach's current access token from ig_accounts (fresher than the one
 // available at webhook time). Updates the message row if media is found.
-app.get("/coach/api/messages/:messageId/story-media", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const clientId = req.coach.client_id;
     const messageId = req.params.messageId;
@@ -5746,7 +5883,7 @@ app.post("/coach/api/leads/:leadId/reply", requireCoach, async (req, res) => {
   }
 });
 
-app.get("/coach/api/leads", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const clientId = req.coach.client_id;
     console.log("[leads] fetching for client_id:", clientId);
@@ -5774,7 +5911,7 @@ app.get("/coach/api/leads", requireCoach, async (req, res) => {
 });
 
 // ── Debug: probe messages table schema and test insert ───────────────────
-app.get("/coach/api/debug/messages", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   // Safe serialiser — avoids circular-reference crashes from Supabase error objects
   function flatErr(e) {
     if (!e) return null;
@@ -5840,7 +5977,7 @@ app.get("/coach/api/debug/messages", requireCoach, async (req, res) => {
 });
 
 // ── Debug: return what client_id the JWT has vs ig_accounts ──────────────
-app.get("/coach/api/instagram/debug", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const clientId = req.coach.client_id;
 
@@ -6379,7 +6516,7 @@ Return ONLY valid JSON in this exact format, no other text:
  * ===========================
  */
 
-app.get("/coach/api/stats", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const clientId = req.coach.client_id;
 
@@ -6583,7 +6720,7 @@ app.post("/coach/api/billing-portal", requireCoach, async (req, res) => {
  * ===========================
  */
 
-app.get("/coach/api/broadcast/leads", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const clientId = req.coachConfig?.client_id;
     const stage = req.query.stage || null;
@@ -6684,7 +6821,7 @@ app.post("/coach/api/broadcast", requireCoach, async (req, res) => {
  * ===========================
  */
 
-app.get("/coach/api/queue-status", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const clientId = req.coachConfig?.client_id;
 
@@ -6858,7 +6995,7 @@ async function createTrialCheckoutSession({ priceAmount, clientId, customerEmail
     line_items: [{ price: stripePrice.id, quantity: 1 }],
     metadata: { client_id: String(clientId) },
     success_url: `${APP_PUBLIC_URL}/login?paid=1`,
-    cancel_url: cancelUrl || `${APP_PUBLIC_URL}/trial-ended`,
+    cancel_url: cancelUrl || `${APP_PUBLIC_URL}/dashboard`,
     billing_address_collection: "required",
     automatic_tax: { enabled: true },
   };
@@ -6988,6 +7125,13 @@ await updateClientStripeStatus(clientId, {
   stripe_subscription_status: status,
   stripe_current_period_end: currentPeriodEnd,
 });
+
+// Attempt to silently restore the IG connection if it was deactivated at
+// trial-expiry or cancellation. Fire-and-forget — must never block or delay
+// the webhook response. Logs success/failure; does not throw.
+attemptIgReactivation(clientId).catch((e) =>
+  console.error("[ig_reactivate] unexpected error for client", clientId, e?.message)
+);
 
 // auto-create coach user placeholder if it doesn't exist
 const { data: existingUsers, error: existingUsersErr } = await supabase
@@ -9464,6 +9608,16 @@ app.get("/auth/facebook/callback", async (req, res) => {
     return res.redirect(`/settings?instagram_connected=1${extra}`);
   };
 
+  // Used for failure states — deliberately omits instagram_connected=1 so the
+  // success banner is never shown alongside an error.
+  const finishRedirectError = (errorParam) => {
+    if (isNew) {
+      const token = signCoachToken(clientId);
+      return res.redirect(`/dashboard?token=${encodeURIComponent(token)}&${errorParam}`);
+    }
+    return res.redirect(`/settings?${errorParam}`);
+  };
+
   const error = String(req.query.error || "");
   if (error) {
     // User cancelled or denied — Instagram token already stored, so account is usable.
@@ -9516,7 +9670,21 @@ app.get("/auth/facebook/callback", async (req, res) => {
 
     if (!pages.length) {
       console.warn("fb_callback: no Facebook pages returned", { clientId, pagesData });
-      return finishRedirect("&facebook_error=no_pages");
+      return finishRedirectError("ig_error=no_assets");
+    }
+
+    // Pages exist but none has an Instagram Business Account attached.
+    // This is the "newly-created Business Portfolio" scenario: the portfolio was
+    // created during OAuth but the user's Page and Instagram account weren't linked
+    // to it yet, so Meta returns pages with no instagram_business_account field.
+    const hasIgAccount = pages.some(p => p.instagram_business_account?.id);
+    if (!hasIgAccount) {
+      console.warn("fb_callback: pages returned but no instagram_business_account on any", {
+        clientId,
+        pageCount: pages.length,
+        pageIds: pages.map(p => p.id),
+      });
+      return finishRedirectError("ig_error=no_assets");
     }
 
     // Match the page whose instagram_business_account.id matches the stored ig_user_id.
@@ -9833,11 +10001,23 @@ async function runFollowUpJob() {
         });
       }
     } catch (e) {
-      console.error(
-        "followup_job: failed for lead",
-        lead.id,
-        e?.message || e
-      );
+      if (e?.permanent) {
+        // Recipient is permanently unreachable (deleted/deactivated IG account).
+        // Mark followup_sent=true so this lead is never re-queued.
+        console.warn(
+          "followup_job: permanent IG failure — marking followup_sent=true to stop retries",
+          { leadId: lead.id, clientId: lead.client_id, error: e?.message }
+        );
+        await updateLeadTracking(lead.id, { followup_sent: true }).catch((ue) =>
+          console.error("followup_job: failed to mark followup_sent for lead", lead.id, ue?.message)
+        );
+      } else {
+        console.error(
+          "followup_job: failed for lead",
+          lead.id,
+          e?.message || e
+        );
+      }
     }
   }
 }
@@ -10162,7 +10342,7 @@ app.post("/webhooks/calendly/:client_id", async (req, res) => {
 });
 
 // Protected — returns this coach's upcoming bookings
-app.get("/coach/api/calendly/bookings", requireCoach, async (req, res) => {
+app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("calendly_bookings")

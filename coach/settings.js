@@ -950,6 +950,34 @@
       if (saveBtn) saveBtn.textContent = "Save & go to Dashboard";
     }
 
+    // Show no-assets error if OAuth returned without a Page/IG account attached
+    if (new URLSearchParams(window.location.search).get("ig_error") === "no_assets") {
+      const banner = qs("#igNoAssetsBanner");
+      if (banner) banner.style.display = "block";
+      window.history.replaceState({}, "", window.location.pathname);
+
+      const tryAgainBtn = qs("#igNoAssetsTryAgainBtn");
+      if (tryAgainBtn && !tryAgainBtn.__wired) {
+        tryAgainBtn.__wired = true;
+        tryAgainBtn.addEventListener("click", async () => {
+          const originalText = tryAgainBtn.textContent;
+          try {
+            tryAgainBtn.disabled = true;
+            tryAgainBtn.style.opacity = "0.75";
+            tryAgainBtn.textContent = "Opening Instagram\u2026";
+            const data = await apiFetch(`${API}/instagram/connect-url`);
+            if (!data?.url) throw new Error("Missing Instagram connect URL");
+            window.location.href = data.url;
+          } catch (e) {
+            tryAgainBtn.disabled = false;
+            tryAgainBtn.style.opacity = "1";
+            tryAgainBtn.textContent = originalText;
+            setErr(String(e.message || e));
+          }
+        });
+      }
+    }
+
     wireLogout();
     wireNicheSelect();
     wireInstagramConnectButton();

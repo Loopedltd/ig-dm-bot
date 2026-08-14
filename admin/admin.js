@@ -196,7 +196,7 @@ const AdminDashboard = {
     tbody.innerHTML = this._clients.map((c) => {
       const cfg = c.config || {};
       const status = cfg.stripe_subscription_status || "none";
-      const badgeCls = status === "active" || status === "trialing" || status === "demo" ? "ok" : status === "past_due" ? "warn" : "off";
+      const badgeCls = status === "active" || status === "trialing" || status === "trialing_no_card" || status === "demo" ? "ok" : status === "past_due" ? "warn" : "off";
       const niche = cfg.niche || "generic";
       const muted = !!c.alerts_muted;
       const reminderPaused = !!c.payment_reminder_paused;

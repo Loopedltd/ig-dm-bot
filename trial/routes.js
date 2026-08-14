@@ -205,20 +205,42 @@ router.post("/api/trial/checkout/:token", async (req, res) => {
     //    trial_price_amount is stored so the day-7 conversion job can create a
     //    checkout at the correct custom price without needing the trial_links row.
     const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    const { error: cfgErr } = await supabase
+    const { data: updatedCfg, error: cfgErr } = await supabase
       .from("client_configs")
       .update({
         stripe_subscription_status: "trialing_no_card",
         trial_end: trialEnd,
         trial_price_amount: trialLink.price_amount,
       })
-      .eq("client_id", clientId);
+      .eq("client_id", clientId)
+      .select("client_id");
 
     if (cfgErr) {
       console.error("[trial] failed to update client_configs:", cfgErr?.message);
       // Roll back payment_links so the link can be retried
       await supabase.from("payment_links").delete().eq("token", setupToken);
       return res.status(500).json({ error: "Failed to activate trial" });
+    }
+
+    // If no row was updated the client_configs row doesn't exist yet — create it.
+    if (!updatedCfg || updatedCfg.length === 0) {
+      console.warn("[trial] client_configs row missing for client_id", clientId, "— inserting now");
+      const { error: insertCfgErr } = await supabase.from("client_configs").insert({
+        client_id: clientId,
+        stripe_subscription_status: "trialing_no_card",
+        trial_end: trialEnd,
+        trial_price_amount: trialLink.price_amount,
+        system_prompt: "You are a helpful assistant that qualifies leads and books sales calls on behalf of this coach. Keep replies short, casual and conversational. Ask one question at a time to understand the lead's goals and situation before moving towards booking a call.",
+        tone: "direct",
+        style: "short, punchy",
+        vocabulary: "casual UK coach",
+        niche: "generic",
+      });
+      if (insertCfgErr) {
+        console.error("[trial] failed to insert client_configs:", insertCfgErr?.message);
+        await supabase.from("payment_links").delete().eq("token", setupToken);
+        return res.status(500).json({ error: "Failed to activate trial" });
+      }
     }
 
     // 5. Mark trial link as completed so it can't be used again

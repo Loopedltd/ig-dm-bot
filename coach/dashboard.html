@@ -1067,6 +1067,24 @@ input:focus, textarea:focus, select:focus{
             <button class="btn primary" id="connectInstagramBtn">Connect Instagram</button>
           </div>
         </div>
+
+        <!-- ── No-assets error state: shown when OAuth completes but no IG/Page was attached -->
+        <div id="igNoAssetsError" style="display:none; margin-top:14px; background:var(--warnBg); border:1px solid var(--warnBorder); border-radius:14px; padding:16px 18px;">
+          <div style="display:flex; align-items:flex-start; gap:12px;">
+            <div style="flex-shrink:0; width:32px; height:32px; border-radius:10px; background:rgba(181,71,8,0.12); display:flex; align-items:center; justify-content:center;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b54708" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-weight:800; font-size:14px; color:var(--warnText); margin-bottom:6px;">No Instagram or Facebook Page found</div>
+              <div style="font-size:13px; color:var(--warnText); line-height:1.55; margin-bottom:4px;">This usually happens when a newly-created Business Portfolio hasn't fully finished setting up on Meta's side yet, so your Page and Instagram account weren't attached to it.</div>
+              <div style="font-size:13px; color:var(--warnText); line-height:1.55; margin-bottom:14px;">Set up your Business Portfolio directly on <strong>business.facebook.com</strong>, making sure your Page and Instagram account are both attached with full control, then try connecting again below.</div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn primary" id="igNoAssetsTryAgainBtn" style="font-size:13px; padding:9px 14px;">Try again</button>
+                <a href="https://business.facebook.com" target="_blank" rel="noopener" class="btn" style="font-size:13px; padding:9px 14px;">Open business.facebook.com</a>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Connected Instagram Profile — hidden until connected -->
