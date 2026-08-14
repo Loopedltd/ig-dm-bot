@@ -3268,7 +3268,7 @@ function buildFacebookOAuthUrl(state) {
   return url.toString();
 }
 
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/instagram/connect-url", requireCoachRead, async (req, res) => {
   try {
     if (!INSTAGRAM_APP_ID || !META_REDIRECT_URI) {
       return safeJson(res, 500, { error: "Instagram app env vars not configured" });
@@ -3427,7 +3427,7 @@ app.post("/coach/api/instagram/resubscribe", requireCoach, async (req, res) => {
 // Diagnostic: returns the raw Instagram API response for the subscribed_apps call
 // and also checks what the current subscription looks like.
 // Call: GET /coach/api/instagram/subscription-debug
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/instagram/subscription-debug", requireCoachRead, async (req, res) => {
   try {
     const { data: rows } = await supabase
       .from("ig_accounts")
@@ -3465,7 +3465,7 @@ app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
 // Runs the same two-stage lookup (User Profile API → Conversations API) used for new leads.
 // Safe to call multiple times — skips leads that already have a resolved name.
 // Single-lead fetch — used by the dashboard to poll until ig_name resolves from 'Loading...'
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/leads/:leadId", requireCoachRead, async (req, res) => {
   try {
     const { data: lead, error } = await supabase
       .from("leads")
@@ -3566,7 +3566,7 @@ app.post("/coach/api/leads/backfill-names", requireCoach, async (req, res) => {
   }
 });
 
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/instagram/status", requireCoachRead, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("ig_accounts")
@@ -3634,7 +3634,7 @@ app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   }
 });
 
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/instagram/profile", requireCoachRead, async (req, res) => {
   try {
     const { data: igAcc } = await supabase
       .from("ig_accounts")
@@ -3688,7 +3688,7 @@ app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
   }
 });
 
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/comment-activity", requireCoachRead, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("comment_activity_log")
@@ -5138,7 +5138,7 @@ app.post("/demo/register", async (req, res) => {
  * ===========================
  */
 
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/me", requireCoachRead, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("clients")
@@ -5160,7 +5160,7 @@ app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
  * ===========================
  */
 
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/config", requireCoachRead, async (req, res) => {
   try {
     const clientId = req.coach.client_id;
     const { data, error } = await supabase
@@ -5180,7 +5180,7 @@ app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
     return safeJson(res, 500, { error: String(e?.message || e) });
   }
 });
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/prompt-usage", requireCoachRead, async (req, res) => {
   try {
     const today = new Date().toISOString().slice(0, 10);
 
@@ -5556,7 +5556,7 @@ app.get("/coach/api/activity-stream", async (req, res) => {
   });
 });
 
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/bot-paused", requireCoachRead, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("client_configs")
@@ -5698,7 +5698,7 @@ app.post("/coach/api/leads/:leadId/resume", requireCoach, async (req, res) => {
   }
 });
 
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/leads/:leadId/messages", requireCoachRead, async (req, res) => {
   try {
     const leadId = req.params.leadId;
     const clientId = req.coach.client_id;
@@ -5731,7 +5731,7 @@ app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
 // On-demand story media fetch — called by the inbox when story_media_url is null.
 // Uses the coach's current access token from ig_accounts (fresher than the one
 // available at webhook time). Updates the message row if media is found.
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/messages/:messageId/story-media", requireCoachRead, async (req, res) => {
   try {
     const clientId = req.coach.client_id;
     const messageId = req.params.messageId;
@@ -5883,7 +5883,7 @@ app.post("/coach/api/leads/:leadId/reply", requireCoach, async (req, res) => {
   }
 });
 
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/leads", requireCoachRead, async (req, res) => {
   try {
     const clientId = req.coach.client_id;
     console.log("[leads] fetching for client_id:", clientId);
@@ -5911,7 +5911,7 @@ app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
 });
 
 // ── Debug: probe messages table schema and test insert ───────────────────
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/debug/messages", requireCoachRead, async (req, res) => {
   // Safe serialiser — avoids circular-reference crashes from Supabase error objects
   function flatErr(e) {
     if (!e) return null;
@@ -5977,7 +5977,7 @@ app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
 });
 
 // ── Debug: return what client_id the JWT has vs ig_accounts ──────────────
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/instagram/debug", requireCoachRead, async (req, res) => {
   try {
     const clientId = req.coach.client_id;
 
@@ -6516,7 +6516,7 @@ Return ONLY valid JSON in this exact format, no other text:
  * ===========================
  */
 
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/stats", requireCoachRead, async (req, res) => {
   try {
     const clientId = req.coach.client_id;
 
@@ -6720,7 +6720,7 @@ app.post("/coach/api/billing-portal", requireCoach, async (req, res) => {
  * ===========================
  */
 
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/broadcast/leads", requireCoachRead, async (req, res) => {
   try {
     const clientId = req.coachConfig?.client_id;
     const stage = req.query.stage || null;
@@ -6821,7 +6821,7 @@ app.post("/coach/api/broadcast", requireCoach, async (req, res) => {
  * ===========================
  */
 
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/queue-status", requireCoachRead, async (req, res) => {
   try {
     const clientId = req.coachConfig?.client_id;
 
@@ -10357,7 +10357,7 @@ app.post("/webhooks/calendly/:client_id", async (req, res) => {
 });
 
 // Protected — returns this coach's upcoming bookings
-app.get("/coach/api/\1", requireCoachRead, async (req, res) => {
+app.get("/coach/api/calendly/bookings", requireCoachRead, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("calendly_bookings")
