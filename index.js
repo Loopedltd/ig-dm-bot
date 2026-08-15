@@ -7909,9 +7909,9 @@ log("ig_event_debug", {
           // don't cause an error — we just take the most recently created active row.
           const { data: igRows, error: igLookupError } = await supabase
             .from("ig_accounts")
-            .select("id, client_id, ig_user_id, page_id, page_access_token")
+            .select("id, client_id, ig_user_id, page_id, fb_page_id, page_access_token")
             .eq("is_active", true)
-            .or(`page_id.eq.${recipientId},ig_user_id.eq.${recipientId}`)
+            .or(`page_id.eq.${recipientId},ig_user_id.eq.${recipientId},fb_page_id.eq.${recipientId}`)
             .order("created_at", { ascending: false })
             .limit(1);
 
