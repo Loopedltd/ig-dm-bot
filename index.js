@@ -2673,7 +2673,7 @@ If you feel the urge to write any of these, it means either: (a) you should ask 
 QUALIFYING SEQUENCE RULE:
 When a lead states a goal or interest for the first time, follow this sequence — never skip ahead:
 1. Open with a qualifying question grounded in their specific goal — never a pitch, never mention price, never explain the offer yet. Register example: "yeah [goal] is a good one — are you mainly looking to [specific sub-question relevant to what they said]?" If the config has multiple products and the lead mentioned a product category, use real distinguishing details from the products array (duration, format, focus) to ask a question that identifies which one fits — this is a qualifying turn, not a reason to defer to a human.
-2. Once they answer, ask one more qualifying question that directly references what they just told you — their timeline, starting point, or current habits. Build on their answer; do not pivot to a generic question or repeat something they already answered.
+2. Once they answer — including with emotional, aspirational, or vague answers like "to feel more confident", "to become calm and collected", "to get my life together", "to finally sort this out" — ask one more qualifying question that directly references what they just told you. These are qualifying answers, not reasons to pause. You do not need config data to follow up a goal statement with a grounding question. Build on their answer; do not pivot to a generic question or repeat something they already answered. NEVER set should_pause_for_coach: true in response to a lead's personal goal statement, aspiration, or emotional answer to a qualifying question.
 3. Only after at least two rounds of genuine qualification, and only when the lead has shown real interest (high_intent: true or asks_price: true): introduce price. Always pair the price with what it includes and one real proof point already present in the config (a timeframe, a result) — never state price alone, never invent or estimate figures. If the price, includes, or proof point is not in the config: follow the DIRECT QUESTION RULE (return "" + should_pause_for_coach: true), do not guess.
 
 WORKED EXAMPLE — multi-product opener (do this, not the forbidden pattern above):
@@ -8942,27 +8942,26 @@ log("ig_trigger_opener_sent", {
             }
 
             if (!reply) {
-              // For discovery/qualifying strategies, getFallbackReply contains
-              // stall-recovery lines that are wrong when nothing has been pitched yet.
-              // Skip it and let confidence_pause fire instead — coach notification is
-              // a better outcome than a non-sequitur reply.
-              const skipFallbackStrategies = new Set([
-                "ask_qualifying_question",
-                "nudge_forward",
-                "warm_greeting",
-              ]);
+              // For nudge_forward turns the getFallbackReply map contains stall-recovery
+              // lines ("thats fair, what's the main hesitation right now?") that are wrong
+              // both on opening messages and on qualifying answers like "to become calm and
+              // collected". A qualifying question is always safe to ask regardless of where
+              // in the funnel the lead is, so redirect nudge_forward to use the
+              // ask_qualifying_question fallback strings instead.
+              const fallbackStrategy =
+                turnStrategy?.type === "nudge_forward"
+                  ? { type: "ask_qualifying_question" }
+                  : turnStrategy;
               reply =
                 buildDeterministicReply({
                   turnStrategy,
                   cfg,
                 }) ||
-                (skipFallbackStrategies.has(turnStrategy?.type)
-                  ? null
-                  : getFallbackReply({
-                      turnStrategy,
-                      cfg,
-                      leadMemory,
-                    }));
+                getFallbackReply({
+                  turnStrategy: fallbackStrategy,
+                  cfg,
+                  leadMemory,
+                });
             }
           }
 
