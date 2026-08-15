@@ -4692,7 +4692,7 @@ app.post("/admin/api/clients/:clientId/offboard", requireAdmin, async (req, res)
           html: `
             <div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
               <h2 style="margin:0 0 16px;font-size:22px;font-weight:900;">Your Looped account has been deactivated</h2>
-              <p style="color:#333;font-size:15px;line-height:1.6;">Hi ${escHtml(clientName)},</p>
+              <p style="color:#333;font-size:15px;line-height:1.6;">Hi ${String(clientName).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")},</p>
               <p style="color:#333;font-size:15px;line-height:1.6;">
                 Your Looped account has been deactivated. Your Instagram connection has been removed and your subscription has been cancelled.
               </p>
