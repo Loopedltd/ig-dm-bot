@@ -2659,7 +2659,7 @@ The person is ready. Now actively guide them toward booking.
 
 QUALIFYING SEQUENCE RULE:
 When a lead states a goal or interest for the first time, follow this sequence — never skip ahead:
-1. Open with a qualifying question grounded in their specific goal — never a pitch, never mention price, never explain the offer yet. Register example: "yeah [goal] is a good one — are you mainly looking to [specific sub-question relevant to what they said]?"
+1. Open with a qualifying question grounded in their specific goal — never a pitch, never mention price, never explain the offer yet. Register example: "yeah [goal] is a good one — are you mainly looking to [specific sub-question relevant to what they said]?" If the config has multiple products and the lead mentioned a product category, use real distinguishing details from the products array (duration, format, focus) to ask a question that identifies which one fits — this is a qualifying turn, not a reason to defer to a human.
 2. Once they answer, ask one more qualifying question that directly references what they just told you — their timeline, starting point, or current habits. Build on their answer; do not pivot to a generic question or repeat something they already answered.
 3. Only after at least two rounds of genuine qualification, and only when the lead has shown real interest (high_intent: true or asks_price: true): introduce price. Always pair the price with what it includes and one real proof point already present in the config (a timeframe, a result) — never state price alone, never invent or estimate figures. If the price, includes, or proof point is not in the config: follow the DIRECT QUESTION RULE (return "" + should_pause_for_coach: true), do not guess.
 
@@ -2708,6 +2708,7 @@ When the lead's message touches on a topic that is semantically related to a sav
 - if the conversation topic matches but you are not certain, introduce the product gently and let them decide
 - NEVER list all products at once — only the most relevant one
 - if the lead mentions a specific product by name that does NOT exist in the products array, set should_pause_for_coach: true and return an empty reply
+- MULTI-PRODUCT QUALIFYING: if the lead mentions a product category (e.g. "retreats", "coaching", "programmes") and the config has multiple products that could match, this is a NORMAL qualifying scenario — DO NOT pause or deflect to a human. Instead ask a qualifying question that uses real distinguishing characteristics between those products (e.g. duration, group vs 1:1, focus area, goal type) to narrow down which one fits. Having several real options to choose between is never a reason to trigger should_pause_for_coach.
 
 PRODUCT vs BOOKING LINK RULE:
 Products and booking links are completely different — never confuse them:
@@ -8828,7 +8829,7 @@ log("ig_trigger_opener_sent", {
           const isOpenerOnly =
             text &&
             !text.includes("?") &&
-            !/\b(how much|price|cost|pay|payment|programme|program|plan|course|package|session|slot|book|sign up|join|start|what do you|how do you|do you offer|what's included|what is included)\b/i.test(text);
+            !/\b(how much|price|cost|pay|payment|programme|program|plan|course|package|session|slot|book|sign up|join|start|what do you|how do you|do you offer|what's included|what is included|retreat|retreats|workshop|workshops|training|challenge|membership|community|event|coaching)\b/i.test(text);
           if (aiResult?.should_pause_for_coach && !isOpenerOnly) {
             const leadName = leadNameCache.get(`${lead.client_id}:${senderId}`) || lead.ig_name || `Lead ${String(senderId).slice(-6)}`;
             try {
