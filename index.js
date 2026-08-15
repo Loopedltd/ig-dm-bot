@@ -8803,8 +8803,16 @@ log("ig_trigger_opener_sent", {
             conversationGap,
           });
 
-          // Unknown product mention or personal question — pause for coach if AI flagged it
-          if (aiResult?.should_pause_for_coach) {
+          // Unknown product mention or personal question — pause for coach if AI flagged it.
+          // Safety valve: never pause on a message that has no question and no specific
+          // product/price/process language — the AI can be overly cautious on openers when
+          // the coach config is sparse, and pausing on "Hey saw your page this looks amazing"
+          // would silently kill the conversation.
+          const isOpenerOnly =
+            text &&
+            !text.includes("?") &&
+            !/\b(how much|price|cost|pay|payment|programme|program|plan|course|package|session|slot|book|sign up|join|start|what do you|how do you|do you offer|what's included|what is included)\b/i.test(text);
+          if (aiResult?.should_pause_for_coach && !isOpenerOnly) {
             const leadName = leadNameCache.get(`${lead.client_id}:${senderId}`) || lead.ig_name || `Lead ${String(senderId).slice(-6)}`;
             try {
               await setLeadManualOverride({
@@ -9351,7 +9359,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
 
         const { error: configErr } = await supabase.from("client_configs").insert({
           client_id: resolvedClientId,
-          stripe_subscription_status: "demo",
+          stripe_subscription_status: "trialing_no_card",
           system_prompt: "You are a helpful assistant that qualifies leads and books sales calls on behalf of this coach. Keep replies short, casual and conversational. Ask one question at a time to understand the lead's goals and situation before moving towards booking a call.",
           tone: "direct",
           style: "short, punchy",
