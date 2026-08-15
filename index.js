@@ -1046,7 +1046,7 @@ function getDefaultFallbackExamples(niche = "generic") {
       {
         user: "how much is it",
         assistant:
-          "I can break the price down for you properly. Want me to send that over?",
+          "it's [price] — want me to send you the link so we can go through it properly?",
       },
       {
         user: "sounds good",
@@ -1101,7 +1101,7 @@ function getDefaultFallbackExamples(niche = "generic") {
       {
         user: "how much is it",
         assistant:
-          "I can break the price down properly for you. Want me to send it over?",
+          "it's [price] — want me to send you the link so we can go through it properly?",
       },
       {
         user: "sounds good",
@@ -1155,7 +1155,7 @@ function getDefaultFallbackExamples(niche = "generic") {
     {
       user: "how much is it",
       assistant:
-        "I can break the price down for you properly. Want me to send it over?",
+        "it's [price] — want me to send you the link so we can go through it properly?",
     },
     {
       user: "sounds good",
@@ -2657,11 +2657,30 @@ The person is ready. Now actively guide them toward booking.
 - guide them naturally to the booking link: "want me to send you the link so we can go through it properly?"
 - set should_send_booking_link to true when they confirm they want to proceed
 
+FORBIDDEN PHRASES — never output any of these under any circumstance, regardless of how ambiguous the situation is:
+- "let me connect you with someone"
+- "i can connect you with someone"
+- "connect you with someone who can"
+- "someone who can share / give / help / tell you the details"
+- "put you in touch with"
+- "pass you along / pass you on"
+- "get someone to reach out"
+- "give you all the details"
+- "share more details about the options"
+- any variation of deferring the lead to another person by name in the reply text
+If you feel the urge to write any of these, it means either: (a) you should ask a qualifying question using real product info from the config, or (b) the info is genuinely missing and you must return "" + should_pause_for_coach: true. There is no third option.
+
 QUALIFYING SEQUENCE RULE:
 When a lead states a goal or interest for the first time, follow this sequence — never skip ahead:
 1. Open with a qualifying question grounded in their specific goal — never a pitch, never mention price, never explain the offer yet. Register example: "yeah [goal] is a good one — are you mainly looking to [specific sub-question relevant to what they said]?" If the config has multiple products and the lead mentioned a product category, use real distinguishing details from the products array (duration, format, focus) to ask a question that identifies which one fits — this is a qualifying turn, not a reason to defer to a human.
 2. Once they answer, ask one more qualifying question that directly references what they just told you — their timeline, starting point, or current habits. Build on their answer; do not pivot to a generic question or repeat something they already answered.
 3. Only after at least two rounds of genuine qualification, and only when the lead has shown real interest (high_intent: true or asks_price: true): introduce price. Always pair the price with what it includes and one real proof point already present in the config (a timeframe, a result) — never state price alone, never invent or estimate figures. If the price, includes, or proof point is not in the config: follow the DIRECT QUESTION RULE (return "" + should_pause_for_coach: true), do not guess.
+
+WORKED EXAMPLE — multi-product opener (do this, not the forbidden pattern above):
+Lead: "hey i've been feeling really burnt out lately, saw your retreats and thought this could be exactly what i need"
+WRONG (forbidden): "i totally understand. a retreat could be a great way to recharge. let me connect you with someone who can give you all the details about the options we have available."
+RIGHT: "yeah burnout is real — are you more looking for something to fully switch off for a few days, or more of a structured reset with ongoing support after?"
+The right response picks a real distinguishing characteristic between the available products (duration, immersive vs. structured, retreat-only vs. retreat + follow-up) and turns it into a qualifying question. It never defers to a human.
 
 OBJECTION RULE:
 When someone hesitates, says it’s expensive, says they’ll think about it, or isn’t sure:
@@ -2929,6 +2948,31 @@ reply = sanitizeReply(
       console.error("⚠️ SAFETY BLOCK: AI reply contained inappropriate content and was suppressed.", {
         clientId: cfg?.client_id,
         reply,
+      });
+      return null;
+    }
+
+    // Hard deflection block — the model has a deeply-ingrained "customer service agent"
+    // default: when it senses multi-product ambiguity or missing info it generates
+    // handoff phrases ("let me connect you with someone who can...") instead of asking
+    // a qualifying question or returning should_pause_for_coach. This is never correct.
+    // Returning null here lets the deterministic fallback or confidence_pause handle
+    // the turn cleanly rather than leaking a human-handoff reply to the lead.
+    const deflectionPatterns = [
+      /\bconnect you with\b/i,
+      /\bput you in touch\b/i,
+      /\bsomeone who can\b/i,
+      /\bsomebody who can\b/i,
+      /\bget someone to\b/i,
+      /\bpass you (along|on|over|to)\b/i,
+      /\bhave someone (reach|get|contact|call)\b/i,
+      /\bgive you all the details\b/i,
+      /\bshare (more |all the |the |all )?details (about|on|with)\b/i,
+    ];
+    if (deflectionPatterns.some((p) => p.test(reply))) {
+      console.warn("ai_deflection_blocked: reply contained handoff language, returning null for fallback", {
+        clientId: cfg?.client_id,
+        reply: reply.slice(0, 140),
       });
       return null;
     }
