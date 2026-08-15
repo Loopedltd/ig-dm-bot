@@ -311,7 +311,8 @@ function safeJson(res, status, payload) {
 }
 // In-memory ring buffer for webhook_async_errors — keyed by clientId
 // Each entry: { ts: Date, error: string }
-const recentWebhookErrors = new Map(); // clientId -> [{ ts, error }]
+const recentWebhookErrors = new Map(); // clientId -> [{ ts, error }]  ("__system__" key used for unrouted webhooks)
+let lastSystemAlertAt = 0; // in-memory cooldown for unrouted-webhook alerts (3h)
 
 function recordWebhookError(clientId, errorMsg) {
   if (!clientId) return;
@@ -7968,77 +7969,23 @@ log("ig_event_debug", {
               validCount: validRows.length,
             });
 
-            // Determine which row to heal:
-            // - 1 candidate: heal it directly
-            // - 2+ candidates: validate each token against Instagram API to find the owner
-            let fallback = null;
-            if (validRows.length === 1) {
-              fallback = validRows[0];
-            } else if (validRows.length > 1) {
-              // For each candidate, try to POST-subscribe to /{recipientId}/subscribed_apps.
-              // A 200 + success:true means this token IS the owner of recipientId.
-              // GET /me?fields=id is NOT used here because it returns the ASID (App-Scoped User ID),
-              // which is a different namespace from the IGBID (Instagram Business Account ID)
-              // that webhooks deliver as recipient.id — they do not match for many accounts.
-              for (const row of validRows) {
-                try {
-                  const checkUrl = `https://graph.instagram.com/v21.0/${encodeURIComponent(recipientId)}/subscribed_apps?access_token=${encodeURIComponent(row.page_access_token)}`;
-                  const checkResp = await fetch(checkUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: new URLSearchParams({ subscribed_fields: "messages" }).toString(),
-                  });
-                  const checkData = await checkResp.json().catch(() => ({}));
-                  console.log("ig_accounts_auto_heal_api_check", {
-                    candidateId: row.id,
-                    candidateIgUserId: row.ig_user_id,
-                    recipientId,
-                    httpStatus: checkResp.status,
-                    success: checkData?.success ?? null,
-                    error: checkData?.error?.message || null,
-                  });
-                  // Success means this token can subscribe to recipientId — it owns that account
-                  if (checkResp.ok && checkData?.success === true) {
-                    fallback = row;
-                    break;
-                  }
-                } catch (apiErr) {
-                  console.warn("ig_accounts_auto_heal_api_check_err", { candidateId: row.id, error: apiErr?.message });
-                }
-              }
-            }
-
-            if (fallback) {
-              const { error: healErr } = await supabase
-                .from("ig_accounts")
-                .update({ ig_user_id: recipientId })
-                .eq("id", fallback.id);
-              if (!healErr) {
-                igAccount = { ...fallback, ig_user_id: recipientId };
-                console.log("ig_accounts_auto_healed", {
-                  accountId: fallback.id,
-                  clientId: fallback.client_id,
-                  oldIgUserId: fallback.ig_user_id,
-                  newIgUserId: recipientId,
-                  pageId: fallback.page_id,
-                });
-                // Re-subscribe with the correct IGBID so future webhooks match directly
-                void subscribeIgWebhook(fallback.page_access_token, recipientId).catch((e) =>
-                  console.error("ig_accounts_auto_heal_resubscribe_err", e?.message || e)
-                );
-              } else {
-                console.error("ig_accounts_auto_heal_failed", {
-                  accountId: fallback.id,
-                  error: healErr.message,
-                });
-              }
-            } else {
-              console.warn("ig_accounts_auto_heal_skipped", {
-                recipientId,
-                reason: validRows.length === 0 ? "no_valid_rows" : "api_check_found_no_match",
-                validCount: validRows.length,
-              });
-            }
+            // Silent auto-heal (overwriting ig_user_id in the DB) has been removed.
+            // With page_id, ig_user_id, and fb_page_id all in the lookup, a failed
+            // lookup after this point means the recipientId genuinely doesn't match
+            // any stored identifier for any active account. Silently mutating ig_user_id
+            // based on a single failed lookup caused oscillation between correct and
+            // incorrect IDs when multiple ID namespaces were in play (IGBID vs Page ID).
+            // The correct response is to alert a human, not to guess and overwrite.
+            recordWebhookError(
+              "__system__",
+              `unrouted_webhook: recipientId=${recipientId} validCandidates=${validRows.length}`
+            );
+            console.warn("ig_accounts_unrouted_webhook", {
+              recipientId,
+              senderId,
+              validCandidates: validRows.length,
+              note: "No DB mutation applied — check ig_accounts routing config",
+            });
           }
 
           if (igLookupError || !igAccount?.client_id) {
@@ -8047,6 +7994,10 @@ log("ig_event_debug", {
               senderId,
               igLookupError: igLookupError?.message || null,
             });
+            recordWebhookError(
+              "__system__",
+              `unrouted_webhook_dropped: recipientId=${recipientId} lookupErr=${igLookupError?.message || "none"}`
+            );
             return;
           }
 
@@ -9530,7 +9481,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
         success: verifyData?.success ?? null,
         error: verifyData?.error?.message || null,
         warning: !verifyResp.ok
-          ? "Subscription failed — stored ID may be ASID not IGBID. Auto-heal will correct on first webhook delivery."
+          ? "Subscription failed — stored ID may be ASID not IGBID. Check ig_user_id vs IGBID manually; auto-heal overwrite has been removed."
           : null,
       });
     } catch (verifyErr) {
@@ -9545,6 +9496,26 @@ app.get("/auth/instagram/callback", async (req, res) => {
       is_active: true,
       token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
     };
+
+    // If this ig_user_id is already active on a DIFFERENT client, deactivate the old
+    // connection before creating this one. A given Instagram account can only be
+    // legitimately active on one client at a time.
+    try {
+      const { data: igDupeRows } = await supabase
+        .from("ig_accounts")
+        .select("id, client_id, ig_username")
+        .eq("ig_user_id", igUserId)
+        .eq("is_active", true)
+        .neq("client_id", clientId);
+      for (const dupe of igDupeRows || []) {
+        await supabase.from("ig_accounts").update({ is_active: false }).eq("id", dupe.id);
+        console.warn("ig_connect: deactivated duplicate ig_user_id on different client", {
+          ig_user_id: igUserId, deactivatedClient: dupe.client_id, activeClient: clientId,
+        });
+      }
+    } catch (dupeErr) {
+      console.warn("ig_connect: duplicate ig_user_id check failed (non-fatal)", dupeErr?.message);
+    }
 
     // Upsert on client_id — handles both first-connect (insert) and reconnect (update)
     // atomically. The previous update-then-insert pattern failed when Supabase RLS
@@ -9741,6 +9712,25 @@ app.get("/auth/facebook/callback", async (req, res) => {
     // Store fb_page_id and fb_page_token on the Instagram Login row.
     // Also correct ig_user_id to the IGBID if it was stored as the ASID.
     if (igRow?.id && page?.access_token && page?.id) {
+      // If this Facebook page is already active on a DIFFERENT client, deactivate that
+      // stale connection before proceeding. One Instagram/FB page → one active client only.
+      try {
+        const { data: fbDupeRows } = await supabase
+          .from("ig_accounts")
+          .select("id, client_id, ig_username")
+          .eq("fb_page_id", page.id)
+          .eq("is_active", true)
+          .neq("client_id", clientId);
+        for (const dupe of fbDupeRows || []) {
+          await supabase.from("ig_accounts").update({ is_active: false }).eq("id", dupe.id);
+          console.warn("fb_callback: deactivated duplicate fb_page_id on different client", {
+            fb_page_id: page.id, deactivatedClient: dupe.client_id, activeClient: clientId,
+          });
+        }
+      } catch (dupeErr) {
+        console.warn("fb_callback: duplicate fb_page_id check failed (non-fatal)", dupeErr?.message);
+      }
+
       const dbPatch = { fb_page_id: page.id, fb_page_token: page.access_token };
       if (igbid && storedId && igbid !== storedId) {
         dbPatch.ig_user_id = igbid;
@@ -10850,6 +10840,31 @@ async function runHealthMonitor() {
         console.log(`[health_monitor] sending email for ${clientName} (${clientId}) alerts_muted=${JSON.stringify(alerts_muted)} issues=${emailIssues.length}`);
         await sendHealthAlert({ clientName: clientName || clientId, clientId, issues: emailIssues });
       }
+    }
+
+    // ── System-level check: unrouted webhook failures (no client matched) ────
+    // These have no client_id so they can't go through the per-client loop above.
+    // 3+ failures in 30 minutes means a routing config problem needs human attention.
+    try {
+      const SYSTEM_ALERT_COOLDOWN = 3 * 60 * 60 * 1000; // 3 hours between repeat alerts
+      const sysErrors = recentWebhookErrors.get("__system__") || [];
+      const sysRecent = sysErrors.filter((e) => now - e.ts.getTime() < THIRTY_MINS);
+      if (sysRecent.length >= 3 && (now - lastSystemAlertAt > SYSTEM_ALERT_COOLDOWN)) {
+        lastSystemAlertAt = now;
+        const latest = sysRecent[sysRecent.length - 1].error.slice(0, 150);
+        console.warn(`[health_monitor] ${sysRecent.length} unrouted webhooks in 30 min — alerting admin`);
+        await sendHealthAlert({
+          clientName: "Platform — unrouted webhooks",
+          clientId: "__system__",
+          issues: [
+            `${sysRecent.length} inbound webhook(s) in the last 30 min arrived with a recipient ID that matched no active Instagram account. ` +
+            `Latest: "${latest}". ` +
+            `Check ig_accounts rows — a missing or incorrect ig_user_id / fb_page_id is the likely cause.`,
+          ],
+        });
+      }
+    } catch (e) {
+      console.warn("health_monitor: system error check failed", e?.message);
     }
   } catch (e) {
     console.error("health_monitor: run failed", e?.message || e);
