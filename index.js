@@ -1893,9 +1893,9 @@ answer_what_you_sell_after_cta: [
       ? [structured.who_its_for]
       : [`it’s for people who want proper help and structure, not people just winging it`],
 handle_think_about_it: [
-  `thats fair - what’s the main thing holding you back?`,
-  `all good - what do you need to see before you can decide properly?`,
-  `got you - is it price, timing or not being fully sure yet?`,
+  `thats fair, what’s the main thing holding you back?`,
+  `all good, what do you need to see before you can decide properly?`,
+  `got you, is it price, timing or not being fully sure yet?`,
 ],
 ask_qualifying_question: [
   `what’s the main thing you want to fix right now?`,
@@ -1907,18 +1907,18 @@ ask_qualifying_question: [
 ],
 
 nudge_forward: [
-  `got you - what’s the main thing stopping you from moving on it now?`,
-  `okay - are you just looking around or do you actually want help with it?`,
-  `thats fair - what’s the bit you’re still not sold on?`,
-  `got you - is it more the price, the timing, or are you just not fully sure yet?`,
-  `okay - what’s actually holding you back from sorting it properly?`,
-  `thats fair - do you actually want help with this or are you still just weighing it up?`,
-  `got you - what needs clearing up before you’d move on it?`,
-  `thats fair - what’s the main hesitation right now?`,
+  `got you, what’s the main thing stopping you from moving on it now?`,
+  `okay, are you just looking around or do you actually want help with it?`,
+  `thats fair, what’s the bit you’re still not sold on?`,
+  `got you, is it more the price, the timing, or are you just not fully sure yet?`,
+  `okay, what’s actually holding you back from sorting it properly?`,
+  `thats fair, do you actually want help with this or are you still just weighing it up?`,
+  `got you, what needs clearing up before you’d move on it?`,
+  `thats fair, what’s the main hesitation right now?`,
 ],
 soft_close_to_booking: bookingUrl
   ? [getEscalatedBookingReply(bookingUrl, leadMemory, "soft")]
-  : [`makes sense - best next step is we go through it properly`],
+  : [`makes sense, best next step is we go through it properly`],
 send_booking_link_now: bookingUrl
   ? [getEscalatedBookingReply(bookingUrl, leadMemory, "normal")]
   : [`best thing is get booked in and we’ll go through it properly`],
@@ -8942,16 +8942,27 @@ log("ig_trigger_opener_sent", {
             }
 
             if (!reply) {
+              // For discovery/qualifying strategies, getFallbackReply contains
+              // stall-recovery lines that are wrong when nothing has been pitched yet.
+              // Skip it and let confidence_pause fire instead — coach notification is
+              // a better outcome than a non-sequitur reply.
+              const skipFallbackStrategies = new Set([
+                "ask_qualifying_question",
+                "nudge_forward",
+                "warm_greeting",
+              ]);
               reply =
                 buildDeterministicReply({
                   turnStrategy,
                   cfg,
                 }) ||
-                getFallbackReply({
-                  turnStrategy,
-                  cfg,
-                  leadMemory,
-                });
+                (skipFallbackStrategies.has(turnStrategy?.type)
+                  ? null
+                  : getFallbackReply({
+                      turnStrategy,
+                      cfg,
+                      leadMemory,
+                    }));
             }
           }
 
