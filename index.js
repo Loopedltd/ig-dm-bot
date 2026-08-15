@@ -9342,7 +9342,31 @@ app.get("/auth/instagram/callback", async (req, res) => {
         }).eq("client_id", resolvedClientId);
         console.log("ig_signup: returning coach logged in", { resolvedClientId, igUserId });
       } else {
-        // New coach — create client + config + ig_account
+        // New coach — but first confirm this IG account isn't already active on another client.
+        // The ig_user_id check above (maybeSingle without is_active filter) handles exact-ID
+        // matches. This belt-and-suspenders check catches ASID/IGBID mismatches: if the stored
+        // ig_user_id is the ASID and the incoming token carries the IGBID, the lookup above
+        // misses it. Fall back to username to catch those cases.
+        if (igUsername) {
+          const { data: existingByUsername } = await supabase
+            .from("ig_accounts")
+            .select("client_id")
+            .eq("ig_username", igUsername)
+            .eq("is_active", true)
+            .maybeSingle();
+          if (existingByUsername?.client_id) {
+            console.warn("ig_signup: active ig_accounts row found by username, redirecting to login", {
+              igUsername, existingClientId: existingByUsername.client_id,
+            });
+            return res.redirect(
+              `/coach/login.html?instagram_error=${encodeURIComponent(
+                "This Instagram account is already connected to a Looped account. Log in to access your account instead of signing up again."
+              )}`
+            );
+          }
+        }
+
+        // Create client + config + ig_account
         const { data: newClient, error: clientErr } = await supabase
           .from("clients")
           .insert({ name: igUsername || "New Coach", timezone: "Europe/London" })
@@ -9379,8 +9403,7 @@ app.get("/auth/instagram/callback", async (req, res) => {
         }
 
         // page_id: null marks this as Instagram Login flow (uses graph.instagram.com for messaging)
-        // New coach — client_id is brand new so INSERT is safe here
-        await supabase.from("ig_accounts").insert({
+        const { error: igInsertErr } = await supabase.from("ig_accounts").insert({
           client_id: resolvedClientId,
           ig_user_id: igUserId,
           ig_username: igUsername,
@@ -9389,6 +9412,20 @@ app.get("/auth/instagram/callback", async (req, res) => {
           is_active: true,
           token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
         });
+        if (igInsertErr) {
+          console.error("ig_signup: ig_accounts insert failed", { igInsertErr, resolvedClientId, igUserId });
+          // Clean up orphaned rows so the account can be retried cleanly
+          await supabase.from("client_configs").delete().eq("client_id", resolvedClientId).catch(() => {});
+          await supabase.from("clients").delete().eq("id", resolvedClientId).catch(() => {});
+          const isDupe = igInsertErr.message?.includes("duplicate key") || igInsertErr.code === "23505";
+          return res.redirect(
+            `/coach/login.html?instagram_error=${encodeURIComponent(
+              isDupe
+                ? "This Instagram account is already connected to a Looped account. Log in to access your account instead of signing up again."
+                : "Failed to create account. Please try again."
+            )}`
+          );
+        }
 
         console.log("ig_signup: new coach created", { resolvedClientId, igUsername });
       }
@@ -9545,7 +9582,14 @@ app.get("/auth/instagram/callback", async (req, res) => {
 
     if (upsertErr) {
       console.error("ig_connect: upsert failed", { clientId, igUserId, error: upsertErr.message });
-      return res.status(500).send(`Failed to save Instagram account: ${upsertErr.message}`);
+      const isDupe = upsertErr.message?.includes("duplicate key") || upsertErr.code === "23505";
+      return res.redirect(
+        `/settings?instagram_error=${encodeURIComponent(
+          isDupe
+            ? "This Instagram account is already connected to a different Looped account. Disconnect it there first, or contact support."
+            : "Failed to connect Instagram. Please try again."
+        )}`
+      );
     }
 
     // Subscribe webhook (non-blocking)
