@@ -5058,13 +5058,27 @@ app.post("/coach/api/login", async (req, res) => {
 
     const emailNorm = String(email).trim().toLowerCase();
 
-    const { data: user, error } = await supabase
+    // Use .limit(1) + array pick instead of .single() — .single() throws a Supabase
+    // error when the query returns anything other than exactly one row (including 2+
+    // rows, which can occur when a Stripe webhook inserts a placeholder row and then
+    // set-password inserts another). That error is caught by the `error || !user`
+    // check below and surfaces to the coach as "invalid credentials" even when their
+    // password is entirely correct. .limit(1) never errors on row count.
+    const { data: userRows, error } = await supabase
       .from("coach_users")
       .select("*")
       .eq("email", emailNorm)
-      .single();
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    const user = Array.isArray(userRows) ? userRows[0] : null;
 
     if (error || !user) {
+      return safeJson(res, 401, { error: "invalid credentials" });
+    }
+
+    // Skip placeholder rows that have no real password set yet
+    if (!user.password_hash) {
       return safeJson(res, 401, { error: "invalid credentials" });
     }
 
