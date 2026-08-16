@@ -9715,24 +9715,31 @@ app.get("/auth/facebook/callback", async (req, res) => {
   }
 
   // Helper: redirect to final destination
-  // New coaches (signup flow) → dashboard with JWT
-  // Existing coaches (reconnect from settings) → settings page
+  // Both signup and connect flows now issue a fresh JWT in the URL so the session
+  // is always re-established regardless of localStorage state. Cross-site OAuth
+  // navigation (app → Instagram → Facebook → app) can cause Safari ITP and some
+  // Chrome privacy configs to expire or isolate localStorage for the originating
+  // site, meaning the token may be gone when /settings reloads. Without a token
+  // in the URL, settings.js' getToken() returns null and it immediately redirects
+  // to /login — which then fails with "invalid credentials" if no email/password
+  // row exists (Instagram-only signups). Issuing the token in the URL makes the
+  // session self-contained and avoids any localStorage dependency.
   const finishRedirect = (extra = "") => {
+    const token = signCoachToken(clientId);
     if (isNew) {
-      const token = signCoachToken(clientId);
       return res.redirect(`/dashboard?token=${encodeURIComponent(token)}&instagram_connected=1${extra}`);
     }
-    return res.redirect(`/settings?instagram_connected=1${extra}`);
+    return res.redirect(`/settings?token=${encodeURIComponent(token)}&instagram_connected=1${extra}`);
   };
 
   // Used for failure states — deliberately omits instagram_connected=1 so the
   // success banner is never shown alongside an error.
   const finishRedirectError = (errorParam) => {
+    const token = signCoachToken(clientId);
     if (isNew) {
-      const token = signCoachToken(clientId);
       return res.redirect(`/dashboard?token=${encodeURIComponent(token)}&${errorParam}`);
     }
-    return res.redirect(`/settings?${errorParam}`);
+    return res.redirect(`/settings?token=${encodeURIComponent(token)}&${errorParam}`);
   };
 
   const error = String(req.query.error || "");

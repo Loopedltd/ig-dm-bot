@@ -944,6 +944,18 @@
   // ── Init ──────────────────────────────────────────────────────────────────
 
   document.addEventListener("DOMContentLoaded", async () => {
+    // Store JWT from URL param if present — issued by the OAuth redirect so the
+    // session is always re-established even if localStorage was cleared during
+    // cross-site navigation (Safari ITP, Chrome privacy modes).
+    const _urlParams = new URLSearchParams(window.location.search);
+    const _urlToken = _urlParams.get("token");
+    if (_urlToken) {
+      localStorage.setItem(TOKEN_KEY, _urlToken);
+      _urlParams.delete("token");
+      const _cleanSearch = _urlParams.toString();
+      window.history.replaceState({}, "", window.location.pathname + (_cleanSearch ? "?" + _cleanSearch : ""));
+    }
+
     if (!getToken()) {
       window.location.href = "/login";
       return;
