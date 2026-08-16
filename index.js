@@ -3633,7 +3633,7 @@ app.get("/coach/api/instagram/status", requireCoachRead, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("ig_accounts")
-      .select("ig_user_id, ig_username, page_id, page_access_token, is_active")
+      .select("ig_user_id, ig_username, page_id, page_access_token, fb_page_id, is_active")
       .eq("client_id", req.coach.client_id)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
@@ -3686,8 +3686,15 @@ app.get("/coach/api/instagram/status", requireCoachRead, async (req, res) => {
       }
     }
 
+    // fb_verified: true means the Facebook chain completed and fb_page_id was stored,
+    // which is the step that corrects the stored ASID to the real IGBID for webhook
+    // routing. connected=true but fb_verified=false means the IG OAuth succeeded but
+    // the Facebook step was skipped or failed — webhooks will not route correctly.
+    const fbVerified = !!data.fb_page_id;
+
     return safeJson(res, 200, {
       connected: true,
+      fb_verified: fbVerified,
       username: currentUsername,
       ig_user_id: data.ig_user_id || null,
       page_id: data.page_id || null,

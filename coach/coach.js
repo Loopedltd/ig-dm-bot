@@ -463,7 +463,7 @@ async function loadInstagramConnectionStatus() {
     });
 
     const webhookBadge = qs("#asBadgeWebhook");
-    if (data?.connected) {
+    if (data?.connected && data?.fb_verified !== false) {
       badgeEl.className = "badge connected";
       badgeEl.textContent = "Connected";
 
@@ -476,6 +476,19 @@ async function loadInstagramConnectionStatus() {
       btn.style.opacity = "1";
 
       if (webhookBadge) webhookBadge.className = "asBadge asBadge--green";
+    } else if (data?.connected && data?.fb_verified === false) {
+      // Instagram OAuth completed but Facebook verification step was skipped/failed.
+      // Stored ig_user_id may be the ASID — webhooks will not route to this account.
+      badgeEl.className = "badge warn";
+      badgeEl.textContent = "Incomplete setup";
+
+      metaEl.textContent = "Instagram connected but not fully verified \u2014 reconnect to complete setup and receive messages.";
+
+      btn.textContent = "Reconnect Instagram";
+      btn.disabled = false;
+      btn.style.opacity = "1";
+
+      if (webhookBadge) webhookBadge.className = "asBadge asBadge--yellow";
     } else {
       badgeEl.className = "badge warn";
       badgeEl.textContent = "Not connected";

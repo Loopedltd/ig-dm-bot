@@ -370,10 +370,17 @@
 
     try {
       const data = await apiFetch(`${API}/instagram/status`);
-      if (data?.connected) {
+      if (data?.connected && data?.fb_verified !== false) {
         badgeEl.className = "badge connected";
         badgeEl.textContent = "Connected";
         metaEl.textContent = data.username ? `Connected as @${data.username}` : "Instagram connected";
+        btn.textContent = "Reconnect Instagram";
+      } else if (data?.connected && data?.fb_verified === false) {
+        // Instagram OAuth completed but Facebook verification step was skipped or failed.
+        // The stored ID may be an ASID (not IGBID) — webhooks will not route to this account.
+        badgeEl.className = "badge warn";
+        badgeEl.textContent = "Incomplete setup";
+        metaEl.textContent = "Instagram connected but not fully verified — reconnect to complete setup and receive messages.";
         btn.textContent = "Reconnect Instagram";
       } else {
         badgeEl.className = "badge warn";
