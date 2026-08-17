@@ -2416,7 +2416,15 @@ function identifyDiscussedProduct(text, leadMemory, products) {
   ].join(" ").toLowerCase();
   const matches = products.filter((p) => {
     const name = String(p?.name || "").trim().toLowerCase();
-    return name.length > 2 && ctx.includes(name);
+    if (name.length <= 2) return false;
+    // Strip a leading article ("the ", "a ", "an ") for matching only —
+    // the stored name is never modified.
+    const normalized = name.replace(/^(?:the|an?)\s+/i, "");
+    if (normalized.length <= 2) return false;
+    // Escape regex special characters, then match on word boundaries so
+    // "stables" matches but "unstables" or embedded fragments do not.
+    const escaped = normalized.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\b${escaped}\\b`).test(ctx);
   });
   return matches.length === 1 ? matches[0] : null;
 }
