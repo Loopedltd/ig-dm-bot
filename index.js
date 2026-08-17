@@ -2399,6 +2399,28 @@ function getObjectionFollowUpReply(objectionText, leadMemory, cfg) {
   return "fair, what’s the main thing holding you back?";
 }
 
+// Identify which specific product a lead is discussing by matching product names
+// against the current message and key lead_memory fields — mirrors the product-matching
+// the AI is instructed to do in the system prompt.
+// Returns the matched product object, or null if zero or multiple products matched
+// (ambiguous → caller falls back to cfg.booking_url).
+function identifyDiscussedProduct(text, leadMemory, products) {
+  if (!Array.isArray(products) || products.length === 0) return null;
+  const ctx = [
+    String(text || ""),
+    String(leadMemory?.goal || ""),
+    String(leadMemory?.pain_points || ""),
+    String(leadMemory?.current_situation || ""),
+    String(leadMemory?.desired_outcome || ""),
+    String(leadMemory?.summary || ""),
+  ].join(" ").toLowerCase();
+  const matches = products.filter((p) => {
+    const name = String(p?.name || "").trim().toLowerCase();
+    return name.length > 2 && ctx.includes(name);
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
 function buildMemoryAnchor(leadMemory) {
   const timeline = String(leadMemory?.timeline || "").trim();
   const eventName = String(leadMemory?.event_name || "").trim();
@@ -8940,6 +8962,20 @@ log("ig_trigger_opener_sent", {
             explicitLinkRequest &&
             bookingAlreadySent;
 
+          // Identify which product the lead is discussing (if any), so the booking
+          // link we send is specific to that product rather than always cfg.booking_url.
+          const _cfgProducts = Array.isArray(cfg?.products) ? cfg.products : [];
+          const _matchedProduct = identifyDiscussedProduct(text, leadMemory, _cfgProducts);
+          const _effectiveBookingUrl = _matchedProduct?.url || cfg?.booking_url || null;
+
+          // Build the set of all known product URLs + cfg.booking_url so the
+          // override-skip check catches any of them, not just cfg.booking_url.
+          const _allKnownUrls = _cfgProducts.map((p) => p?.url).filter(Boolean);
+          if (cfg?.booking_url && !_allKnownUrls.includes(cfg.booking_url)) {
+            _allKnownUrls.push(cfg.booking_url);
+          }
+          const _replyAlreadyHasLink = (r) => !!r && _allKnownUrls.some((u) => r.includes(u));
+
           if (canResendBecauseAsked) {
             reply = "use the link i sent earlier and get booked in";
           } else if (aiResult?.should_send_booking_link && !cfg?.booking_url && !bookingAlreadySent) {
@@ -8954,22 +8990,24 @@ log("ig_trigger_opener_sent", {
             await sendCoachPauseNotification(lead.id, lead.client_id);
             return;
           } else if (aiResult?.should_send_booking_link && canSendNewBookingPush) {
-            // Only override the AI's reply if it doesn't already contain the booking URL.
-            if (!reply || !reply.includes(cfg.booking_url)) {
+            if (_replyAlreadyHasLink(reply)) {
+              console.log("booking_override_skipped", { leadId: lead.id, branch: "should_send_booking_link", effectiveUrl: _effectiveBookingUrl, matchedProduct: _matchedProduct?.name || null, replyPreview: String(reply).slice(0, 140) });
+            } else {
+              const _replyBefore = reply;
               if (turnStrategy?.type === "soft_close_to_booking") {
-                reply = buildWarmCloseFromMemory(cfg.booking_url, leadMemory);
+                reply = buildWarmCloseFromMemory(_effectiveBookingUrl, leadMemory);
               } else {
-                reply = getEscalatedBookingReply(
-                  cfg.booking_url,
-                  leadMemory,
-                  "normal"
-                );
+                reply = getEscalatedBookingReply(_effectiveBookingUrl, leadMemory, "normal");
               }
+              console.log("booking_override_fired", { leadId: lead.id, branch: "should_send_booking_link", effectiveUrl: _effectiveBookingUrl, matchedProduct: _matchedProduct?.name || null, replyBefore: String(_replyBefore || "").slice(0, 140), replyAfter: String(reply).slice(0, 140) });
             }
           } else if (highIntent && canSendNewBookingPush) {
-            // Only override if the AI's reply doesn't already contain the booking URL.
-            if (!reply || !reply.includes(cfg.booking_url)) {
-              reply = getEscalatedBookingReply(cfg.booking_url, leadMemory, "normal");
+            if (_replyAlreadyHasLink(reply)) {
+              console.log("booking_override_skipped", { leadId: lead.id, branch: "highIntent", effectiveUrl: _effectiveBookingUrl, matchedProduct: _matchedProduct?.name || null, replyPreview: String(reply).slice(0, 140) });
+            } else {
+              const _replyBefore = reply;
+              reply = getEscalatedBookingReply(_effectiveBookingUrl, leadMemory, "normal");
+              console.log("booking_override_fired", { leadId: lead.id, branch: "highIntent", effectiveUrl: _effectiveBookingUrl, matchedProduct: _matchedProduct?.name || null, replyBefore: String(_replyBefore || "").slice(0, 140), replyAfter: String(reply).slice(0, 140) });
             }
           }
 
