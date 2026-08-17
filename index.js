@@ -9798,9 +9798,11 @@ app.get("/auth/facebook/callback", async (req, res) => {
     }
 
     // Stage 3: get pages list — each page includes its own long-lived access_token
+    // instagram_business_account{id,username} lets us match by username as a fallback
+    // when ig_user_id is the ASID (doesn't match the IGBID Meta returns in id field).
     const pagesResp = await fetch(
       `https://graph.facebook.com/v23.0/me/accounts` +
-      `?fields=id,name,access_token,instagram_business_account` +
+      `?fields=id,name,access_token,instagram_business_account{id,username}` +
       `&access_token=${encodeURIComponent(userToken)}`
     );
     const pagesData = await pagesResp.json().catch(() => ({}));
@@ -9830,17 +9832,61 @@ app.get("/auth/facebook/callback", async (req, res) => {
     // fb_page_id/fb_page_token stored, and they already have a page_id value.
     const { data: igRows } = await supabase
       .from("ig_accounts")
-      .select("id, ig_user_id, page_access_token")
+      .select("id, ig_user_id, ig_username, page_access_token")
       .eq("client_id", clientId)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(1);
 
     const igRow = Array.isArray(igRows) ? igRows[0] : null;
-    const matchedPage = igRow
+
+    // Primary match: ig_user_id === instagram_business_account.id
+    // Works when ig_user_id is correctly stored as the IGBID.
+    // Fails silently when ig_user_id is the ASID (Meta returns IGBID in that field, not ASID).
+    let matchedPage = igRow
       ? pages.find(p => String(p.instagram_business_account?.id) === igRow.ig_user_id)
       : null;
-    const page = matchedPage || pages[0];
+
+    // Secondary match: username — reliable even when ig_user_id is the ASID
+    if (!matchedPage && igRow?.ig_username) {
+      const usernameMatch = pages.find(
+        p => p.instagram_business_account?.username === igRow.ig_username
+      );
+      if (usernameMatch) {
+        console.log("fb_callback: matched page by ig_username fallback", {
+          clientId,
+          username: igRow.ig_username,
+          pageId: usernameMatch.id,
+        });
+        matchedPage = usernameMatch;
+      }
+    }
+
+    // Tertiary: if exactly one page has an instagram_business_account, use it
+    if (!matchedPage) {
+      const pagesWithIg = pages.filter(p => p.instagram_business_account?.id);
+      if (pagesWithIg.length === 1) {
+        console.log("fb_callback: matched page by single-IG-page fallback", {
+          clientId,
+          pageId: pagesWithIg[0].id,
+        });
+        matchedPage = pagesWithIg[0];
+      } else {
+        // Multiple pages with IG accounts and none matched — refuse to guess.
+        // pages[0] would silently pick the wrong Page, producing a wrong fb_page_id and IGBID.
+        console.error("fb_callback: multiple IG-linked pages found, none matched stored ID or username", {
+          clientId,
+          storedIgUserId: igRow?.ig_user_id,
+          storedUsername: igRow?.ig_username,
+          pageCount: pagesWithIg.length,
+          pageIds: pagesWithIg.map(p => p.id),
+          igAccountIds: pagesWithIg.map(p => p.instagram_business_account?.id),
+        });
+        return finishRedirectError("ig_error=page_match_failed");
+      }
+    }
+
+    const page = matchedPage;
 
     // The IGBID is the instagram_business_account.id on the Facebook page object.
     // This is the authoritative ID that webhooks use for event routing.
