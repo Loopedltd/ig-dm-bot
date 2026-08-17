@@ -2929,7 +2929,14 @@ if (!parsed || typeof parsed.reply !== "string") {
   return null;
 }
     let reply = String(parsed?.reply || "").trim();
-    if (!reply) return null;
+    if (!reply) {
+      // Preserve the pause signal when the AI correctly returns reply:"" + should_pause_for_coach:true.
+      // All other empty-reply cases (missing info, parse failure, etc.) keep returning null.
+      if (parsed?.should_pause_for_coach === true) {
+        return { reply: "", reply_type: parsed?.reply_type || null, should_send_booking_link: false, should_pause_for_coach: true };
+      }
+      return null;
+    }
 
 reply = sanitizeReply(
   cleanObjectionReply(
@@ -8932,18 +8939,35 @@ log("ig_trigger_opener_sent", {
 
           if (canResendBecauseAsked) {
             reply = "use the link i sent earlier and get booked in";
+          } else if (aiResult?.should_send_booking_link && !cfg?.booking_url && !bookingAlreadySent) {
+            // AI flagged should_send_booking_link but no booking URL is configured at all.
+            // Sending the reply without a link would be misleading — pause for coach instead.
+            // (bookingAlreadySent is a separate expected path and must NOT trigger this.)
+            const pauseLeadName = leadNameCache.get(`${lead.client_id}:${senderId}`) || lead.ig_name || `Lead ${String(senderId).slice(-6)}`;
+            try {
+              await setLeadManualOverride({ leadId: lead.id, clientId: lead.client_id, enabled: true, reason: "Coach input needed — no booking URL configured", actor: "system" });
+            } catch {}
+            emitActivityEvent(lead.client_id, { type: "confidence_pause", leadName: pauseLeadName, igPsid: senderId, preview: text ? String(text).slice(0, 120) : "" });
+            await sendCoachPauseNotification(lead.id, lead.client_id);
+            return;
           } else if (aiResult?.should_send_booking_link && canSendNewBookingPush) {
-            if (turnStrategy?.type === "soft_close_to_booking") {
-              reply = buildWarmCloseFromMemory(cfg.booking_url, leadMemory);
-            } else {
-              reply = getEscalatedBookingReply(
-                cfg.booking_url,
-                leadMemory,
-                "normal"
-              );
+            // Only override the AI's reply if it doesn't already contain the booking URL.
+            if (!reply || !reply.includes(cfg.booking_url)) {
+              if (turnStrategy?.type === "soft_close_to_booking") {
+                reply = buildWarmCloseFromMemory(cfg.booking_url, leadMemory);
+              } else {
+                reply = getEscalatedBookingReply(
+                  cfg.booking_url,
+                  leadMemory,
+                  "normal"
+                );
+              }
             }
           } else if (highIntent && canSendNewBookingPush) {
-            reply = getEscalatedBookingReply(cfg.booking_url, leadMemory, "normal");
+            // Only override if the AI's reply doesn't already contain the booking URL.
+            if (!reply || !reply.includes(cfg.booking_url)) {
+              reply = getEscalatedBookingReply(cfg.booking_url, leadMemory, "normal");
+            }
           }
 
           // send_product_link_now: find first product with a URL and send it
@@ -9067,7 +9091,17 @@ log("ig_trigger_opener_sent", {
               userText: text,
             });
 
-            if (retryAiResult?.reply && !looksIncompleteReply(retryAiResult.reply)) {
+            if (retryAiResult?.should_pause_for_coach && !retryAiResult?.reply) {
+              // Retry surfaced a pause signal with empty reply — honour it immediately.
+              // The primary-path pause check (above) has already run, so we trigger inline.
+              const pauseLeadName = leadNameCache.get(`${lead.client_id}:${senderId}`) || lead.ig_name || `Lead ${String(senderId).slice(-6)}`;
+              try {
+                await setLeadManualOverride({ leadId: lead.id, clientId: lead.client_id, enabled: true, reason: "Coach input needed — personal question or unknown product", actor: "system" });
+              } catch {}
+              emitActivityEvent(lead.client_id, { type: "confidence_pause", leadName: pauseLeadName, igPsid: senderId, preview: text ? String(text).slice(0, 120) : "" });
+              await sendCoachPauseNotification(lead.id, lead.client_id);
+              return;
+            } else if (retryAiResult?.reply && !looksIncompleteReply(retryAiResult.reply)) {
               reply = retryAiResult.reply;
             } else {
               const fallback =
