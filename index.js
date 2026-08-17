@@ -2467,7 +2467,7 @@ async function generateAiReply({
   userText,
   conversationGap,
 }) {
-  if (!openai) return null;
+  if (!openai) { console.warn("ai_null_no_client", { leadId: lead?.id, clientId: cfg?.client_id }); return null; }
   const now = Date.now();
   global.aiCalls = global.aiCalls.filter((t) => now - t < 60000);
 
@@ -2917,15 +2917,17 @@ const resp = await withTimeout(
 );
 
     const raw = resp?.choices?.[0]?.message?.content?.trim();
-    if (!raw) return null;
+    if (!raw) { console.warn("ai_null_empty_content", { leadId: lead?.id, clientId: cfg?.client_id, rawContent: resp?.choices?.[0]?.message?.content ?? "(null)" }); return null; }
 
     let parsed;
     try {
-      parsed = JSON.parse(raw);   
+      parsed = JSON.parse(raw);
  } catch {
+      console.warn("ai_null_parse_error", { leadId: lead?.id, clientId: cfg?.client_id, raw: raw.slice(0, 300) });
       return null;
     }
 if (!parsed || typeof parsed.reply !== "string") {
+  console.warn("ai_null_bad_reply_field", { leadId: lead?.id, clientId: cfg?.client_id, parsed: JSON.stringify(parsed).slice(0, 300) });
   return null;
 }
     let reply = String(parsed?.reply || "").trim();
@@ -2935,6 +2937,7 @@ if (!parsed || typeof parsed.reply !== "string") {
       if (parsed?.should_pause_for_coach === true) {
         return { reply: "", reply_type: parsed?.reply_type || null, should_send_booking_link: false, should_pause_for_coach: true };
       }
+      console.warn("ai_null_empty_reply", { leadId: lead?.id, clientId: cfg?.client_id, parsed: JSON.stringify(parsed).slice(0, 300) });
       return null;
     }
 
@@ -2946,7 +2949,7 @@ reply = sanitizeReply(
   )
 );
 
-    if (looksIncompleteReply(reply)) return null;
+    if (looksIncompleteReply(reply)) { console.warn("ai_null_incomplete", { leadId: lead?.id, clientId: cfg?.client_id, reply }); return null; }
 
     // Hard safety gate — never send a reply that contains inappropriate content,
     // regardless of what the model produced. Log it and return null so the
