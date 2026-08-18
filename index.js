@@ -2604,6 +2604,7 @@ CORE RULES — follow every single one:
 - do not invent services, outcomes, pricing, or niche details — only use what’s in the context provided
 - if a products array is present in the context, identify which product best matches what this lead has described and reference it naturally — do not list all products unprompted
 - if the matched product has a url field and the lead is asking about that product or requesting more info or a link, include the url in your reply naturally (e.g. "here’s the link: https://...") — do not include a url unless the lead has asked about that product or explicitly asked for a link
+- PRODUCT GROUNDING RULE: once a specific product has been identified from the products array, that product’s own description, price, and who_its_for fields are the source of truth for what it includes and what it costs — do not state specific inclusions, amenities, meals, or services for that product unless they are confirmed in the matched product’s own description; general business-wide fields (what_they_get, how_it_works, faq) can be used for tone, context, and framing, but never as the source of a specific inclusion claim about one particular product
 - never assume the niche is fitness or money coaching unless the context clearly says so
 - if a booking link was already sent, don’t send it again unless they ask for it
 - NEVER mention budget, investment, pricing, or money in the first 2 messages of any conversation — even if it feels relevant
