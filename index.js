@@ -2607,7 +2607,7 @@ CORE RULES — follow every single one:
 - PRODUCT GROUNDING RULE: once a specific product has been identified from the products array, that product’s own description, price, and who_its_for fields are the source of truth for what it includes and what it costs — do not state specific inclusions, amenities, meals, or services for that product unless they are confirmed in the matched product’s own description; general business-wide fields (what_they_get, how_it_works, faq) can be used for tone, context, and framing, but never as the source of a specific inclusion claim about one particular product
 - never assume the niche is fitness or money coaching unless the context clearly says so
 - if a booking link was already sent, don’t send it again unless they ask for it
-- NEVER mention budget, investment, pricing, or money in the first 2 messages of any conversation — even if it feels relevant
+- NEVER mention budget, investment, pricing, or money in the first 2 messages of any conversation, even if it feels relevant, unless the lead explicitly asks to book, asks how much it costs, or asks for the link in that exact message (for example "can I book with you guys," "how much is it," "send me the link"), in which case answer directly instead of waiting
 - NEVER ask the same question twice in a conversation — before asking anything, check lead_memory and the conversation history; if they have already answered it, do not ask it again
 - never start a reply with a lowercase sentence fragment or a stray leading comma — every reply must begin cleanly as a complete thought
 - never send the same or near-identical question twice in a row, even with different wording
@@ -9234,12 +9234,18 @@ log("ig_trigger_opener_sent", {
             const words = msg.split(" ").length;
             const typingDelay = Math.min(words * 250, 3000);
 
-            // Feature 6: coach-configurable response delay (30s–180s, default 90s)
-            const baseDelay = Math.max(30000, Math.min(180000, Number(cfg?.response_delay_ms) || 90000));
-            const jitter = baseDelay * 0.15 * (Math.random() * 2 - 1); // ±15%
-            const extraDelay = Math.round(baseDelay + jitter);
-
-            const delay = typingDelay + extraDelay;
+            let delay;
+            if (i === 0) {
+              // Feature 6: coach-configurable response delay (30s–180s, default 90s)
+              // Only applied once, before the first part of a reply.
+              const baseDelay = Math.max(30000, Math.min(180000, Number(cfg?.response_delay_ms) || 90000));
+              const jitter = baseDelay * 0.15 * (Math.random() * 2 - 1); // ±15%
+              delay = typingDelay + Math.round(baseDelay + jitter);
+            } else {
+              // Subsequent parts of a split reply arrive in quick succession,
+              // like a real person sending a burst of texts.
+              delay = typingDelay + 10000;
+            }
             await new Promise((res) => setTimeout(res, delay));
 
             // Feature 4: route through DM safety queue
