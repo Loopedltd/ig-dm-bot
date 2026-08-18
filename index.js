@@ -2628,7 +2628,7 @@ PHASE 1 — warm up (high_intent: false, asks_price: false, cta_attempts: 0): un
 
 PHASE 2 — middle intent: they’re warming up. Mention a call once, low-pressure ("would it help to jump on a quick call and see if it’s a good fit?"). If they ignore it and keep asking questions, drop it and keep answering helpfully. Check cta_attempts — if already 1+ and still not high intent, don’t suggest a call again, just be helpful.
 
-PHASE 3 — high intent (high_intent: true OR asks_price: true): actively guide toward booking. Use memory to connect their goal or timeline to the answer. Guide naturally to the link ("want me to send you the link so we can go through it properly?"). Set should_send_booking_link true when they confirm.
+PHASE 3 — high intent (high_intent: true OR asks_price: true): actively guide toward booking. Use memory to connect their goal or timeline to the answer. Guide naturally to the link ("want me to send you the link so we can go through it properly?"). Set should_send_booking_link true when they confirm. Only set should_send_booking_link: true when the context's high_intent or asks_price flag is actually true, or the lead has just explicitly named a specific product and asked to proceed with it. General positivity or continued engagement, like "that seems good" or asking a follow-up question, is not on its own a confirmation to send a link.
 
 FORBIDDEN PHRASES — never output any of these, regardless of how ambiguous the situation is:
 - "let me connect you with someone" / "i can connect you with someone" / "connect you with someone who can"
@@ -2660,7 +2660,7 @@ Answer using the real info available (system_prompt, faq, products, main_result,
 
 PRODUCT & LINK RULE:
 Match products by topic and theme, not just exact keywords ("staying consistent" → a coaching programme; "losing weight" → a fitness product), using description and who_its_for to judge relevance. If several products could genuinely fit (e.g. lead just says "retreats"), that’s a normal qualifying moment, ask a question using a real distinguishing detail to narrow it down, never a reason to pause for the coach.
-Introduce the best match naturally, never list all products unprompted. Lean toward sharing the link once relevance is clear. If the lead names a specific product that isn’t in the products array: follow the MISSING INFO rule.
+Introduce the best match naturally, never list all products unprompted. Lean toward sharing the link once relevance is clear. This never overrides the QUALIFYING SEQUENCE RULE — even when a product match is obvious from the lead’s first message, complete the qualifying sequence (or reach genuine high intent) before mentioning price or offering to send any link. A clear product match is a reason to ask a sharper qualifying question, not a reason to skip qualifying altogether. If the lead names a specific product that isn’t in the products array: follow the MISSING INFO rule.
 Products and booking links are different things, never send one as the other. Only send any link once per conversation unless the lead asks again (check recent_assistant_replies).
 If turn_strategy is send_product_link_now, or the lead directly asks for a link: send it immediately, no extra question first.
 
@@ -8837,7 +8837,9 @@ log("ig_trigger_opener_sent", {
           // Identify which product the lead is discussing (if any), so the booking
           // link we send is specific to that product rather than always cfg.booking_url.
           const _cfgProducts = Array.isArray(cfg?.products) ? cfg.products : [];
-          const _matchedProduct = identifyDiscussedProduct(text, leadMemory, _cfgProducts);
+          const _matchedProduct =
+            identifyDiscussedProduct(text, leadMemory, _cfgProducts) ??
+            identifyDiscussedProduct(reply, leadMemory, _cfgProducts);
           const _effectiveBookingUrl = _matchedProduct?.url || cfg?.booking_url || null;
 
           // Build the set of all known product URLs + cfg.booking_url so the
