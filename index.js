@@ -761,7 +761,18 @@ function splitIntoMessages(text) {
     return [raw];
   }
 
-  const sentences = raw.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [raw];
+  // Protect tokens where . ! ? is NOT followed by whitespace or end-of-string
+  // (URLs, decimals, abbreviations like e.g., prices like £99.50, etc.)
+  // so the sentence regex cannot misinterpret them as sentence boundaries.
+  const tokenMap = new Map();
+  let tokenIndex = 0;
+  const safe = raw.replace(/\S*[.!?](?!\s|$)\S*/g, (match) => {
+    const placeholder = `TKPLACEHOLDER${tokenIndex++}`;
+    tokenMap.set(placeholder, match);
+    return placeholder;
+  });
+
+  const sentences = safe.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [safe];
   const parts = [];
   let current = "";
 
@@ -784,7 +795,16 @@ function splitIntoMessages(text) {
 
   if (current) parts.push(current.trim());
 
-  return parts.length ? parts : [raw];
+  // Restore placeholders in each chunk. A chunk is allowed to exceed 220 chars
+  // if that's the cost of keeping a protected token intact — never break a URL,
+  // decimal, or abbreviation across two messages.
+  return (parts.length ? parts : [safe]).map((chunk) => {
+    let out = chunk;
+    for (const [placeholder, original] of tokenMap) {
+      out = out.replace(placeholder, original);
+    }
+    return out;
+  });
 }
 function parseExampleMessages(raw) {
   const text = String(raw || "").trim();
@@ -1031,12 +1051,12 @@ function getDefaultFallbackExamples(niche = "generic") {
       {
         user: "what do you actually help with",
         assistant:
-          "I help people get in shape properly without guessing. Clear plan, accountability, proper support, and actually sticking to it.",
+          "i help people get in shape properly without guessing. clear plan, accountability, proper support, and actually sticking to it.",
       },
       {
         user: "what do i get",
         assistant:
-          "You get structure, accountability, and proper support so you're not just left trying to figure it out on your own.",
+          "you get structure, accountability, and proper support so you're not just left trying to figure it out on your own.",
       },
       {
         user: "how does it work",
@@ -1056,7 +1076,7 @@ function getDefaultFallbackExamples(niche = "generic") {
       {
         user: "send me the link",
         assistant:
-          "here you go - pick a slot that works for you and we’ll get moving.",
+          "here you go. pick a slot that works for you and we’ll get moving.",
       },
       {
         user: "i want it",
@@ -1076,7 +1096,7 @@ function getDefaultFallbackExamples(niche = "generic") {
       {
         user: "not sure if it’s for me",
         assistant:
-          "what part are you unsure about - the fit, the process, or the price?",
+          "what part are you unsure about, the fit, the process, or the price?",
       },
     ];
   }
@@ -1086,12 +1106,12 @@ function getDefaultFallbackExamples(niche = "generic") {
       {
         user: "what do you actually help with",
         assistant:
-          "I help people tighten their offer, fix the messaging, and get clients more consistently instead of guessing.",
+          "i help people tighten their offer, fix the messaging, and get clients more consistently instead of guessing.",
       },
       {
         user: "what do i get",
         assistant:
-          "You get clearer positioning, proper direction, and support so you stop drifting and actually move properly.",
+          "you get clearer positioning, proper direction, and support so you stop drifting and actually move properly.",
       },
       {
         user: "how does it work",
@@ -1121,7 +1141,7 @@ function getDefaultFallbackExamples(niche = "generic") {
       {
         user: "that’s expensive",
         assistant:
-          "fair - what were you expecting to invest?",
+          "fair. what were you expecting to invest?",
       },
       {
         user: "i’ll think about it",
@@ -1131,7 +1151,7 @@ function getDefaultFallbackExamples(niche = "generic") {
       {
         user: "not sure if it’s for me",
         assistant:
-          "what part are you unsure about - whether it works, whether it fits, or the investment?",
+          "what part are you unsure about, whether it works, whether it fits, or the investment?",
       },
     ];
   }
@@ -1140,12 +1160,12 @@ function getDefaultFallbackExamples(niche = "generic") {
     {
       user: "what do you actually help with",
       assistant:
-        "I help people get a proper result with clear structure and support instead of guessing their way through it.",
+        "i help people get a proper result with clear structure and support instead of guessing their way through it.",
     },
     {
       user: "what do i get",
       assistant:
-        "You get support, structure, and proper guidance so you can actually move properly.",
+        "you get support, structure, and proper guidance so you can actually move properly.",
     },
     {
       user: "how does it work",
@@ -1165,7 +1185,7 @@ function getDefaultFallbackExamples(niche = "generic") {
     {
       user: "send me the link",
       assistant:
-        "here you go - pick what works for you and get booked in.",
+        "here you go. pick what works for you and get booked in.",
     },
     {
       user: "i want it",
@@ -1528,7 +1548,7 @@ function detectSoftIntent(text) {
   );
 }
 function detectExplicitBookingLinkRequest(text) {
-  return /send me the link|booking link|book me in|where do i book|send the booking link|can you send the link/i.test(
+  return /send me the link|booking link|book me in|where do i book|send the booking link|can you send the link|send me that link|send that link|that link again|link again|send it again|can i get that link|resend the link/i.test(
     String(text || "")
   );
 }
@@ -2575,7 +2595,8 @@ CORE RULES — follow every single one:
 - replies range from one short line to two or three sentences in one message bubble — never long paragraphs; a single short line is often the right choice
 - write in lowercase throughout — casual, warm, contractions, short sentences, like you’re texting from your phone, not writing customer-service copy
 - never use emojis by default
-- don’t use exclamation marks by default — use a period or comma instead; only use one when the message genuinely calls for it (an actual exclamation, not just enthusiasm); most replies should have zero exclamation marks
+- never use exclamation marks, under any circumstances — always use a period or comma instead, with zero exceptions
+- never use asterisks, markdown, or any bold/italic formatting anywhere in a reply — product and service names should read as plain text woven naturally into the sentence, never wrapped in ** or * or any other formatting characters
 - never use a dash as a pause or to break up a sentence (e.g. never write "okay - what’s holding you back" or "great - let’s do it") — hyphens in compound words like "check-ins" or "well-structured" are fine, sentence-breaking dashes are not
 - never sound corporate, scripted, or like a support bot
 - never give a generic response — every reply must be specific to what they just said
